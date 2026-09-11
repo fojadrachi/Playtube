@@ -71,17 +71,25 @@ o.ae. umgehen).
 ## Automatische Updates
 
 Playtube prueft beim Start und danach alle `updates.check_interval_hours` Stunden
-(Standard 6, in `config.json` einstellbar) die [GitHub Releases](https://github.com/fojadrachi/Playtube/releases)
-des Projekts. Gibt es eine neuere Version als die laufende, fragt ein Dialog, ob sie
-installiert werden soll:
+(Standard 6, im **Einstellungen-Tab** oder in `config.json` einstellbar) die
+[GitHub Releases](https://github.com/fojadrachi/Playtube/releases) des Projekts. Im
+Einstellungen-Tab gibt es zusaetzlich einen "Jetzt nach Updates suchen"-Button mit
+Status-Anzeige und Fortschrittsbalken fuer den Download. Gibt es eine neuere Version,
+fragt ein Dialog, ob sie installiert werden soll:
 
-- **Gepackte `Playtube.exe`**: laedt das `.zip`-Asset des Release herunter und ersetzt
-  nach dem Beenden automatisch alle Dateien im Installationsordner, startet die App
-  danach selbst neu.
+- **Gepackte `Playtube.exe`/`Playtube`**: laedt bevorzugt das kleine **Patch-Paket**
+  herunter (nur die ausfuehrbare Datei mit unserem Anwendungscode, ca. 2-3 MB statt
+  ~200 MB) und ersetzt ausschliesslich diese - der riesige PySide6/QtWebEngine-
+  Laufzeitordner (`_internal/`) bleibt unangetastet, da er sich zwischen normalen
+  Patch-Releases nicht aendert. Nur wenn kein Patch-Paket verfuegbar ist (z.B. beim
+  allerersten Release oder nach einem Wechsel der PySide6-Version), wird automatisch
+  auf das volle Release-Paket zurueckgefallen und der komplette Installationsordner
+  ersetzt. Die App startet sich in beiden Faellen danach selbst neu.
 - **Entwicklungsmodus** (`python main.py`): fuehrt `git pull` + `pip install -r
   requirements.txt` aus und startet den Python-Prozess neu.
 
-Auto-Update laesst sich in `config.json` unter `updates.enabled` deaktivieren.
+Auto-Update laesst sich im Einstellungen-Tab oder in `config.json` unter
+`updates.enabled` deaktivieren.
 
 ### Eine neue Version veroeffentlichen
 

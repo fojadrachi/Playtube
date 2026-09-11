@@ -33,13 +33,21 @@ jobs:
       - name: Playtube.exe bauen
         run: pyinstaller packaging\playtube.spec --noconfirm --distpath dist --workpath build
 
-      - name: Als .zip packen
+      - name: Als .zip packen (volles Paket)
         run: Compress-Archive -Path dist\Playtube -DestinationPath Playtube-${{ github.ref_name }}-win64.zip
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-build
           path: Playtube-${{ github.ref_name }}-win64.zip
+
+      - name: Patch-Paket packen (nur Playtube.exe, fuer schnelle Updates)
+        run: Compress-Archive -Path dist\Playtube\Playtube.exe -DestinationPath Playtube-${{ github.ref_name }}-win64-patch.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-patch
+          path: Playtube-${{ github.ref_name }}-win64-patch.zip
 
   build-linux:
     runs-on: ubuntu-latest
@@ -69,13 +77,21 @@ jobs:
       - name: Playtube-Binary bauen
         run: pyinstaller packaging/playtube.spec --noconfirm --distpath dist --workpath build
 
-      - name: Als .tar.gz packen
+      - name: Als .tar.gz packen (volles Paket)
         run: tar -C dist -czf Playtube-${{ github.ref_name }}-linux-x86_64.tar.gz Playtube
 
       - uses: actions/upload-artifact@v4
         with:
           name: linux-build
           path: Playtube-${{ github.ref_name }}-linux-x86_64.tar.gz
+
+      - name: Patch-Paket packen (nur Playtube-Binary, fuer schnelle Updates)
+        run: tar -C dist/Playtube -czf Playtube-${{ github.ref_name }}-linux-x86_64-patch.tar.gz Playtube
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-patch
+          path: Playtube-${{ github.ref_name }}-linux-x86_64-patch.tar.gz
 
   publish-release:
     needs: [build-windows, build-linux]

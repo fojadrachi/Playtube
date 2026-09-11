@@ -5,11 +5,16 @@ Ablauf:
      Version als die aktuell laufende (playtube.__version__).
   2. Bei Fund fragt die UI (siehe mainwindow.py) nach Bestaetigung.
   3. UpdateInstaller installiert das Update:
-       - Gepackte App (Windows Playtube.exe oder Linux Playtube-Binary): laedt das
-         zum laufenden Betriebssystem passende Release-Paket herunter, entpackt es
-         und laesst ein kurzes Skript (nach Prozessende) den Installationsordner
-         ersetzen und die App neu starten - PowerShell+robocopy unter Windows,
-         ein Shell-Skript unter Linux.
+       - Gepackte App (Windows Playtube.exe oder Linux Playtube-Binary): laedt
+         bevorzugt das kleine "Patch"-Paket herunter (enthaelt NUR die eigentliche
+         .exe/Binary mit unserem Anwendungscode, ca. 2-3 MB statt ~200 MB) und
+         ersetzt lediglich diese Datei - der riesige PySide6/QtWebEngine-Laufzeit-
+         Ordner (_internal/) bleibt unangetastet, da er sich zwischen Patch-Releases
+         normalerweise nicht aendert. Gibt es kein Patch-Paket (z.B. beim allerersten
+         Release oder wenn CI es nicht gebaut hat), faellt es automatisch auf das
+         volle Release-Paket zurueck und ersetzt den kompletten Installationsordner.
+         Ein kurzes Skript wartet dafuer (nach Prozessende) und startet die App neu -
+         PowerShell unter Windows, ein Shell-Skript unter Linux.
        - Entwicklungsmodus (python main.py): fuehrt 'git pull' + 'pip install -r
          requirements.txt' aus, die App startet sich danach selbst neu (os.execv).
 """
@@ -17,7 +22,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import stat
 import subprocess
 import sys
@@ -66,8 +70,9 @@ def fetch_latest_release() -> dict[str, Any] | None:
 
 
 def _find_platform_asset(release: dict[str, Any]) -> dict[str, Any] | None:
-    """Sucht das zur laufenden Plattform passende Release-Paket:
-    Windows -> *.zip mit "win" im Namen, Linux -> *.tar.gz mit "linux" im Namen."""
+    """Sucht das zur laufenden Plattform passende Release-Paket. Bevorzugt das kleine
+    "-patch"-Paket (nur die .exe/Binary) gegenueber dem vollen Release-Paket - siehe
+    Moduldoku. Windows -> *.zip mit "win" im Namen, Linux -> *.tar.gz mit "linux"."""
     assets = release.get("assets", [])
     if sys.platform == "win32":
         hints, exts = ("win",), (".zip",)
@@ -76,14 +81,24 @@ def _find_platform_asset(release: dict[str, Any]) -> dict[str, Any] | None:
     else:
         return None
 
-    for asset in assets:
-        name = asset.get("name", "").lower()
-        if name.endswith(exts) and any(h in name for h in hints):
+    def find(want_patch: bool, require_hint: bool) -> dict[str, Any] | None:
+        for asset in assets:
+            name = asset.get("name", "").lower()
+            if not name.endswith(exts):
+                continue
+            if require_hint and not any(h in name for h in hints):
+                continue
+            if ("patch" in name) != want_patch:
+                continue
             return asset
-    for asset in assets:
-        if asset.get("name", "").lower().endswith(exts):
-            return asset
-    return None
+        return None
+
+    return (
+        find(True, True)
+        or find(True, False)
+        or find(False, True)
+        or find(False, False)
+    )
 
 
 class UpdateChecker(QThread):
@@ -112,6 +127,9 @@ class UpdateInstaller(QThread):
     """Laedt ein Release herunter und installiert es (siehe Moduldoku)."""
 
     progress = Signal(str)
+    # Download-Fortschritt in Prozent (0-100); -1 = unbestimmt (z.B. waehrend
+    # Entpacken/Installieren, wo sich kein Prozentsatz sinnvoll angeben laesst).
+    progress_percent = Signal(int)
     finished_ok = Signal()
     failed = Signal(str)
 
@@ -138,6 +156,7 @@ class UpdateInstaller(QThread):
             return
 
         self.progress.emit("Lade Update herunter …")
+        self.progress_percent.emit(0)
         install_dir = Path(sys.executable).resolve().parent
         staging = Path(tempfile.mkdtemp(prefix="playtube_update_"))
         archive_name = self._download_url.rsplit("/", 1)[-1]
@@ -145,10 +164,28 @@ class UpdateInstaller(QThread):
         extract_dir = staging / "extracted"
 
         req = urllib.request.Request(self._download_url, headers={"User-Agent": _USER_AGENT})
-        with urllib.request.urlopen(req, timeout=120) as resp, open(archive_path, "wb") as out:
-            shutil.copyfileobj(resp, out)
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            total = int(resp.headers.get("Content-Length") or 0)
+            downloaded = 0
+            last_emitted = -1
+            with open(archive_path, "wb") as out:
+                while True:
+                    chunk = resp.read(256 * 1024)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+                    downloaded += len(chunk)
+                    if total:
+                        percent = int(downloaded * 100 / total)
+                        if percent != last_emitted:
+                            self.progress_percent.emit(percent)
+                            last_emitted = percent
 
+        self.progress_percent.emit(100)
         self.progress.emit("Entpacke Update …")
+        # Unbestimmter Fortschritt waehrend Entpacken/Installieren - die UI zeigt
+        # dafuer einen "laufenden" Balken statt einer Prozentzahl.
+        self.progress_percent.emit(-1)
         if archive_name.endswith((".tar.gz", ".tgz")):
             with tarfile.open(archive_path) as tf:
                 tf.extractall(extract_dir)
@@ -156,20 +193,69 @@ class UpdateInstaller(QThread):
             with zipfile.ZipFile(archive_path) as zf:
                 zf.extractall(extract_dir)
 
-        # Release-Archive enthalten meist einen einzelnen Unterordner (z.B. "Playtube/").
-        entries = list(extract_dir.iterdir())
-        source_dir = entries[0] if len(entries) == 1 and entries[0].is_dir() else extract_dir
-
+        is_patch = "patch" in archive_name.lower()
         self.progress.emit("Bereite Installation vor …")
-        if sys.platform == "win32":
-            self._install_windows(source_dir, install_dir, staging)
+
+        if is_patch:
+            binary_name = _WINDOWS_BINARY_NAME if sys.platform == "win32" else _LINUX_BINARY_NAME
+            matches = list(extract_dir.rglob(binary_name))
+            if not matches:
+                # Unerwartet leeres/falsches Patch-Paket -> nicht kaputt installieren,
+                # lieber sauber fehlschlagen und den Nutzer auf das volle Paket
+                # hinweisen (naechster Check faellt automatisch darauf zurueck).
+                self.failed.emit(
+                    f"Patch-Paket enthielt kein '{binary_name}'. Bitte erneut versuchen."
+                )
+                return
+            if sys.platform == "win32":
+                self._install_patch_windows(matches[0], install_dir, staging)
+            else:
+                self._install_patch_posix(matches[0], install_dir, staging)
         else:
-            self._install_posix(source_dir, install_dir, staging)
+            # Release-Archive enthalten meist einen einzelnen Unterordner (z.B. "Playtube/").
+            entries = list(extract_dir.iterdir())
+            source_dir = entries[0] if len(entries) == 1 and entries[0].is_dir() else extract_dir
+            if sys.platform == "win32":
+                self._install_full_windows(source_dir, install_dir, staging)
+            else:
+                self._install_full_posix(source_dir, install_dir, staging)
+
         self.finished_ok.emit()
 
-    # -- Windows: PowerShell-Skript wartet auf Prozessende, kopiert per robocopy --
+    # -- Patch (nur .exe/Binary tauschen, _internal/ bleibt unangetastet) --
 
-    def _install_windows(self, source_dir: Path, install_dir: Path, staging: Path) -> None:
+    def _install_patch_windows(self, new_exe: Path, install_dir: Path, staging: Path) -> None:
+        exe_path = install_dir / _WINDOWS_BINARY_NAME
+        script = f"""
+$ErrorActionPreference = "SilentlyContinue"
+Start-Sleep -Seconds 1
+$targetPid = {os.getpid()}
+while (Get-Process -Id $targetPid -ErrorAction SilentlyContinue) {{
+    Start-Sleep -Milliseconds 500
+}}
+Copy-Item -Path "{new_exe}" -Destination "{exe_path}" -Force
+Start-Process -FilePath "{exe_path}"
+Start-Sleep -Seconds 2
+Remove-Item -Recurse -Force "{staging}" -ErrorAction SilentlyContinue
+"""
+        self._spawn_windows_script(script, staging)
+
+    def _install_patch_posix(self, new_binary: Path, install_dir: Path, staging: Path) -> None:
+        exe_path = install_dir / _LINUX_BINARY_NAME
+        script = f"""#!/bin/sh
+while kill -0 {os.getpid()} 2>/dev/null; do
+    sleep 0.5
+done
+cp -f "{new_binary}" "{exe_path}"
+chmod +x "{exe_path}"
+nohup "{exe_path}" >/dev/null 2>&1 &
+rm -rf "{staging}"
+"""
+        self._spawn_posix_script(script, staging)
+
+    # -- Volles Paket (kein Patch verfuegbar/passend) - kompletten Ordner ersetzen --
+
+    def _install_full_windows(self, source_dir: Path, install_dir: Path, staging: Path) -> None:
         exe_path = install_dir / _WINDOWS_BINARY_NAME
         script = f"""
 $ErrorActionPreference = "SilentlyContinue"
@@ -183,16 +269,9 @@ Start-Process -FilePath "{exe_path}"
 Start-Sleep -Seconds 2
 Remove-Item -Recurse -Force "{staging}" -ErrorAction SilentlyContinue
 """
-        script_path = staging / "apply_update.ps1"
-        script_path.write_text(script, encoding="utf-8")
-        subprocess.Popen(
-            ["powershell", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", str(script_path)],
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
+        self._spawn_windows_script(script, staging)
 
-    # -- Linux: Shell-Skript wartet auf Prozessende, kopiert per cp -a --
-
-    def _install_posix(self, source_dir: Path, install_dir: Path, staging: Path) -> None:
+    def _install_full_posix(self, source_dir: Path, install_dir: Path, staging: Path) -> None:
         exe_path = install_dir / _LINUX_BINARY_NAME
         script = f"""#!/bin/sh
 while kill -0 {os.getpid()} 2>/dev/null; do
@@ -204,6 +283,21 @@ chmod +x "{exe_path}"
 nohup "{exe_path}" >/dev/null 2>&1 &
 rm -rf "{staging}"
 """
+        self._spawn_posix_script(script, staging)
+
+    # -- Skript-Ausfuehrung: PowerShell (wartet+robocopy/Copy) unter Windows, Shell
+    #    (wartet+cp) unter Linux; wird detached gestartet, damit es diesen Prozess
+    #    ueberlebt, wenn dieser sich gleich beendet. --
+
+    def _spawn_windows_script(self, script: str, staging: Path) -> None:
+        script_path = staging / "apply_update.ps1"
+        script_path.write_text(script, encoding="utf-8")
+        subprocess.Popen(
+            ["powershell", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", str(script_path)],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+
+    def _spawn_posix_script(self, script: str, staging: Path) -> None:
         script_path = staging / "apply_update.sh"
         script_path.write_text(script, encoding="utf-8")
         script_path.chmod(script_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)

@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -30,6 +31,8 @@ class SettingsTab(QWidget):
     MainWindow, damit Discord-RPC/Auto-Update ohne Neustart neu konfiguriert werden."""
 
     settingsSaved = Signal(dict)
+    checkUpdatesRequested = Signal()
+    installUpdateRequested = Signal()
 
     def __init__(self, config: dict[str, Any], parent=None):
         super().__init__(parent)
@@ -79,6 +82,29 @@ class SettingsTab(QWidget):
         self._check_interval.setValue(int(updates_cfg.get("check_interval_hours", 6)))
         update_form.addRow(self._updates_enabled)
         update_form.addRow("Prüfintervall:", self._check_interval)
+
+        update_actions = QHBoxLayout()
+        self._check_updates_btn = QPushButton("Jetzt nach Updates suchen")
+        self._check_updates_btn.clicked.connect(self.checkUpdatesRequested.emit)
+        update_actions.addWidget(self._check_updates_btn)
+        self._install_update_btn = QPushButton("Update installieren")
+        self._install_update_btn.setVisible(False)
+        self._install_update_btn.clicked.connect(self.installUpdateRequested.emit)
+        update_actions.addWidget(self._install_update_btn)
+        update_actions.addStretch(1)
+        update_form.addRow(update_actions)
+
+        self._update_status_label = QLabel("")
+        self._update_status_label.setStyleSheet("color: palette(mid);")
+        self._update_status_label.setWordWrap(True)
+        update_form.addRow(self._update_status_label)
+
+        self._update_progress = QProgressBar()
+        self._update_progress.setRange(0, 100)
+        self._update_progress.setTextVisible(True)
+        self._update_progress.setVisible(False)
+        update_form.addRow(self._update_progress)
+
         outer.addWidget(update_box)
 
         general_box = QGroupBox("Allgemein")
@@ -126,3 +152,39 @@ class SettingsTab(QWidget):
             "Einstellungen gespeichert und übernommen (Discord-Verbindung wurde "
             "mit den neuen Werten neu gestartet).",
         )
+
+    # ----------------------------------------------------- Update-Status (von MainWindow)
+
+    def set_checking(self) -> None:
+        self._check_updates_btn.setEnabled(False)
+        self._install_update_btn.setVisible(False)
+        self._update_progress.setVisible(False)
+        self._update_status_label.setText("Suche nach Updates …")
+
+    def set_check_done(self) -> None:
+        self._check_updates_btn.setEnabled(True)
+
+    def set_update_status(self, text: str) -> None:
+        self._update_status_label.setText(text)
+
+    def show_update_available(self, version: str) -> None:
+        self._update_status_label.setText(f"Neue Version verfügbar: {version}")
+        self._install_update_btn.setVisible(True)
+
+    def hide_install_button(self) -> None:
+        self._install_update_btn.setVisible(False)
+
+    def set_download_progress(self, percent: int) -> None:
+        """percent: 0-100 fuer einen konkreten Fortschritt, -1 fuer unbestimmt
+        (z.B. waehrend Entpacken/Installieren), negativ->versteckt den Balken nicht
+        automatisch - dafuer set_progress_hidden() aufrufen."""
+        if percent < 0:
+            self._update_progress.setRange(0, 0)  # "laufender" Balken ohne Prozentzahl
+        else:
+            self._update_progress.setRange(0, 100)
+            self._update_progress.setValue(percent)
+        self._update_progress.setVisible(True)
+
+    def set_progress_hidden(self) -> None:
+        self._update_progress.setVisible(False)
+        self._update_progress.setRange(0, 100)

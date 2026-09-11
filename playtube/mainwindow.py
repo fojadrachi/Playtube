@@ -52,6 +52,11 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self._settings_tab, "Einstellungen")
         self._tabs.setCurrentIndex(0 if config.get("start_tab") != "music" else 1)
         self._settings_tab.settingsSaved.connect(self._on_settings_saved)
+        self._settings_tab.checkUpdatesRequested.connect(self._check_for_updates)
+        self._settings_tab.installUpdateRequested.connect(
+            lambda: self._start_update_install(self._pending_download_url)
+        )
+        self._pending_download_url = ""
 
         self._youtube_tab.mediaInfoChanged.connect(self._on_media_info)
         self._music_tab.mediaInfoChanged.connect(self._on_media_info)
@@ -263,13 +268,30 @@ class MainWindow(QMainWindow):
     def _check_for_updates(self) -> None:
         if self._update_checker is not None and self._update_checker.isRunning():
             return
+        self._settings_tab.set_checking()
         self._update_checker = UpdateChecker(self)
         self._update_checker.updateAvailable.connect(self._on_update_available)
+        self._update_checker.upToDate.connect(self._on_update_up_to_date)
+        self._update_checker.checkFailed.connect(self._on_update_check_failed)
         self._update_checker.start()
 
+    def _on_update_up_to_date(self) -> None:
+        self._settings_tab.set_check_done()
+        self._settings_tab.set_update_status(f"Du hast bereits die neueste Version (v{APP_VERSION}).")
+
+    def _on_update_check_failed(self) -> None:
+        self._settings_tab.set_check_done()
+        self._settings_tab.set_update_status(
+            "Update-Prüfung fehlgeschlagen (keine Internetverbindung oder GitHub nicht erreichbar)."
+        )
+
     def _on_update_available(self, version: str, notes: str, download_url: str) -> None:
+        self._settings_tab.set_check_done()
+        self._pending_download_url = download_url
+        self._settings_tab.show_update_available(version)
+
         if self._pending_update_version == version:
-            return  # Nutzer hat diese Version schon abgelehnt/wird schon gefragt
+            return  # Dialog fuer diese Version wurde schon einmal gezeigt
         self._pending_update_version = version
 
         self._show_and_raise()
@@ -290,16 +312,25 @@ class MainWindow(QMainWindow):
             self._start_update_install(download_url)
 
     def _start_update_install(self, download_url: str) -> None:
+        if not download_url:
+            return
+        self._settings_tab.hide_install_button()
+        self._settings_tab.set_update_status("Lade Update herunter …")
+        self._settings_tab.set_download_progress(0)
         self._tray.setToolTip(f"{APP_NAME} – Update wird installiert …")
         self._update_installer = UpdateInstaller(download_url, self)
-        self._update_installer.progress.connect(
-            lambda msg: self._tray.setToolTip(f"{APP_NAME} – {msg}")
-        )
+        self._update_installer.progress.connect(self._on_install_progress_text)
+        self._update_installer.progress_percent.connect(self._settings_tab.set_download_progress)
         self._update_installer.finished_ok.connect(self._on_update_finished)
         self._update_installer.failed.connect(self._on_update_failed)
         self._update_installer.start()
 
+    def _on_install_progress_text(self, msg: str) -> None:
+        self._tray.setToolTip(f"{APP_NAME} – {msg}")
+        self._settings_tab.set_update_status(msg)
+
     def _on_update_finished(self) -> None:
+        self._settings_tab.set_download_progress(100)
         if getattr(sys, "frozen", False):
             # Ein Hintergrund-Skript wartet bereits darauf, dass dieser Prozess
             # beendet wird, tauscht dann die Dateien aus und startet die App neu.
@@ -314,6 +345,8 @@ class MainWindow(QMainWindow):
 
     def _on_update_failed(self, error: str) -> None:
         self._tray.setToolTip(APP_NAME)
+        self._settings_tab.set_progress_hidden()
+        self._settings_tab.set_update_status(f"Update fehlgeschlagen: {error}")
         QMessageBox.warning(self, f"{APP_NAME}-Update fehlgeschlagen", error)
 
     def _restart_dev_process(self) -> None:
