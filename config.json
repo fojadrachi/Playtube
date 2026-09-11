@@ -1,0 +1,20 @@
+{
+  "app_name": "Playtube",
+  "discord": {
+    "enabled": true,
+    "client_id": "1544058029190938774",
+    "update_interval_seconds": 15,
+    "show_idle_presence": true
+  },
+  "updates": {
+    "enabled": true,
+    "check_interval_hours": 6
+  },
+  "start_tab": "youtube",
+  "home_youtube": "https://www.youtube.com/",
+  "home_music": "https://music.youtube.com/",
+  "window": {
+    "width": 1366,
+    "height": 860
+  }
+}

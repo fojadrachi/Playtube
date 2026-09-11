@@ -1,0 +1,151 @@
+"""Eingebetteter Browser-Tab fuer YouTube bzw. YouTube Music, mit persistentem Login-
+Profil (eigener Datenordner, kein System-Browser-Profil) und periodischem Auslesen
+der aktuellen Wiedergabe fuer Discord Rich Presence."""
+from __future__ import annotations
+
+from PySide6.QtCore import QTimer, Signal, QUrl
+from PySide6.QtWebEngineCore import (
+    QWebEnginePage,
+    QWebEngineProfile,
+    QWebEngineScript,
+    QWebEngineSettings,
+    QWebEngineUrlRequestInterceptor,
+)
+from PySide6.QtWebEngineWidgets import QWebEngineView
+
+from .chrome_shim import CHROME_FULL, CHROME_MAJOR, CHROME_SHIM_JS
+from .config import profile_dir
+from .media_probe import MEDIA_PROBE_JS, NEXT_TRACK_JS, PREV_TRACK_JS, TOGGLE_PLAYBACK_JS
+
+# Chrome-Versionsnummer, die exakt zur tatsaechlich in QtWebEngine eingebetteten
+# Chromium-Version passt (siehe QWebEngineCore.qWebEngineChromiumVersion()). Legacy-
+# User-Agent, die "Sec-CH-UA" Client-Hints (Header) UND navigator.userAgentData (JS,
+# siehe chrome_shim.py) muessen konsistent dieselbe Version + Marke ("Google Chrome")
+# melden - sonst erkennt Google-Login den Browser als nicht vertrauenswuerdiges
+# Embedded-WebView und blockiert die Anmeldung mit "Dieser Browser oder diese App ist
+# unter Umstaenden nicht sicher".
+_CHROME_VERSION = CHROME_FULL
+_CHROME_MAJOR = CHROME_MAJOR
+
+_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    f"(KHTML, like Gecko) Chrome/{_CHROME_VERSION} Safari/537.36"
+)
+
+_SEC_CH_UA = (
+    f'"Not(A:Brand";v="99", "Google Chrome";v="{_CHROME_MAJOR}", '
+    f'"Chromium";v="{_CHROME_MAJOR}"'
+).encode("ascii")
+_SEC_CH_UA_FULL_VERSION_LIST = (
+    f'"Not(A:Brand";v="99.0.0.0", "Google Chrome";v="{_CHROME_VERSION}", '
+    f'"Chromium";v="{_CHROME_VERSION}"'
+).encode("ascii")
+
+
+class _ChromeBrandingInterceptor(QWebEngineUrlRequestInterceptor):
+    """Ergaenzt/korrigiert die Sec-CH-UA Client-Hint-Header auf jeder Anfrage, damit
+    sie zum gesetzten User-Agent passen (echtes QtWebEngine meldet dort normalerweise
+    nur "Chromium", ohne die Marke "Google Chrome" - genau daran erkennt Googles
+    Login-Seite ein Embedded-WebView und blockiert die Anmeldung)."""
+
+    def interceptRequest(self, info) -> None:  # noqa: N802 (Qt-Override)
+        info.setHttpHeader(b"sec-ch-ua", _SEC_CH_UA)
+        info.setHttpHeader(b"sec-ch-ua-full-version-list", _SEC_CH_UA_FULL_VERSION_LIST)
+        info.setHttpHeader(b"sec-ch-ua-mobile", b"?0")
+        info.setHttpHeader(b"sec-ch-ua-platform", b'"Windows"')
+        info.setHttpHeader(b"sec-ch-ua-platform-version", b'"15.0.0"')
+
+
+_shared_profile: QWebEngineProfile | None = None
+_shared_interceptor: _ChromeBrandingInterceptor | None = None
+
+
+def get_shared_profile() -> QWebEngineProfile:
+    """Ein gemeinsames, persistentes Profil fuer alle Tabs, damit ein einmaliges
+    Google-Login fuer YouTube und YouTube Music gleichermassen gilt."""
+    global _shared_profile, _shared_interceptor
+    if _shared_profile is None:
+        _shared_profile = QWebEngineProfile("playtube-profile")
+        _shared_profile.setPersistentStoragePath(str(profile_dir() / "storage"))
+        _shared_profile.setCachePath(str(profile_dir() / "cache"))
+        _shared_profile.setPersistentCookiesPolicy(
+            QWebEngineProfile.PersistentCookiesPolicy.ForcePersistentCookies
+        )
+        _shared_profile.setHttpUserAgent(_USER_AGENT)
+        _shared_profile.setHttpAcceptLanguage("de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7")
+
+        # Referenz muss gehalten werden, sonst sammelt Python das Objekt vorzeitig ein.
+        _shared_interceptor = _ChromeBrandingInterceptor()
+        _shared_profile.setUrlRequestInterceptor(_shared_interceptor)
+
+        # JS-seitiger "Chrome-Shim" (window.chrome, navigator.userAgentData, Plugins) -
+        # muss vor jedem Seiten-JS laufen, daher DocumentCreation + MainWorld.
+        shim_script = QWebEngineScript()
+        shim_script.setName("playtube-chrome-shim")
+        shim_script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+        shim_script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+        shim_script.setRunsOnSubFrames(True)
+        shim_script.setSourceCode(CHROME_SHIM_JS)
+        _shared_profile.scripts().insert(shim_script)
+    return _shared_profile
+
+
+class BrowserTab(QWebEngineView):
+    """Ein WebEngine-Tab mit Medien-Ueberwachung fuer Discord Rich Presence."""
+
+    mediaInfoChanged = Signal(dict)
+    titleUpdated = Signal(str)
+
+    def __init__(self, home_url: str, parent=None):
+        super().__init__(parent)
+        self._home_url = home_url
+
+        page = QWebEnginePage(get_shared_profile(), self)
+        self.setPage(page)
+
+        settings = page.settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.PlaybackRequiresUserGesture, False)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.FullScreenSupportEnabled, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.ScreenCaptureEnabled, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, True)
+
+        page.fullScreenRequested.connect(self._on_full_screen_requested)
+
+        self.load(QUrl(home_url))
+
+        self._poll_timer = QTimer(self)
+        self._poll_timer.setInterval(2000)
+        self._poll_timer.timeout.connect(self._poll_media_state)
+        self._poll_timer.start()
+
+        self.titleChanged.connect(self.titleUpdated.emit)
+
+    def go_home(self) -> None:
+        self.load(QUrl(self._home_url))
+
+    def toggle_playback(self) -> None:
+        self.page().runJavaScript(TOGGLE_PLAYBACK_JS)
+
+    def next_track(self) -> None:
+        self.page().runJavaScript(NEXT_TRACK_JS)
+
+    def previous_track(self) -> None:
+        self.page().runJavaScript(PREV_TRACK_JS)
+
+    def _on_full_screen_requested(self, request) -> None:
+        # Erlaubt echtes Fullscreen-Video (z.B. per YouTube-Fullscreen-Button).
+        request.accept()
+        window = self.window()
+        if request.toggleOn():
+            window.showFullScreen()
+        else:
+            window.showNormal()
+
+    def _poll_media_state(self) -> None:
+        self.page().runJavaScript(MEDIA_PROBE_JS, self._on_media_probe_result)
+
+    def _on_media_probe_result(self, result) -> None:
+        if isinstance(result, dict):
+            self.mediaInfoChanged.emit(result)
