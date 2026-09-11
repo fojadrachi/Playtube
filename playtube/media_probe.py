@@ -15,14 +15,29 @@ MEDIA_PROBE_JS = r"""
         var raw = el ? el.getAttribute('src') : null;
         return (raw && /^https?:\/\//i.test(raw)) ? raw : null;
     }
+    // Video-ID aus der URL (?v=... Parameter) - damit laesst sich die Thumbnail-URL
+    // ueber YouTubes CDN immer zuverlaessig selbst bauen, unabhaengig davon, ob
+    // gerade ein passendes <img>/<link> im DOM zu finden ist (das <link
+    // rel="image_src">, auf das sich der Code frueher verlassen hat, fehlt auf
+    // vielen aktuellen YouTube-Seiten schlicht).
+    function videoIdFromUrl(url) {
+        try {
+            return new URL(url).searchParams.get('v');
+        } catch (e) { return null; }
+    }
+    function ytThumbnailUrl(videoId) {
+        return videoId ? ('https://i.ytimg.com/vi/' + videoId + '/hqdefault.jpg') : null;
+    }
+
     var video = document.querySelector('video');
     var isMusic = location.hostname.indexOf('music.youtube.com') !== -1;
+    var videoId = videoIdFromUrl(location.href);
     var title = null, subtitle = null, thumbnail = null;
 
     if (isMusic) {
         title = txt('.title.ytmusic-player-bar') || txt('ytmusic-player-bar .title');
         subtitle = txt('.byline.ytmusic-player-bar') || txt('ytmusic-player-bar .byline');
-        thumbnail = imgSrc('ytmusic-player-bar img, .image.ytmusic-player-bar img');
+        thumbnail = imgSrc('ytmusic-player-bar img, .image.ytmusic-player-bar img') || ytThumbnailUrl(videoId);
     } else {
         var t = document.title.replace(/ - YouTube$/, '');
         title = t || null;
@@ -31,7 +46,7 @@ MEDIA_PROBE_JS = r"""
             || txt('#channel-name a')
             || txt('ytd-channel-name#channel-name a');
         var imgY = document.querySelector('link[rel="image_src"]');
-        thumbnail = imgY ? imgY.href : null;
+        thumbnail = (imgY ? imgY.href : null) || ytThumbnailUrl(videoId);
     }
 
     // WICHTIG: QtWebEngine's runJavaScript()-Bruecke liefert bei einem direkt
