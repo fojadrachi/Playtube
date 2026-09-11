@@ -54,9 +54,13 @@ def _upsize_thumbnail(url: str | None) -> str | None:
     return _THUMBNAIL_SIZE_RE.sub("=w544-h544-l90-rj", url)
 
 
-def build_presence_payload(info: dict[str, Any], session_start: int) -> dict[str, Any]:
+def build_presence_payload(
+    info: dict[str, Any], session_start: int, start_ts: int, end_ts: int | None
+) -> dict[str, Any]:
     """Baut das update()-Payload fuer pypresence aus den vom Browser-Tab gelieferten
-    Medien-Informationen."""
+    Medien-Informationen. start_ts/end_ts werden vom DiscordRPCWorker mitgegeben (siehe
+    dort _track_timestamps) statt hier direkt aus info["currentTime"] berechnet zu
+    werden."""
     is_music = bool(info.get("isMusic"))
     playing = bool(info.get("playing"))
     title = _truncate(info.get("title"), fallback="Unbekannter Titel")
@@ -84,22 +88,10 @@ def build_presence_payload(info: dict[str, Any], session_start: int) -> dict[str
         "large_text": "YouTube Music" if is_music else "YouTube",
         "small_image": ASSET_PLAY if playing else ASSET_PAUSE,
         "small_text": "Spielt" if playing else "Pausiert",
+        "start": start_ts,
     }
-
-    duration = info.get("duration") or 0
-    current_time = info.get("currentTime") or 0
-    # IMMER start/end mitschicken, unabhaengig vom playing-Status - nicht nur wenn
-    # playing=true. Discord ersetzt "timestamps" bei einem SET_ACTIVITY-Update ohne
-    # diese Felder offenbar nicht sauber, sondern behaelt intern die zuletzt bekannten
-    # Werte bei ("stackt"). Waehrend eines Songwechsels ist "playing" durch das kurze
-    # Neuladen des <video>-Elements oft fuer 1-2 Polls faelschlich false - wurden
-    # start/end dann weggelassen, blieb Discords alte (viel zu weit zurueckliegende)
-    # Zeit einfach stehen, bis irgendwann wieder echte Werte kamen. Ein pausierter
-    # Titel zeigt so einfach einen eingefrorenen Fortschrittsbalken statt gar keinen.
-    start_ts = int(time.time() - current_time)
-    payload["start"] = start_ts
-    if duration and duration > 0:
-        payload["end"] = start_ts + int(duration)
+    if end_ts:
+        payload["end"] = end_ts
 
     url = info.get("url")
     if url and isinstance(url, str) and url.startswith("http"):
@@ -141,6 +133,10 @@ class DiscordRPCWorker(QThread):
         self._connected = False
         self._presence = None
         self._session_start = int(time.time())
+        # Anker fuer die Fortschrittsanzeige: wird NICHT mehr bei jedem Send aus
+        # video.currentTime neu berechnet (siehe _track_timestamps).
+        self._track_key: tuple | None = None
+        self._track_start_ts: int | None = None
 
     def submit_media_info(self, info: dict[str, Any] | None) -> None:
         """Neuester bekannter Zustand (None = nichts spielt / idle)."""
@@ -210,11 +206,44 @@ class DiscordRPCWorker(QThread):
             if os.environ.get("PLAYTUBE_DEBUG"):
                 print(f"[discord-rpc] Verbindung fehlgeschlagen: {exc!r}", flush=True)
 
+    def _track_timestamps(self, info: dict[str, Any]) -> tuple[int, int | None]:
+        """Liefert (start_ts, end_ts) fuer die Fortschrittsanzeige. Der Anker wird nur
+        NEU gesetzt, wenn sich Titel/Untertitel aendern (= neuer Track) - nicht bei
+        jedem Send aus video.currentTime neu berechnet. Grund: YouTube Music spielt
+        beim Songwechsel oft nahtlos (gapless) aus einem durchgehenden Buffer weiter -
+        video.currentTime springt dabei nicht zuverlaessig auf 0 zurueck, sondern kann
+        einfach vom vorherigen Titel weiterzaehlen. Wuerde man start_ts jedes Mal aus
+        currentTime neu ableiten, "stackt" die in Discord angezeigte Zeit ueber mehrere
+        Songs hinweg, obwohl Titel/Bild laengst gewechselt haben."""
+        title = info.get("title") or ""
+        subtitle = info.get("subtitle") or ""
+        is_music = bool(info.get("isMusic"))
+        key = (is_music, title, subtitle)
+        duration = info.get("duration") or 0
+        current_time = info.get("currentTime") or 0
+        now = time.time()
+
+        if key != self._track_key:
+            self._track_key = key
+            # current_time nur als grobe Anfangs-Schaetzung verwenden (z.B. Programm
+            # startet waehrend ein Titel schon laeuft) - plausibilisiert, damit ein
+            # verlaesslicher Wert genau EINMAL beim Trackwechsel einfriert und danach
+            # rein ueber die Systemzeit weiterlaeuft statt ueber currentTime.
+            offset = current_time if (duration <= 0 or 0 <= current_time <= duration) else 0
+            self._track_start_ts = int(now - offset)
+
+        start_ts = self._track_start_ts if self._track_start_ts is not None else int(now)
+        end_ts = start_ts + int(duration) if duration and duration > 0 else None
+        return start_ts, end_ts
+
     def _send(self, item) -> None:
         if self._presence is None:
             return
         try:
             if item is _IDLE_SENTINEL:
+                # Naechster echter Track soll wieder einen frischen Zeit-Anker bekommen.
+                self._track_key = None
+                self._track_start_ts = None
                 if self._show_idle:
                     payload = build_idle_payload(self._session_start)
                     self._presence.update(**payload)
@@ -222,7 +251,8 @@ class DiscordRPCWorker(QThread):
                     payload = None
                     self._presence.clear()
             else:
-                payload = build_presence_payload(item, self._session_start)
+                start_ts, end_ts = self._track_timestamps(item)
+                payload = build_presence_payload(item, self._session_start, start_ts, end_ts)
                 self._presence.update(**payload)
             if os.environ.get("PLAYTUBE_DEBUG"):
                 print(f"[discord-rpc] gesendet: {payload!r}", flush=True)
