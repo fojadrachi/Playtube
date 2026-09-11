@@ -5,7 +5,9 @@ Erweiterung) mit:
 
 - **Zwei Tabs** – YouTube und YouTube Music laufen parallel, Musik spielt im
   Hintergrund weiter wenn du zu Videos wechselst.
-- **Login/Premium** – eigenes, persistentes Profil (`%APPDATA%\Playtube`), einmal bei
+- **Login/Premium** – eigenes, persistentes Profil (`%APPDATA%\Playtube`, im
+  Entwicklungsmodus `%APPDATA%\PlaytubeDev` – bewusst getrennt, damit sich lokale
+  Test-Builds nie mit einer installierten Version in die Quere kommen), einmal bei
   Google anmelden reicht fuer beide Dienste.
 - **Discord Rich Presence** – zeigt Titel, Kanal/Interpret, Fortschrittsbalken und
   einen Link-Button in deinem Discord-Profil, sobald etwas laeuft.
@@ -133,7 +135,8 @@ QtWebEngine benoetigt unter Linux ein paar System-Bibliotheken (auf Debian/Ubunt
   das eingebettete Chromium (QtWebEngine) nicht als unsicheres WebView erkennt. Sollte
   die Meldung dennoch erscheinen: alle Playtube-Fenster/-Prozesse schliessen und neu
   starten (die Header greifen erst ab dem naechsten Prozessstart), notfalls einmal den
-  Profilordner `%APPDATA%\Playtube\webprofile` loeschen und neu anmelden.
+  Profilordner `%APPDATA%\Playtube\webprofile` (bzw. `PlaytubeDev` im
+  Entwicklungsmodus) loeschen und neu anmelden.
 - 4K/Premium-Videoqualitaet kann eingeschraenkt sein, da die Open-Source-Variante von
   QtWebEngine kein Widevine-DRM mitbringt (Standard-Qualitaeten funktionieren normal).
 - Icon/Branding-Bilder liegen unter `assets/` und wurden mit `tools/generate_icon.py`

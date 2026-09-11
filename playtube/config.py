@@ -10,6 +10,13 @@ from typing import Any
 APP_NAME = "Playtube"
 APP_AUMID = "Playtube.DesktopClient"  # Windows AppUserModelID
 
+# Der Entwicklungsmodus (python main.py) benutzt einen eigenen APPDATA-Ordner
+# ("PlaytubeDev" statt "Playtube"), damit Login-Profil und Config sich NIE mit einer
+# gepackten/installierten Playtube.exe ueberschneiden (frueher fuehrte das dazu, dass
+# ein lokaler Test-Build und die echte Installation sich dieselbe config.json bzw.
+# denselben Browser-Profil-Lock geteilt haben).
+_DATA_DIR_NAME = APP_NAME if getattr(sys, "frozen", False) else f"{APP_NAME}Dev"
+
 DEFAULT_CONFIG: dict[str, Any] = {
     "app_name": APP_NAME,
     "discord": {
@@ -32,9 +39,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
 
 
 def _app_data_dir() -> Path:
-    """Ordner fuer persistente Daten (Login-Profil, Config) - auch im gepackten .exe stabil."""
+    """Ordner fuer persistente Daten (Login-Profil, Config) - auch im gepackten .exe
+    stabil. Entwicklungsmodus und gepackte .exe nutzen bewusst unterschiedliche
+    Ordner (siehe _DATA_DIR_NAME)."""
     base = os.environ.get("APPDATA") or str(Path.home())
-    d = Path(base) / APP_NAME
+    d = Path(base) / _DATA_DIR_NAME
     d.mkdir(parents=True, exist_ok=True)
     return d
 
