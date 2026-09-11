@@ -88,11 +88,18 @@ def build_presence_payload(info: dict[str, Any], session_start: int) -> dict[str
 
     duration = info.get("duration") or 0
     current_time = info.get("currentTime") or 0
-    if playing:
-        start_ts = int(time.time() - current_time)
-        payload["start"] = start_ts
-        if duration and duration > 0:
-            payload["end"] = start_ts + int(duration)
+    # IMMER start/end mitschicken, unabhaengig vom playing-Status - nicht nur wenn
+    # playing=true. Discord ersetzt "timestamps" bei einem SET_ACTIVITY-Update ohne
+    # diese Felder offenbar nicht sauber, sondern behaelt intern die zuletzt bekannten
+    # Werte bei ("stackt"). Waehrend eines Songwechsels ist "playing" durch das kurze
+    # Neuladen des <video>-Elements oft fuer 1-2 Polls faelschlich false - wurden
+    # start/end dann weggelassen, blieb Discords alte (viel zu weit zurueckliegende)
+    # Zeit einfach stehen, bis irgendwann wieder echte Werte kamen. Ein pausierter
+    # Titel zeigt so einfach einen eingefrorenen Fortschrittsbalken statt gar keinen.
+    start_ts = int(time.time() - current_time)
+    payload["start"] = start_ts
+    if duration and duration > 0:
+        payload["end"] = start_ts + int(duration)
 
     url = info.get("url")
     if url and isinstance(url, str) and url.startswith("http"):
