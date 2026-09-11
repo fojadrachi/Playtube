@@ -87,17 +87,44 @@ Auto-Update laesst sich in `config.json` unter `updates.enabled` deaktivieren.
 powershell -ExecutionPolicy Bypass -File packaging\release.ps1 -Version 1.1.0
 ```
 
-Das Skript setzt die Versionsnummer, baut die `.exe`, packt sie als `.zip`, erstellt
-Git-Tag `v1.1.0`, pusht zu `origin` (dein Repo unter
-https://github.com/fojadrachi/Playtube) und legt automatisch ein GitHub Release mit
-dem `.zip` als Anhang an - vorausgesetzt, entweder ist die
-[GitHub CLI](https://cli.github.com/) installiert (`gh auth login` einmalig) oder die
-Umgebungsvariable `GITHUB_TOKEN` enthaelt ein Personal Access Token mit `repo`-Rechten.
-Ohne beides wird nur getaggt/gepusht und du legst das Release manuell unter
-https://github.com/fojadrachi/Playtube/releases/new an (Zip-Datei aus `dist\` anhaengen).
+Das Skript setzt die Versionsnummer, committet, erstellt Git-Tag `v1.1.0` und pusht zu
+`origin` (dein Repo unter https://github.com/fojadrachi/Playtube). Der gepushte Tag
+loest automatisch die GitHub-Actions-Pipeline
+([.github/workflows/release.yml](.github/workflows/release.yml)) aus, die **sowohl
+eine Windows- als auch eine Linux-Version baut** und beide als Assets an einem GitHub
+Release veroeffentlicht - Fortschritt unter
+https://github.com/fojadrachi/Playtube/actions.
 
-Alle Nutzer mit einer laufenden Playtube-Installation bekommen die neue Version dann
-automatisch angeboten.
+Alle Nutzer mit einer laufenden Playtube-Installation (Windows oder Linux) bekommen die
+neue Version danach automatisch angeboten.
+
+## Native Linux-Version
+
+Playtube laeuft genauso unter Linux (gleicher Code, gleiches PySide6/QtWebEngine) und
+wird bei jedem Release automatisch als `Playtube-vX.Y.Z-linux-x86_64.tar.gz` unter
+https://github.com/fojadrachi/Playtube/releases mitgebaut.
+
+**Fertiges Release installieren** (richtet Startmenue-Eintrag + Icon ein):
+
+```sh
+tar -xzf Playtube-vX.Y.Z-linux-x86_64.tar.gz
+cd Playtube
+sh install-linux.sh
+```
+
+Danach ist Playtube ueber das Anwendungsmenue oder den Befehl `playtube` startbar.
+
+**Aus dem Quellcode starten:**
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python main.py
+```
+
+QtWebEngine benoetigt unter Linux ein paar System-Bibliotheken (auf Debian/Ubuntu):
+`sudo apt install libxkbcommon0 libegl1 libnss3 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libasound2t64 libatk-bridge2.0-0 libcups2` (siehe auch die vollstaendige Liste in
+[.github/workflows/release.yml](.github/workflows/release.yml)).
 
 ## Hinweise
 
