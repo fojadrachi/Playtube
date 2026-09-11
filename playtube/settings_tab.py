@@ -39,9 +39,15 @@ class SettingsTab(QWidget):
         outer.setContentsMargins(32, 28, 32, 28)
         outer.setSpacing(18)
 
+        header = QVBoxLayout()
+        header.setSpacing(2)
         title = QLabel(f"{APP_NAME}-Einstellungen")
         title.setStyleSheet("font-size: 20px; font-weight: 600;")
-        outer.addWidget(title)
+        header.addWidget(title)
+        version_label = QLabel(f"Version {APP_VERSION}")
+        version_label.setStyleSheet("color: palette(mid);")
+        header.addWidget(version_label)
+        outer.addLayout(header)
 
         discord_cfg = config.get("discord", {})
         discord_box = QGroupBox("Discord Rich Presence")
@@ -92,7 +98,7 @@ class SettingsTab(QWidget):
         button_row.addStretch(1)
         outer.addLayout(button_row)
 
-        info = QLabel(f"{APP_NAME} v{APP_VERSION}  ·  github.com/{GITHUB_REPO}")
+        info = QLabel(f"github.com/{GITHUB_REPO}")
         info.setStyleSheet("color: palette(mid);")
         outer.addWidget(info)
 
