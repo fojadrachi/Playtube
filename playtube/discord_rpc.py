@@ -7,6 +7,7 @@ versucht, ohne die App zu beeintraechtigen.
 """
 from __future__ import annotations
 
+import os
 import queue
 import time
 from typing import Any
@@ -156,8 +157,12 @@ class DiscordRPCWorker(QThread):
             self._presence = Presence(self._client_id)
             self._presence.connect()
             self._connected = True
-        except Exception:
+            if os.environ.get("PLAYTUBE_DEBUG"):
+                print("[discord-rpc] verbunden", flush=True)
+        except Exception as exc:
             self._connected = False
+            if os.environ.get("PLAYTUBE_DEBUG"):
+                print(f"[discord-rpc] Verbindung fehlgeschlagen: {exc!r}", flush=True)
 
     def _send(self, item) -> None:
         if self._presence is None:
@@ -165,14 +170,21 @@ class DiscordRPCWorker(QThread):
         try:
             if item is _IDLE_SENTINEL:
                 if self._show_idle:
-                    self._presence.update(**build_idle_payload(self._session_start))
+                    payload = build_idle_payload(self._session_start)
+                    self._presence.update(**payload)
                 else:
+                    payload = None
                     self._presence.clear()
             else:
-                self._presence.update(**build_presence_payload(item, self._session_start))
-        except Exception:
+                payload = build_presence_payload(item, self._session_start)
+                self._presence.update(**payload)
+            if os.environ.get("PLAYTUBE_DEBUG"):
+                print(f"[discord-rpc] gesendet: {payload!r}", flush=True)
+        except Exception as exc:
             # Discord evtl. geschlossen worden -> beim naechsten Mal neu verbinden.
             self._connected = False
+            if os.environ.get("PLAYTUBE_DEBUG"):
+                print(f"[discord-rpc] Senden fehlgeschlagen: {exc!r}", flush=True)
 
     def _cleanup(self) -> None:
         if self._presence is not None:

@@ -15,7 +15,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "discord": {
         "enabled": True,
         # Deine Discord Application Client-ID (discord.com/developers/applications).
-        "client_id": "1544058029190938774",
+        "client_id": "1548023494976086127",
         "update_interval_seconds": 15,
         # Wenn nichts laeuft: Idle-Status anzeigen statt Presence komplett zu leeren.
         "show_idle_presence": True,

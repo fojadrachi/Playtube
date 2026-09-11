@@ -3,6 +3,8 @@ Profil (eigener Datenordner, kein System-Browser-Profil) und periodischem Ausles
 der aktuellen Wiedergabe fuer Discord Rich Presence."""
 from __future__ import annotations
 
+import json
+import os
 import sys
 
 from PySide6.QtCore import QTimer, Signal, QUrl
@@ -162,5 +164,20 @@ class BrowserTab(QWebEngineView):
         self.page().runJavaScript(MEDIA_PROBE_JS, self._on_media_probe_result)
 
     def _on_media_probe_result(self, result) -> None:
-        if isinstance(result, dict):
-            self.mediaInfoChanged.emit(result)
+        # runJavaScript() liefert JS-Objekte ueber diese Bruecke nicht zuverlaessig
+        # als dict (siehe media_probe.py) - das Probe-Skript gibt daher einen
+        # JSON-String zurueck, der hier geparst wird.
+        info = None
+        if isinstance(result, str) and result:
+            try:
+                info = json.loads(result)
+            except json.JSONDecodeError:
+                info = None
+        elif isinstance(result, dict):
+            info = result
+
+        if os.environ.get("PLAYTUBE_DEBUG"):
+            print(f"[media-probe:{self._home_url}] roh={result!r} geparst={info!r}", flush=True)
+
+        if isinstance(info, dict):
+            self.mediaInfoChanged.emit(info)

@@ -27,7 +27,12 @@ MEDIA_PROBE_JS = r"""
         thumbnail = imgY ? imgY.href : null;
     }
 
-    return {
+    // WICHTIG: QtWebEngine's runJavaScript()-Bruecke liefert bei einem direkt
+    // zurueckgegebenen JS-Objekt zuverlaessig nur einen leeren String statt des
+    // Objekts (Zahlen/Strings funktionieren, Objekte nicht) - deshalb hier als
+    // JSON-String zurueckgeben und in Python mit json.loads() wieder parsen
+    // (siehe BrowserTab._on_media_probe_result in browser.py).
+    return JSON.stringify({
         isMusic: isMusic,
         title: title,
         subtitle: subtitle,
@@ -37,7 +42,7 @@ MEDIA_PROBE_JS = r"""
         currentTime: video ? video.currentTime : 0,
         duration: (video && isFinite(video.duration)) ? video.duration : 0,
         hasVideo: !!video
-    };
+    });
 })();
 """
 
