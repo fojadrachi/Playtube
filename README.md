@@ -1,6 +1,6 @@
 # Playtube
 
-Eigenstaendige Desktop-App fuer YouTube & YouTube Music (kein Browser-Fenster, keine
+Eigenstaendige Desktop-App für YouTube & YouTube Music (kein Browser-Fenster, keine
 Erweiterung) mit:
 
 - **Zwei Tabs** – YouTube und YouTube Music laufen parallel, Musik spielt im
