@@ -126,7 +126,15 @@ class DiscordRPCWorker(QThread):
     def __init__(self, client_id: str, interval: float, show_idle: bool, parent=None):
         super().__init__(parent)
         self._client_id = client_id
-        self._interval = max(5.0, float(interval))
+        # Discord ignoriert/verwirft Rich-Presence-Updates stillschweigend, wenn sie
+        # haeufiger als ca. alle 15 Sekunden gesendet werden (offizielle Grenze fuer
+        # SET_ACTIVITY). Wird diese Grenze unterschritten, landet zwar technisch jedes
+        # Update im Code, aber Discord uebernimmt nur einen Teil davon - nach aussen
+        # sieht das wie "eingefrorene" Bilder/Zeiten aus (Bild wechselt nicht, Fortschritt
+        # "stackt" beim Songwechsel), weil zufaellig immer wieder ein veraltetes Update
+        # durchkommt statt des aktuellen. Deshalb hartes Minimum von 15s, unabhaengig
+        # davon, was in der Konfiguration steht.
+        self._interval = max(15.0, float(interval))
         self._show_idle = show_idle
         self._queue: "queue.Queue[dict | None | object]" = queue.Queue(maxsize=1)
         self._running = True

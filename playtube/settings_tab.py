@@ -60,9 +60,11 @@ class SettingsTab(QWidget):
         self._client_id = QLineEdit(str(discord_cfg.get("client_id", "")))
         self._client_id.setPlaceholderText("Discord Application Client-ID")
         self._discord_interval = QSpinBox()
-        self._discord_interval.setRange(5, 120)
+        # Minimum 15s: Discord ignoriert Rich-Presence-Updates, die haeufiger kommen,
+        # stillschweigend (fuehrt zu "eingefrorenem" Bild/Fortschrittsbalken).
+        self._discord_interval.setRange(15, 120)
         self._discord_interval.setSuffix(" s")
-        self._discord_interval.setValue(int(discord_cfg.get("update_interval_seconds", 15)))
+        self._discord_interval.setValue(max(15, int(discord_cfg.get("update_interval_seconds", 15))))
         self._show_idle = QCheckBox("Status anzeigen, wenn gerade nichts läuft")
         self._show_idle.setChecked(bool(discord_cfg.get("show_idle_presence", True)))
         discord_form.addRow(self._discord_enabled)

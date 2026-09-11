@@ -3,7 +3,7 @@
   "discord": {
     "enabled": true,
     "client_id": "1548023494976086127",
-    "update_interval_seconds": 5,
+    "update_interval_seconds": 15,
     "show_idle_presence": true
   },
   "updates": {
