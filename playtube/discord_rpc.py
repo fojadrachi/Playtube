@@ -9,12 +9,18 @@ from __future__ import annotations
 
 import os
 import queue
+import re
 import time
 from typing import Any
 
 from PySide6.QtCore import QThread
 
 from .config import APP_NAME
+
+try:
+    from pypresence.types import ActivityType
+except ImportError:  # pypresence fehlt -> Discord-Feature bleibt einfach aus
+    ActivityType = None
 
 # Asset-Keys, die (optional) unter discord.com/developers/applications -> Rich
 # Presence -> Art Assets hochgeladen werden koennen. Fehlen sie, zeigt Discord
@@ -37,6 +43,17 @@ def _truncate(text: str | None, limit: int = 128, fallback: str = "") -> str:
     return text
 
 
+_THUMBNAIL_SIZE_RE = re.compile(r"=w\d+-h\d+(-[a-z0-9-]*)?$", re.IGNORECASE)
+
+
+def _upsize_thumbnail(url: str | None) -> str | None:
+    """YouTube-Music-Player-Bar-Thumbnails kommen sehr klein (z.B. '=w60-h60-l90-rj').
+    Fuer eine scharfe Darstellung in Discord die Groesse im URL-Suffix hochsetzen."""
+    if not url:
+        return url
+    return _THUMBNAIL_SIZE_RE.sub("=w544-h544-l90-rj", url)
+
+
 def build_presence_payload(info: dict[str, Any], session_start: int) -> dict[str, Any]:
     """Baut das update()-Payload fuer pypresence aus den vom Browser-Tab gelieferten
     Medien-Informationen."""
@@ -46,10 +63,24 @@ def build_presence_payload(info: dict[str, Any], session_start: int) -> dict[str
     default_state = "YouTube Music" if is_music else "YouTube"
     state = _truncate(info.get("subtitle"), fallback=default_state)
 
+    thumbnail = info.get("thumbnail")
+    if isinstance(thumbnail, str) and thumbnail.startswith("http"):
+        # Discord akzeptiert fuer large_image auch direkte externe Bild-URLs (nicht nur
+        # vorab hochgeladene Asset-Keys) - so zeigt Discord das echte Video-/Cover-Bild
+        # statt eines statischen Logos.
+        large_image = _upsize_thumbnail(thumbnail) if is_music else thumbnail
+    else:
+        large_image = ASSET_MUSIC if is_music else ASSET_YOUTUBE
+
     payload: dict[str, Any] = {
+        # LISTENING = Hoert, WATCHING = Schaut - statt des Default-Typs PLAYING
+        # (Spielt). Muss ein ActivityType-Enum-Member sein, kein rohes int - pypresence
+        # ruft intern .value darauf auf.
+        "activity_type": ActivityType.LISTENING if is_music else ActivityType.WATCHING,
+        "instance": False,
         "details": title,
         "state": state,
-        "large_image": ASSET_MUSIC if is_music else ASSET_YOUTUBE,
+        "large_image": large_image,
         "large_text": "YouTube Music" if is_music else "YouTube",
         "small_image": ASSET_PLAY if playing else ASSET_PAUSE,
         "small_text": "Spielt" if playing else "Pausiert",

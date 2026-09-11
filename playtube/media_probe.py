@@ -7,6 +7,14 @@ MEDIA_PROBE_JS = r"""
         var el = document.querySelector(sel);
         return el ? el.textContent.trim() : null;
     }
+    // Wichtig: getAttribute('src') statt .src - bei einem noch nicht (nach-)geladenen
+    // <img> (leeres/fehlendes src-Attribut, z.B. waehrend Lazy-Loading) loest die .src
+    // Property faelschlich auf die aktuelle Seiten-URL auf statt null/"" zu liefern.
+    function imgSrc(sel) {
+        var el = document.querySelector(sel);
+        var raw = el ? el.getAttribute('src') : null;
+        return (raw && /^https?:\/\//i.test(raw)) ? raw : null;
+    }
     var video = document.querySelector('video');
     var isMusic = location.hostname.indexOf('music.youtube.com') !== -1;
     var title = null, subtitle = null, thumbnail = null;
@@ -14,8 +22,7 @@ MEDIA_PROBE_JS = r"""
     if (isMusic) {
         title = txt('.title.ytmusic-player-bar') || txt('ytmusic-player-bar .title');
         subtitle = txt('.byline.ytmusic-player-bar') || txt('ytmusic-player-bar .byline');
-        var imgM = document.querySelector('ytmusic-player-bar img, .image.ytmusic-player-bar img');
-        thumbnail = imgM ? imgM.src : null;
+        thumbnail = imgSrc('ytmusic-player-bar img, .image.ytmusic-player-bar img');
     } else {
         var t = document.title.replace(/ - YouTube$/, '');
         title = t || null;
