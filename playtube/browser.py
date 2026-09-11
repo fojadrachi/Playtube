@@ -3,6 +3,8 @@ Profil (eigener Datenordner, kein System-Browser-Profil) und periodischem Ausles
 der aktuellen Wiedergabe fuer Discord Rich Presence."""
 from __future__ import annotations
 
+import sys
+
 from PySide6.QtCore import QTimer, Signal, QUrl
 from PySide6.QtWebEngineCore import (
     QWebEnginePage,
@@ -27,8 +29,21 @@ from .media_probe import MEDIA_PROBE_JS, NEXT_TRACK_JS, PREV_TRACK_JS, TOGGLE_PL
 _CHROME_VERSION = CHROME_FULL
 _CHROME_MAJOR = CHROME_MAJOR
 
+if sys.platform == "win32":
+    _UA_PLATFORM_TOKEN = "Windows NT 10.0; Win64; x64"
+    _SEC_CH_UA_PLATFORM = b'"Windows"'
+    _SEC_CH_UA_PLATFORM_VERSION = b'"15.0.0"'
+elif sys.platform.startswith("linux"):
+    _UA_PLATFORM_TOKEN = "X11; Linux x86_64"
+    _SEC_CH_UA_PLATFORM = b'"Linux"'
+    _SEC_CH_UA_PLATFORM_VERSION = b'"6.0.0"'
+else:
+    _UA_PLATFORM_TOKEN = "Macintosh; Intel Mac OS X 10_15_7"
+    _SEC_CH_UA_PLATFORM = b'"macOS"'
+    _SEC_CH_UA_PLATFORM_VERSION = b'"14.0.0"'
+
 _USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    f"Mozilla/5.0 ({_UA_PLATFORM_TOKEN}) AppleWebKit/537.36 "
     f"(KHTML, like Gecko) Chrome/{_CHROME_VERSION} Safari/537.36"
 )
 
@@ -52,8 +67,8 @@ class _ChromeBrandingInterceptor(QWebEngineUrlRequestInterceptor):
         info.setHttpHeader(b"sec-ch-ua", _SEC_CH_UA)
         info.setHttpHeader(b"sec-ch-ua-full-version-list", _SEC_CH_UA_FULL_VERSION_LIST)
         info.setHttpHeader(b"sec-ch-ua-mobile", b"?0")
-        info.setHttpHeader(b"sec-ch-ua-platform", b'"Windows"')
-        info.setHttpHeader(b"sec-ch-ua-platform-version", b'"15.0.0"')
+        info.setHttpHeader(b"sec-ch-ua-platform", _SEC_CH_UA_PLATFORM)
+        info.setHttpHeader(b"sec-ch-ua-platform-version", _SEC_CH_UA_PLATFORM_VERSION)
 
 
 _shared_profile: QWebEngineProfile | None = None

@@ -22,6 +22,7 @@ from . import __version__ as APP_VERSION
 from .browser import BrowserTab
 from .config import APP_NAME
 from .discord_rpc import DiscordRPCWorker
+from .settings_tab import SettingsTab
 from .updater import UpdateChecker, UpdateInstaller
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
@@ -45,9 +46,12 @@ class MainWindow(QMainWindow):
 
         self._youtube_tab = BrowserTab(config["home_youtube"], self)
         self._music_tab = BrowserTab(config["home_music"], self)
+        self._settings_tab = SettingsTab(config, self)
         self._tabs.addTab(self._youtube_tab, "YouTube")
         self._tabs.addTab(self._music_tab, "YouTube Music")
+        self._tabs.addTab(self._settings_tab, "Einstellungen")
         self._tabs.setCurrentIndex(0 if config.get("start_tab") != "music" else 1)
+        self._settings_tab.settingsSaved.connect(self._on_settings_saved)
 
         self._youtube_tab.mediaInfoChanged.connect(self._on_media_info)
         self._music_tab.mediaInfoChanged.connect(self._on_media_info)
@@ -58,14 +62,7 @@ class MainWindow(QMainWindow):
         self._build_tray()
 
         self._rpc_worker: DiscordRPCWorker | None = None
-        discord_cfg = config.get("discord", {})
-        if discord_cfg.get("enabled") and discord_cfg.get("client_id"):
-            self._rpc_worker = DiscordRPCWorker(
-                client_id=str(discord_cfg["client_id"]),
-                interval=discord_cfg.get("update_interval_seconds", 15),
-                show_idle=discord_cfg.get("show_idle_presence", True),
-            )
-            self._rpc_worker.start()
+        self._start_discord_worker()
 
         self._update_checker: UpdateChecker | None = None
         self._update_installer: UpdateInstaller | None = None
@@ -80,19 +77,19 @@ class MainWindow(QMainWindow):
         self.addToolBar(toolbar)
 
         back_action = QAction("◀", self)
-        back_action.triggered.connect(lambda: self._current_tab().back())
+        back_action.triggered.connect(lambda: self._with_browser_tab(lambda t: t.back()))
         toolbar.addAction(back_action)
 
         forward_action = QAction("▶", self)
-        forward_action.triggered.connect(lambda: self._current_tab().forward())
+        forward_action.triggered.connect(lambda: self._with_browser_tab(lambda t: t.forward()))
         toolbar.addAction(forward_action)
 
         reload_action = QAction("⟳", self)
-        reload_action.triggered.connect(lambda: self._current_tab().reload())
+        reload_action.triggered.connect(lambda: self._with_browser_tab(lambda t: t.reload()))
         toolbar.addAction(reload_action)
 
         home_action = QAction("⌂", self)
-        home_action.triggered.connect(lambda: self._current_tab().go_home())
+        home_action.triggered.connect(lambda: self._with_browser_tab(lambda t: t.go_home()))
         toolbar.addAction(home_action)
 
         toolbar.addSeparator()
@@ -117,13 +114,13 @@ class MainWindow(QMainWindow):
         show_action.triggered.connect(self._show_and_raise)
 
         play_pause_action = menu.addAction("Wiedergabe umschalten")
-        play_pause_action.triggered.connect(lambda: self._current_tab().toggle_playback())
+        play_pause_action.triggered.connect(lambda: self._with_browser_tab(lambda t: t.toggle_playback()))
 
         next_action = menu.addAction("Nächster Titel")
-        next_action.triggered.connect(lambda: self._current_tab().next_track())
+        next_action.triggered.connect(lambda: self._with_browser_tab(lambda t: t.next_track()))
 
         prev_action = menu.addAction("Vorheriger Titel")
-        prev_action.triggered.connect(lambda: self._current_tab().previous_track())
+        prev_action.triggered.connect(lambda: self._with_browser_tab(lambda t: t.previous_track()))
 
         menu.addSeparator()
         quit_action = menu.addAction("Beenden")
@@ -135,25 +132,39 @@ class MainWindow(QMainWindow):
 
     # --------------------------------------------------------------- Slots
 
-    def _current_tab(self) -> BrowserTab:
+    def _current_tab(self) -> QWidget:
         return self._tabs.currentWidget()
+
+    def _current_browser_tab(self) -> BrowserTab | None:
+        tab = self._tabs.currentWidget()
+        return tab if isinstance(tab, BrowserTab) else None
+
+    def _with_browser_tab(self, fn) -> None:
+        """Fuehrt fn(tab) nur aus, wenn der aktive Tab ein Browser-Tab ist (nicht
+        die Einstellungen)."""
+        tab = self._current_browser_tab()
+        if tab is not None:
+            fn(tab)
 
     def _navigate_to_url_bar(self) -> None:
         text = self._url_bar.text().strip()
-        if not text:
+        tab = self._current_browser_tab()
+        if not text or tab is None:
             return
         if " " in text or ("." not in text and "://" not in text):
             url = QUrl("https://www.google.com/search?q=" + QUrl.toPercentEncoding(text).data().decode())
         else:
             url = QUrl.fromUserInput(text)
-        self._current_tab().setUrl(url)
+        tab.setUrl(url)
 
     def _sync_url_bar(self, tab: BrowserTab, url: QUrl) -> None:
         if self._current_tab() is tab:
             self._url_bar.setText(url.toString())
 
     def _on_tab_changed(self, index: int) -> None:
-        self._url_bar.setText(self._current_tab().url().toString())
+        tab = self._current_browser_tab()
+        self._url_bar.setEnabled(tab is not None)
+        self._url_bar.setText(tab.url().toString() if tab is not None else "")
 
     def _on_media_info(self, info: dict) -> None:
         sender = self.sender()
@@ -174,6 +185,27 @@ class MainWindow(QMainWindow):
                 self._rpc_worker.submit_media_info(active_info)
             else:
                 self._rpc_worker.submit_media_info(None)
+
+    def _start_discord_worker(self) -> None:
+        discord_cfg = self._config.get("discord", {})
+        if discord_cfg.get("enabled") and discord_cfg.get("client_id"):
+            self._rpc_worker = DiscordRPCWorker(
+                client_id=str(discord_cfg["client_id"]),
+                interval=discord_cfg.get("update_interval_seconds", 15),
+                show_idle=discord_cfg.get("show_idle_presence", True),
+            )
+            self._rpc_worker.start()
+
+    def _on_settings_saved(self, new_config: dict) -> None:
+        self._config = new_config
+
+        if self._rpc_worker is not None:
+            self._rpc_worker.stop()
+            self._rpc_worker.wait(2000)
+            self._rpc_worker = None
+        self._start_discord_worker()
+
+        self._setup_auto_update()
 
     def _on_tray_activated(self, reason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
@@ -209,6 +241,13 @@ class MainWindow(QMainWindow):
     # -------------------------------------------------------------- Auto-Update
 
     def _setup_auto_update(self) -> None:
+        """(Re-)Konfiguriert die Auto-Update-Pruefung - sicher mehrfach aufrufbar,
+        z.B. nach Aenderungen im Einstellungen-Tab."""
+        if getattr(self, "_update_timer", None) is not None:
+            self._update_timer.stop()
+            self._update_timer.deleteLater()
+            self._update_timer = None
+
         updates_cfg = self._config.get("updates", {})
         if not updates_cfg.get("enabled", True):
             return

@@ -47,11 +47,10 @@ def configure_webengine_process_path() -> None:
         return
 
     exe_dir = Path(sys.executable).resolve().parent
-    candidates = [
-        exe_dir / "PlaytubeHelper.exe",
-        exe_dir / "_internal" / "PlaytubeHelper.exe",
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            os.environ["QTWEBENGINEPROCESS_PATH"] = str(candidate)
-            return
+    # PyInstaller legt PySide6 je nach Version unterschiedlich tief in _internal ab
+    # (z.B. _internal\PySide6\), daher rekursiv suchen statt feste Pfade anzunehmen.
+    try:
+        candidate = next(exe_dir.rglob("PlaytubeHelper.exe"))
+    except StopIteration:
+        return
+    os.environ["QTWEBENGINEPROCESS_PATH"] = str(candidate)

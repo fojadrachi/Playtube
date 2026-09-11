@@ -25,10 +25,9 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
-exe = EXE(
-    pyz,
-    a.scripts,
-    [],
+# icon/version-Ressourcen sind Windows-spezifisch (.ico + Versionsressource) - unter
+# Linux/macOS gibt es diese Konzepte fuer ELF-Binaries nicht, deshalb nur dort setzen.
+exe_kwargs = dict(
     exclude_binaries=True,
     name="Playtube",
     debug=False,
@@ -36,9 +35,12 @@ exe = EXE(
     strip=False,
     upx=False,
     console=False,
-    icon=str(ROOT / "assets" / "icon.ico"),
-    version=str(ROOT / "packaging" / "version_info.txt"),
 )
+if sys.platform == "win32":
+    exe_kwargs["icon"] = str(ROOT / "assets" / "icon.ico")
+    exe_kwargs["version"] = str(ROOT / "packaging" / "version_info.txt")
+
+exe = EXE(pyz, a.scripts, [], **exe_kwargs)
 
 coll = COLLECT(
     exe,

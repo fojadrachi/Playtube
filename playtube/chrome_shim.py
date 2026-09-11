@@ -21,8 +21,20 @@ Nutzer lediglich, sich in der eigenen App mit dem eigenen Google-Konto anzumelde
 so wie es in vielen anderen Desktop-Clients (z.B. Mail-/Chat-Sammler-Apps) ueblich ist.
 """
 
+import sys
+
 CHROME_MAJOR = "140"
 CHROME_FULL = "140.0.0.0"
+
+if sys.platform == "win32":
+    _JS_PLATFORM = "Windows"
+    _JS_PLATFORM_VERSION = "15.0.0"
+elif sys.platform.startswith("linux"):
+    _JS_PLATFORM = "Linux"
+    _JS_PLATFORM_VERSION = "6.0.0"
+else:
+    _JS_PLATFORM = "macOS"
+    _JS_PLATFORM_VERSION = "14.0.0"
 
 CHROME_SHIM_JS = f"""
 (function() {{
@@ -69,12 +81,12 @@ CHROME_SHIM_JS = f"""
         var uaData = {{
             brands: brands,
             mobile: false,
-            platform: 'Windows',
+            platform: '{_JS_PLATFORM}',
             getHighEntropyValues: function(hints) {{
                 var full = {{
                     architecture: 'x86', bitness: '64', brands: brands,
                     fullVersionList: fullBrands, mobile: false, model: '',
-                    platform: 'Windows', platformVersion: '15.0.0',
+                    platform: '{_JS_PLATFORM}', platformVersion: '{_JS_PLATFORM_VERSION}',
                     uaFullVersion: '{CHROME_FULL}', wow64: false
                 }};
                 var result = {{}};
@@ -83,7 +95,7 @@ CHROME_SHIM_JS = f"""
                 }});
                 return Promise.resolve(result);
             }},
-            toJSON: function() {{ return {{ brands: brands, mobile: false, platform: 'Windows' }}; }}
+            toJSON: function() {{ return {{ brands: brands, mobile: false, platform: '{_JS_PLATFORM}' }}; }}
         }};
         Object.defineProperty(navigator, 'userAgentData', {{ get: () => uaData, configurable: true }});
     }} catch (e) {{}}

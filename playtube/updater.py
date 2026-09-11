@@ -5,9 +5,11 @@ Ablauf:
      Version als die aktuell laufende (playtube.__version__).
   2. Bei Fund fragt die UI (siehe mainwindow.py) nach Bestaetigung.
   3. UpdateInstaller installiert das Update:
-       - Gepackte Playtube.exe: laedt das Windows-Release-Zip herunter, entpackt es
-         und laesst ein kurzes PowerShell-Skript (nach Prozessende) den Installations-
-         ordner per robocopy /MIR ersetzen und die App neu starten.
+       - Gepackte App (Windows Playtube.exe oder Linux Playtube-Binary): laedt das
+         zum laufenden Betriebssystem passende Release-Paket herunter, entpackt es
+         und laesst ein kurzes Skript (nach Prozessende) den Installationsordner
+         ersetzen und die App neu starten - PowerShell+robocopy unter Windows,
+         ein Shell-Skript unter Linux.
        - Entwicklungsmodus (python main.py): fuehrt 'git pull' + 'pip install -r
          requirements.txt' aus, die App startet sich danach selbst neu (os.execv).
 """
@@ -16,8 +18,10 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
+import tarfile
 import tempfile
 import urllib.error
 import urllib.request
@@ -32,6 +36,9 @@ from . import __version__ as CURRENT_VERSION
 GITHUB_REPO = "fojadrachi/Playtube"
 _API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 _USER_AGENT = "Playtube-Updater"
+
+_LINUX_BINARY_NAME = "Playtube"
+_WINDOWS_BINARY_NAME = "Playtube.exe"
 
 
 def _parse_version(v: str) -> tuple[int, ...]:
@@ -58,14 +65,23 @@ def fetch_latest_release() -> dict[str, Any] | None:
         return None
 
 
-def _find_windows_zip_asset(release: dict[str, Any]) -> dict[str, Any] | None:
+def _find_platform_asset(release: dict[str, Any]) -> dict[str, Any] | None:
+    """Sucht das zur laufenden Plattform passende Release-Paket:
+    Windows -> *.zip mit "win" im Namen, Linux -> *.tar.gz mit "linux" im Namen."""
     assets = release.get("assets", [])
+    if sys.platform == "win32":
+        hints, exts = ("win",), (".zip",)
+    elif sys.platform.startswith("linux"):
+        hints, exts = ("linux",), (".tar.gz", ".tgz")
+    else:
+        return None
+
     for asset in assets:
         name = asset.get("name", "").lower()
-        if name.endswith(".zip") and ("win" in name or "windows" in name):
+        if name.endswith(exts) and any(h in name for h in hints):
             return asset
     for asset in assets:
-        if asset.get("name", "").lower().endswith(".zip"):
+        if asset.get("name", "").lower().endswith(exts):
             return asset
     return None
 
@@ -73,7 +89,7 @@ def _find_windows_zip_asset(release: dict[str, Any]) -> dict[str, Any] | None:
 class UpdateChecker(QThread):
     """Prueft einmalig im Hintergrund auf eine neue Version."""
 
-    updateAvailable = Signal(str, str, str)  # version, release_notes, zip_download_url
+    updateAvailable = Signal(str, str, str)  # version, release_notes, download_url
     checkFailed = Signal()
     upToDate = Signal()
 
@@ -86,7 +102,7 @@ class UpdateChecker(QThread):
         if not tag or not is_newer(tag):
             self.upToDate.emit()
             return
-        asset = _find_windows_zip_asset(release)
+        asset = _find_platform_asset(release)
         download_url = asset["browser_download_url"] if asset else ""
         notes = (release.get("body") or "").strip()
         self.updateAvailable.emit(tag, notes, download_url)
@@ -117,38 +133,44 @@ class UpdateInstaller(QThread):
     def _run_packaged_update(self) -> None:
         if not self._download_url:
             self.failed.emit(
-                "Kein Windows-Release-Paket (.zip) im neuesten Release gefunden."
+                "Kein passendes Release-Paket fuer dieses Betriebssystem gefunden."
             )
             return
 
         self.progress.emit("Lade Update herunter …")
         install_dir = Path(sys.executable).resolve().parent
         staging = Path(tempfile.mkdtemp(prefix="playtube_update_"))
-        zip_path = staging / "update.zip"
+        archive_name = self._download_url.rsplit("/", 1)[-1]
+        archive_path = staging / archive_name
         extract_dir = staging / "extracted"
 
         req = urllib.request.Request(self._download_url, headers={"User-Agent": _USER_AGENT})
-        with urllib.request.urlopen(req, timeout=120) as resp, open(zip_path, "wb") as out:
+        with urllib.request.urlopen(req, timeout=120) as resp, open(archive_path, "wb") as out:
             shutil.copyfileobj(resp, out)
 
         self.progress.emit("Entpacke Update …")
-        with zipfile.ZipFile(zip_path) as zf:
-            zf.extractall(extract_dir)
+        if archive_name.endswith((".tar.gz", ".tgz")):
+            with tarfile.open(archive_path) as tf:
+                tf.extractall(extract_dir)
+        else:
+            with zipfile.ZipFile(archive_path) as zf:
+                zf.extractall(extract_dir)
 
-        # Manche Release-Zips enthalten einen einzelnen Unterordner (z.B. "Playtube/").
+        # Release-Archive enthalten meist einen einzelnen Unterordner (z.B. "Playtube/").
         entries = list(extract_dir.iterdir())
         source_dir = entries[0] if len(entries) == 1 and entries[0].is_dir() else extract_dir
 
         self.progress.emit("Bereite Installation vor …")
-        script_path = self._write_apply_script(source_dir, install_dir, staging)
-        subprocess.Popen(
-            ["powershell", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", str(script_path)],
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
+        if sys.platform == "win32":
+            self._install_windows(source_dir, install_dir, staging)
+        else:
+            self._install_posix(source_dir, install_dir, staging)
         self.finished_ok.emit()
 
-    def _write_apply_script(self, source_dir: Path, install_dir: Path, staging: Path) -> Path:
-        exe_path = install_dir / "Playtube.exe"
+    # -- Windows: PowerShell-Skript wartet auf Prozessende, kopiert per robocopy --
+
+    def _install_windows(self, source_dir: Path, install_dir: Path, staging: Path) -> None:
+        exe_path = install_dir / _WINDOWS_BINARY_NAME
         script = f"""
 $ErrorActionPreference = "SilentlyContinue"
 Start-Sleep -Seconds 1
@@ -163,7 +185,34 @@ Remove-Item -Recurse -Force "{staging}" -ErrorAction SilentlyContinue
 """
         script_path = staging / "apply_update.ps1"
         script_path.write_text(script, encoding="utf-8")
-        return script_path
+        subprocess.Popen(
+            ["powershell", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", str(script_path)],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+
+    # -- Linux: Shell-Skript wartet auf Prozessende, kopiert per cp -a --
+
+    def _install_posix(self, source_dir: Path, install_dir: Path, staging: Path) -> None:
+        exe_path = install_dir / _LINUX_BINARY_NAME
+        script = f"""#!/bin/sh
+while kill -0 {os.getpid()} 2>/dev/null; do
+    sleep 0.5
+done
+rm -rf "{install_dir}"/*
+cp -a "{source_dir}"/. "{install_dir}"/
+chmod +x "{exe_path}"
+nohup "{exe_path}" >/dev/null 2>&1 &
+rm -rf "{staging}"
+"""
+        script_path = staging / "apply_update.sh"
+        script_path.write_text(script, encoding="utf-8")
+        script_path.chmod(script_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        subprocess.Popen(
+            ["/bin/sh", str(script_path)],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
     # ------------------------------------------------------------- Entwicklungsmodus
 
