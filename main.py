@@ -12,7 +12,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from playtube import __version__, app_id  # noqa: E402
 from playtube.config import APP_NAME, clear_cache_on_update, load_config  # noqa: E402
-from playtube.shortcuts import ensure_start_menu_shortcut  # noqa: E402
+from playtube.shortcuts import (  # noqa: E402
+    ensure_play_file_association,
+    ensure_start_menu_shortcut,
+)
 
 app_id.set_app_user_model_id()
 app_id.configure_webengine_process_path()
@@ -33,6 +36,15 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 from playtube.mainwindow import MainWindow  # noqa: E402
 
 
+def _pending_local_patch() -> str | None:
+    """Falls Playtube per Doppelklick auf eine ".play"-Patchdatei gestartet wurde
+    (siehe shortcuts.ensure_play_file_association), liefert den Pfad dazu."""
+    for arg in sys.argv[1:]:
+        if arg.lower().endswith(".play") and Path(arg).is_file():
+            return str(Path(arg).resolve())
+    return None
+
+
 def main() -> int:
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)
     app = QApplication(sys.argv)
@@ -51,9 +63,16 @@ def main() -> int:
     # komplett, da Playtube als portables ZIP ohne Installer ausgeliefert wird.
     clear_cache_on_update(__version__)
     ensure_start_menu_shortcut(APP_NAME)
+    ensure_play_file_association(APP_NAME)
 
     window = MainWindow(config)
     window.show()
+
+    # Playtube wurde per Doppelklick auf eine heruntergeladene .play-Patchdatei
+    # gestartet -> direkt installieren statt selbst etwas herunterzuladen.
+    local_patch = _pending_local_patch()
+    if local_patch:
+        window.install_local_patch(local_patch)
 
     return app.exec()
 

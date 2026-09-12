@@ -1,4 +1,5 @@
-"""Erstellt bei Bedarf eine Windows-Startmenue-Verknuepfung.
+"""Erstellt bei Bedarf eine Windows-Startmenue-Verknuepfung sowie die Dateizuordnung
+fuer die eigene ".play"-Patchdateiendung.
 
 Playtube wird als portables ZIP ausgeliefert (kein MSI/Installer) - ohne das gaebe es
 also nie einen Eintrag im Windows-Startmenue, wie man ihn von "richtig installierten"
@@ -49,4 +50,45 @@ def ensure_start_menu_shortcut(app_name: str) -> None:
         )
     except Exception:
         # Kein Startmenue-Eintrag ist kein Grund, den App-Start scheitern zu lassen.
+        pass
+
+
+def ensure_play_file_association(app_name: str) -> None:
+    """Registriert ".play" (unsere eigene Endung fuer Patch-Pakete, siehe updater.py)
+    als Windows-Dateizuordnung fuer Playtube - ein manuell heruntergeladenes Patch kann
+    danach per Doppelklick installiert werden (Playtube startet dann mit dem Dateipfad
+    als Kommandozeilenargument, siehe main.py). Nur unter HKEY_CURRENT_USER, damit keine
+    Admin-Rechte noetig sind. Wird bei jedem Start erneut geschrieben (billig, idempotent
+    und heilt sich selbst, falls die .exe z.B. nach einem Update an einem neuen Pfad
+    liegt)."""
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return
+    try:
+        import winreg
+
+        exe_path = str(Path(sys.executable).resolve())
+        prog_id = f"{app_name}.PatchFile"
+        icon_path = _find_icon(Path(exe_path).parent) or Path(exe_path)
+
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\.play") as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, prog_id)
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, rf"Software\Classes\{prog_id}") as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, f"{app_name}-Patchdatei")
+        with winreg.CreateKey(
+            winreg.HKEY_CURRENT_USER, rf"Software\Classes\{prog_id}\DefaultIcon"
+        ) as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, str(icon_path))
+        with winreg.CreateKey(
+            winreg.HKEY_CURRENT_USER, rf"Software\Classes\{prog_id}\shell\open\command"
+        ) as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, f'"{exe_path}" "%1"')
+
+        # Explorer informieren, damit die neue Zuordnung sofort (ohne Neustart) greift.
+        import ctypes
+
+        SHCNE_ASSOCCHANGED = 0x08000000
+        SHCNF_IDLIST = 0x0000
+        ctypes.windll.shell32.SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, None, None)
+    except Exception:
+        # Keine Dateizuordnung ist kein Grund, den App-Start scheitern zu lassen.
         pass

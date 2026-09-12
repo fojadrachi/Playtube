@@ -17,6 +17,14 @@ Ablauf:
          PowerShell unter Windows, ein Shell-Skript unter Linux.
        - Entwicklungsmodus (python main.py): fuehrt 'git pull' + 'pip install -r
          requirements.txt' aus, die App startet sich danach selbst neu (os.execv).
+
+Windows-Patch-Pakete tragen die eigene Dateiendung ".play" statt ".zip" (technisch
+weiterhin ein ganz normales ZIP-Archiv - Windows/Python schauen beim Entpacken auf die
+Magic Bytes, nicht auf die Endung). shortcuts.py registriert ".play" beim ersten Start
+als Windows-Dateizuordnung fuer Playtube - ein manuell heruntergeladenes Patch kann so
+auch per Doppelklick installiert werden, ohne dass Playtube selbst etwas herunterladen
+muss (siehe main.py: wird eine .play-Datei als Kommandozeilenargument uebergeben,
+installiert MainWindow.install_local_patch() sie direkt ueber UpdateInstaller).
 """
 from __future__ import annotations
 
@@ -72,16 +80,21 @@ def fetch_latest_release() -> dict[str, Any] | None:
 def _find_platform_asset(release: dict[str, Any]) -> dict[str, Any] | None:
     """Sucht das zur laufenden Plattform passende Release-Paket. Bevorzugt das kleine
     "-patch"-Paket (nur die .exe/Binary) gegenueber dem vollen Release-Paket - siehe
-    Moduldoku. Windows -> *.zip mit "win" im Namen, Linux -> *.tar.gz mit "linux"."""
+    Moduldoku. Windows: volles Paket -> *.zip, Patch -> *.play (unsere eigene
+    Dateiendung, technisch ein ganz normales .zip - siehe Moduldoku), beide mit "win" im
+    Namen. Linux -> *.tar.gz mit "linux"."""
     assets = release.get("assets", [])
     if sys.platform == "win32":
-        hints, exts = ("win",), (".zip",)
+        hints = ("win",)
+        patch_exts, full_exts = (".play",), (".zip",)
     elif sys.platform.startswith("linux"):
-        hints, exts = ("linux",), (".tar.gz", ".tgz")
+        hints = ("linux",)
+        patch_exts = full_exts = (".tar.gz", ".tgz")
     else:
         return None
 
     def find(want_patch: bool, require_hint: bool) -> dict[str, Any] | None:
+        exts = patch_exts if want_patch else full_exts
         for asset in assets:
             name = asset.get("name", "").lower()
             if not name.endswith(exts):
@@ -133,9 +146,18 @@ class UpdateInstaller(QThread):
     finished_ok = Signal()
     failed = Signal(str)
 
-    def __init__(self, download_url: str, parent=None):
+    def __init__(
+        self,
+        download_url: str = "",
+        local_archive_path: str | None = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self._download_url = download_url
+        # Gesetzt, wenn der Nutzer eine bereits heruntergeladene .play-Patchdatei per
+        # Doppelklick geoeffnet hat (siehe shortcuts.py-Dateiverknuepfung) - dann wird
+        # nichts heruntergeladen, sondern direkt diese lokale Datei installiert.
+        self._local_archive_path = local_archive_path
 
     def run(self) -> None:
         try:
@@ -149,39 +171,49 @@ class UpdateInstaller(QThread):
     # ---------------------------------------------------------- gepackter Modus
 
     def _run_packaged_update(self) -> None:
-        if not self._download_url:
-            self.failed.emit(
-                "Kein passendes Release-Paket fuer dieses Betriebssystem gefunden."
-            )
-            return
-
-        self.progress.emit("Lade Update herunter …")
-        self.progress_percent.emit(0)
         install_dir = Path(sys.executable).resolve().parent
         staging = Path(tempfile.mkdtemp(prefix="playtube_update_"))
-        archive_name = self._download_url.rsplit("/", 1)[-1]
-        archive_path = staging / archive_name
         extract_dir = staging / "extracted"
 
-        req = urllib.request.Request(self._download_url, headers={"User-Agent": _USER_AGENT})
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            total = int(resp.headers.get("Content-Length") or 0)
-            downloaded = 0
-            last_emitted = -1
-            with open(archive_path, "wb") as out:
-                while True:
-                    chunk = resp.read(256 * 1024)
-                    if not chunk:
-                        break
-                    out.write(chunk)
-                    downloaded += len(chunk)
-                    if total:
-                        percent = int(downloaded * 100 / total)
-                        if percent != last_emitted:
-                            self.progress_percent.emit(percent)
-                            last_emitted = percent
+        if self._local_archive_path:
+            archive_path = Path(self._local_archive_path)
+            if not archive_path.exists():
+                self.failed.emit(f"Patch-Datei nicht gefunden: {archive_path}")
+                return
+            archive_name = archive_path.name
+            self.progress.emit(f"Verwende lokale Patch-Datei {archive_name} …")
+            self.progress_percent.emit(-1)
+        else:
+            if not self._download_url:
+                self.failed.emit(
+                    "Kein passendes Release-Paket fuer dieses Betriebssystem gefunden."
+                )
+                return
 
-        self.progress_percent.emit(100)
+            self.progress.emit("Lade Update herunter …")
+            self.progress_percent.emit(0)
+            archive_name = self._download_url.rsplit("/", 1)[-1]
+            archive_path = staging / archive_name
+
+            req = urllib.request.Request(self._download_url, headers={"User-Agent": _USER_AGENT})
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                total = int(resp.headers.get("Content-Length") or 0)
+                downloaded = 0
+                last_emitted = -1
+                with open(archive_path, "wb") as out:
+                    while True:
+                        chunk = resp.read(256 * 1024)
+                        if not chunk:
+                            break
+                        out.write(chunk)
+                        downloaded += len(chunk)
+                        if total:
+                            percent = int(downloaded * 100 / total)
+                            if percent != last_emitted:
+                                self.progress_percent.emit(percent)
+                                last_emitted = percent
+            self.progress_percent.emit(100)
+
         self.progress.emit("Entpacke Update …")
         # Unbestimmter Fortschritt waehrend Entpacken/Installieren - die UI zeigt
         # dafuer einen "laufenden" Balken statt einer Prozentzahl.
@@ -190,10 +222,13 @@ class UpdateInstaller(QThread):
             with tarfile.open(archive_path) as tf:
                 tf.extractall(extract_dir)
         else:
+            # .zip UND .play (unsere eigene Dateiendung fuer per Doppelklick startbare
+            # Patchdateien - technisch ein ganz normales .zip, siehe Moduldoku) werden
+            # beide als ZIP entpackt.
             with zipfile.ZipFile(archive_path) as zf:
                 zf.extractall(extract_dir)
 
-        is_patch = "patch" in archive_name.lower()
+        is_patch = "patch" in archive_name.lower() or archive_name.lower().endswith(".play")
         self.progress.emit("Bereite Installation vor …")
 
         if is_patch:

@@ -102,6 +102,16 @@ zum neuen Code passen (fruehere Ursache fuer fehlende Icons). Der Login bleibt d
 unberuehrt, da Cookies/LocalStorage in einem komplett getrennten Ordner
 (`webprofile/storage`) liegen.
 
+### Patch-Dateien manuell installieren (`.play`)
+
+Windows-Patch-Pakete tragen die eigene Dateiendung `.play` statt `.zip` (technisch
+weiterhin ein ganz normales ZIP-Archiv). Playtube registriert `.play` beim ersten Start
+automatisch als Windows-Dateizuordnung - eine manuell heruntergeladene
+`Playtube-vX.Y.Z-win64-patch.play` (z.B. von der
+[Releases-Seite](https://github.com/fojadrachi/Playtube/releases)) laesst sich also
+einfach per Doppelklick installieren, ohne dass Playtube selbst etwas herunterladen
+muss.
+
 ### Eine neue Version veroeffentlichen
 
 ```powershell

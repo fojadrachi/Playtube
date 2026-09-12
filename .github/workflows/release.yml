@@ -42,12 +42,18 @@ jobs:
           path: Playtube-${{ github.ref_name }}-win64.zip
 
       - name: Patch-Paket packen (nur Playtube.exe, fuer schnelle Updates)
-        run: Compress-Archive -Path dist\Playtube\Playtube.exe -DestinationPath Playtube-${{ github.ref_name }}-win64-patch.zip
+        # .play statt .zip: eigene Dateiendung, die Playtube nach dem ersten Start als
+        # Windows-Dateizuordnung registriert (siehe shortcuts.py) - ein manuell
+        # heruntergeladenes Patch laesst sich so auch per Doppelklick installieren.
+        # Technisch bleibt es ein ganz normales ZIP-Archiv.
+        run: |
+          Compress-Archive -Path dist\Playtube\Playtube.exe -DestinationPath Playtube-${{ github.ref_name }}-win64-patch.zip
+          Rename-Item -Path Playtube-${{ github.ref_name }}-win64-patch.zip -NewName Playtube-${{ github.ref_name }}-win64-patch.play
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-patch
-          path: Playtube-${{ github.ref_name }}-win64-patch.zip
+          path: Playtube-${{ github.ref_name }}-win64-patch.play
 
   build-linux:
     runs-on: ubuntu-latest

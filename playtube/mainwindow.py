@@ -311,19 +311,32 @@ class MainWindow(QMainWindow):
         if answer == QMessageBox.StandardButton.Yes:
             self._start_update_install(download_url)
 
-    def _start_update_install(self, download_url: str) -> None:
-        if not download_url:
+    def _start_update_install(self, download_url: str = "", local_path: str | None = None) -> None:
+        if not download_url and not local_path:
             return
         self._settings_tab.hide_install_button()
-        self._settings_tab.set_update_status("Lade Update herunter …")
-        self._settings_tab.set_download_progress(0)
+        if local_path:
+            self._settings_tab.set_update_status("Installiere lokale Patch-Datei …")
+            self._settings_tab.set_download_progress(-1)
+        else:
+            self._settings_tab.set_update_status("Lade Update herunter …")
+            self._settings_tab.set_download_progress(0)
         self._tray.setToolTip(f"{APP_NAME} – Update wird installiert …")
-        self._update_installer = UpdateInstaller(download_url, self)
+        self._update_installer = UpdateInstaller(
+            download_url, local_archive_path=local_path, parent=self
+        )
         self._update_installer.progress.connect(self._on_install_progress_text)
         self._update_installer.progress_percent.connect(self._settings_tab.set_download_progress)
         self._update_installer.finished_ok.connect(self._on_update_finished)
         self._update_installer.failed.connect(self._on_update_failed)
         self._update_installer.start()
+
+    def install_local_patch(self, path: str) -> None:
+        """Wird von main.py aufgerufen, wenn Playtube per Doppelklick auf eine
+        heruntergeladene .play-Patchdatei gestartet wurde (siehe
+        shortcuts.ensure_play_file_association)."""
+        self._tabs.setCurrentWidget(self._settings_tab)
+        self._start_update_install(local_path=path)
 
     def _on_install_progress_text(self, msg: str) -> None:
         self._tray.setToolTip(f"{APP_NAME} – {msg}")
