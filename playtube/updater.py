@@ -222,32 +222,88 @@ class UpdateInstaller(QThread):
 
         self.finished_ok.emit()
 
+    # Kleines, immer sichtbares Fortschrittsfenster fuer den Windows-Installationsschritt.
+    # Der Hauptprozess ist zu diesem Zeitpunkt schon beendet (Datei-Sperren!), daher
+    # laeuft das komplett im separaten PowerShell-Skript - ohne dieses Fenster wuerde
+    # der Nutzer nach dem Schliessen der App fuer die Dauer der Installation (bei
+    # einem vollen Paket ggf. mehrere Sekunden) gar nichts sehen, was wie ein Absturz
+    # oder Haenger wirkt.
+    _WINDOWS_PROGRESS_FORM_PS = """
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "Playtube-Update"
+$form.Size = New-Object System.Drawing.Size(380,130)
+$form.StartPosition = "CenterScreen"
+$form.FormBorderStyle = "FixedDialog"
+$form.ControlBox = $false
+$form.TopMost = $true
+$label = New-Object System.Windows.Forms.Label
+$label.Text = "Playtube wird aktualisiert – bitte warten …"
+$label.AutoSize = $false
+$label.Size = New-Object System.Drawing.Size(340,20)
+$label.Location = New-Object System.Drawing.Point(20,15)
+$form.Controls.Add($label)
+$bar = New-Object System.Windows.Forms.ProgressBar
+$bar.Style = "Marquee"
+$bar.MarqueeAnimationSpeed = 30
+$bar.Size = New-Object System.Drawing.Size(340,20)
+$bar.Location = New-Object System.Drawing.Point(20,50)
+$form.Controls.Add($bar)
+$form.Show()
+$form.Refresh()
+"""
+
     # -- Patch (nur .exe/Binary tauschen, _internal/ bleibt unangetastet) --
 
     def _install_patch_windows(self, new_exe: Path, install_dir: Path, staging: Path) -> None:
         exe_path = install_dir / _WINDOWS_BINARY_NAME
-        script = f"""
+        script = self._WINDOWS_PROGRESS_FORM_PS + f"""
 $ErrorActionPreference = "SilentlyContinue"
-Start-Sleep -Seconds 1
 $targetPid = {os.getpid()}
 while (Get-Process -Id $targetPid -ErrorAction SilentlyContinue) {{
-    Start-Sleep -Milliseconds 500
+    Start-Sleep -Milliseconds 300
+    [System.Windows.Forms.Application]::DoEvents()
 }}
+$label.Text = "Kopiere aktualisierte Datei …"
+$form.Refresh()
+[System.Windows.Forms.Application]::DoEvents()
 Copy-Item -Path "{new_exe}" -Destination "{exe_path}" -Force
+$label.Text = "Fertig – Playtube wird neu gestartet …"
+$form.Refresh()
+[System.Windows.Forms.Application]::DoEvents()
 Start-Process -FilePath "{exe_path}"
-Start-Sleep -Seconds 2
+Start-Sleep -Milliseconds 800
+$form.Close()
 Remove-Item -Recurse -Force "{staging}" -ErrorAction SilentlyContinue
 """
         self._spawn_windows_script(script, staging)
 
+    # Falls zenity installiert ist (auf den meisten Desktop-Distros vorhanden), waehrend
+    # Wartezeit/Installation ein pulsierendes Fortschrittsfenster zeigen - rein optisch,
+    # das Update funktioniert auch ohne (dann passiert der Neustart einfach unsichtbar).
+    _POSIX_PROGRESS_HEADER = """#!/bin/sh
+ZPID=""
+if command -v zenity >/dev/null 2>&1; then
+    tail -f /dev/null | zenity --progress --title="Playtube-Update" \
+        --text="Playtube wird aktualisiert - bitte warten ..." --pulsate --no-cancel \
+        >/dev/null 2>&1 &
+    ZPID=$!
+fi
+"""
+    _POSIX_PROGRESS_FOOTER = """
+[ -n "$ZPID" ] && kill "$ZPID" 2>/dev/null
+"""
+
     def _install_patch_posix(self, new_binary: Path, install_dir: Path, staging: Path) -> None:
         exe_path = install_dir / _LINUX_BINARY_NAME
-        script = f"""#!/bin/sh
+        script = self._POSIX_PROGRESS_HEADER + f"""
 while kill -0 {os.getpid()} 2>/dev/null; do
     sleep 0.5
 done
 cp -f "{new_binary}" "{exe_path}"
 chmod +x "{exe_path}"
+""" + self._POSIX_PROGRESS_FOOTER + f"""
 nohup "{exe_path}" >/dev/null 2>&1 &
 rm -rf "{staging}"
 """
@@ -257,29 +313,45 @@ rm -rf "{staging}"
 
     def _install_full_windows(self, source_dir: Path, install_dir: Path, staging: Path) -> None:
         exe_path = install_dir / _WINDOWS_BINARY_NAME
-        script = f"""
+        script = self._WINDOWS_PROGRESS_FORM_PS + f"""
 $ErrorActionPreference = "SilentlyContinue"
-Start-Sleep -Seconds 1
 $targetPid = {os.getpid()}
 while (Get-Process -Id $targetPid -ErrorAction SilentlyContinue) {{
-    Start-Sleep -Milliseconds 500
+    Start-Sleep -Milliseconds 300
+    [System.Windows.Forms.Application]::DoEvents()
 }}
-robocopy "{source_dir}" "{install_dir}" /MIR /NFL /NDL /NJH /NJS /NC /NS /NP | Out-Null
+$label.Text = "Kopiere Programmdateien … (kann etwas dauern)"
+$form.Refresh()
+[System.Windows.Forms.Application]::DoEvents()
+# Ueber Start-Process (statt direktem Aufruf) gestartet und per Polling statt -Wait
+# abgewartet, damit die Fensternachrichtenschleife per DoEvents() weiterlaeuft -
+# sonst wuerde Windows das Fenster waehrend robocopy als "Keine Rueckmeldung" anzeigen.
+$roboArgs = @("{source_dir}", "{install_dir}", "/MIR", "/NFL", "/NDL", "/NJH", "/NJS", "/NC", "/NS", "/NP")
+$roboProc = Start-Process -FilePath "robocopy" -ArgumentList $roboArgs -WindowStyle Hidden -PassThru
+while (-not $roboProc.HasExited) {{
+    Start-Sleep -Milliseconds 200
+    [System.Windows.Forms.Application]::DoEvents()
+}}
+$label.Text = "Fertig – Playtube wird neu gestartet …"
+$form.Refresh()
+[System.Windows.Forms.Application]::DoEvents()
 Start-Process -FilePath "{exe_path}"
-Start-Sleep -Seconds 2
+Start-Sleep -Milliseconds 800
+$form.Close()
 Remove-Item -Recurse -Force "{staging}" -ErrorAction SilentlyContinue
 """
         self._spawn_windows_script(script, staging)
 
     def _install_full_posix(self, source_dir: Path, install_dir: Path, staging: Path) -> None:
         exe_path = install_dir / _LINUX_BINARY_NAME
-        script = f"""#!/bin/sh
+        script = self._POSIX_PROGRESS_HEADER + f"""
 while kill -0 {os.getpid()} 2>/dev/null; do
     sleep 0.5
 done
 rm -rf "{install_dir}"/*
 cp -a "{source_dir}"/. "{install_dir}"/
 chmod +x "{exe_path}"
+""" + self._POSIX_PROGRESS_FOOTER + f"""
 nohup "{exe_path}" >/dev/null 2>&1 &
 rm -rf "{staging}"
 """

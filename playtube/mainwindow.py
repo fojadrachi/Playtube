@@ -333,7 +333,14 @@ class MainWindow(QMainWindow):
         self._settings_tab.set_download_progress(100)
         if getattr(sys, "frozen", False):
             # Ein Hintergrund-Skript wartet bereits darauf, dass dieser Prozess
-            # beendet wird, tauscht dann die Dateien aus und startet die App neu.
+            # beendet wird, tauscht dann die Dateien aus und startet die App neu -
+            # es zeigt dabei selbst ein kleines Fortschrittsfenster an (siehe
+            # updater.py), damit der Nutzer zwischen "App schliesst sich" und
+            # "neue App startet" nicht denkt, etwas sei abgestuerzt.
+            self._settings_tab.set_update_status(
+                "Installation abgeschlossen. Playtube wird neu gestartet …"
+            )
+            self._tray.setToolTip(f"{APP_NAME} – wird neu gestartet …")
             self._quit()
         else:
             QMessageBox.information(
