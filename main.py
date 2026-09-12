@@ -10,8 +10,9 @@ from pathlib import Path
 
 # Branding-Schritte MUESSEN vor dem Import von QtWebEngine passieren.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from playtube import app_id  # noqa: E402
-from playtube.config import APP_NAME, load_config  # noqa: E402
+from playtube import __version__, app_id  # noqa: E402
+from playtube.config import APP_NAME, clear_cache_on_update, load_config  # noqa: E402
+from playtube.shortcuts import ensure_start_menu_shortcut  # noqa: E402
 
 app_id.set_app_user_model_id()
 app_id.configure_webengine_process_path()
@@ -45,6 +46,12 @@ def main() -> int:
         app.setWindowIcon(QIcon(str(icon_path)))
 
     config = load_config()
+    # Cache leeren, wenn seit dem letzten Start ein Update installiert wurde (Login
+    # bleibt erhalten, siehe clear_cache_on_update); Startmenue-Verknuepfung fehlt sonst
+    # komplett, da Playtube als portables ZIP ohne Installer ausgeliefert wird.
+    clear_cache_on_update(__version__)
+    ensure_start_menu_shortcut(APP_NAME)
+
     window = MainWindow(config)
     window.show()
 

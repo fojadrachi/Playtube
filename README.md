@@ -55,7 +55,12 @@ nur eine kompilierte .exe mit eigenem Namen und eigener Versionsinfo kann das ae
 powershell -ExecutionPolicy Bypass -File packaging\build.ps1
 ```
 
-Ergebnis liegt danach unter `dist\Playtube\Playtube.exe`. Das Build-Skript benennt
+Ergebnis liegt danach unter `dist\Playtube\Playtube.exe`. Beim ersten Start dieser
+`.exe` legt Playtube automatisch eine Verknuepfung im Windows-Startmenue an (Playtube
+wird ja als portables ZIP ohne Installer ausgeliefert - ohne diesen Schritt gaebe es
+sonst keinen Startmenue-Eintrag).
+
+Das Build-Skript benennt
 zusaetzlich den QtWebEngine-Hilfsprozess (der den eigentlichen Ton ausgibt) zu
 `PlaytubeHelper.exe` um, damit er im Taskmanager nicht als `QtWebEngineProcess`
 auftaucht. Fuer eine vollstaendige Umbenennung inkl. Icon/Versionsinfo dieses
@@ -90,6 +95,12 @@ fragt ein Dialog, ob sie installiert werden soll:
 
 Auto-Update laesst sich im Einstellungen-Tab oder in `config.json` unter
 `updates.enabled` deaktivieren.
+
+Nach einem erkannten Update wird beim naechsten Start automatisch der QtWebEngine-
+HTTP-Cache geleert (`webprofile/cache`) - alte Cache-Eintraege koennen sonst nicht mehr
+zum neuen Code passen (fruehere Ursache fuer fehlende Icons). Der Login bleibt davon
+unberuehrt, da Cookies/LocalStorage in einem komplett getrennten Ordner
+(`webprofile/storage`) liegen.
 
 ### Eine neue Version veroeffentlichen
 

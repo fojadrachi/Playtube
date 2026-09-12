@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -101,3 +102,28 @@ def profile_dir() -> Path:
     d = _app_data_dir() / "webprofile"
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def clear_cache_on_update(current_version: str) -> None:
+    """Loescht den QtWebEngine-HTTP-Cache (webprofile/cache), wenn seit dem letzten
+    Start ein Update installiert wurde - der Login (Cookies/LocalStorage liegen in
+    webprofile/storage, einem komplett getrennten Ordner) bleibt dabei unangetastet.
+    Alte Cache-Eintraege (z.B. Icon-Sprites, Skripte) koennen nach einem Update nicht
+    mehr zum neuen Code passen - frueher Ursache fuer fehlende Icons nach einem
+    beschaedigten Cache, siehe README."""
+    marker = _app_data_dir() / "installed_version.txt"
+    previous = None
+    if marker.exists():
+        try:
+            previous = marker.read_text(encoding="utf-8").strip()
+        except OSError:
+            previous = None
+
+    if previous != current_version:
+        cache_dir = profile_dir() / "cache"
+        if cache_dir.exists():
+            shutil.rmtree(cache_dir, ignore_errors=True)
+        try:
+            marker.write_text(current_version, encoding="utf-8")
+        except OSError:
+            pass
