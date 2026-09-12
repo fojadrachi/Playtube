@@ -259,9 +259,10 @@ class DiscordRPCWorker(QThread):
                 payload = build_presence_payload(item, self._session_start, start_ts, end_ts)
                 self._presence.update(**payload)
                 log_line(
-                    "[send] title=%r thumbnail=%r large_image=%r start=%s end=%s"
+                    "[send] title=%r url=%r thumbnail=%r large_image=%r start=%s end=%s"
                     % (
                         item.get("title"),
+                        item.get("url"),
                         item.get("thumbnail"),
                         payload.get("large_image"),
                         start_ts,

@@ -82,10 +82,18 @@ MEDIA_PROBE_JS = r"""
     var videoId = videoIdFromUrl(location.href);
     var title = null, subtitle = null, thumbnail = null;
 
+    // WICHTIG: die Video-ID aus der URL ist die zuverlaessigste Thumbnail-Quelle - sie
+    // wechselt garantiert synchron mit dem Titel. Das <img> in der YT-Music-Playerleiste
+    // (fruehere Praeferenz) wird von YouTube per Crossfade/Shadow-DOM animiert und
+    // aktualisiert sein src-Attribut dabei nachweislich NICHT zuverlaessig pro Titel -
+    // empirisch bestaetigt: dieselbe Thumbnail-URL blieb ueber mehrere komplett
+    // unterschiedliche Songs hinweg stehen, obwohl Titel/Zeit schon laengst gewechselt
+    // hatten. Das DOM-<img> dient nur noch als Fallback, falls keine Video-ID in der
+    // URL steckt.
     if (isMusic) {
         title = txt('.title.ytmusic-player-bar') || txt('ytmusic-player-bar .title');
         subtitle = txt('.byline.ytmusic-player-bar') || txt('ytmusic-player-bar .byline');
-        thumbnail = imgSrc('ytmusic-player-bar img, .image.ytmusic-player-bar img') || ytThumbnailUrl(videoId);
+        thumbnail = ytThumbnailUrl(videoId) || imgSrc('ytmusic-player-bar img, .image.ytmusic-player-bar img');
     } else {
         var t = document.title.replace(/ - YouTube$/, '');
         title = t || null;
@@ -94,7 +102,7 @@ MEDIA_PROBE_JS = r"""
             || txt('#channel-name a')
             || txt('ytd-channel-name#channel-name a');
         var imgY = document.querySelector('link[rel="image_src"]');
-        thumbnail = (imgY ? imgY.href : null) || ytThumbnailUrl(videoId);
+        thumbnail = ytThumbnailUrl(videoId) || (imgY ? imgY.href : null);
     }
 
     var timeInfo = isMusic ? musicTimeInfo() : youtubeTimeInfo();
