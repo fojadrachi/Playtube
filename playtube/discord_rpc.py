@@ -16,6 +16,7 @@ from typing import Any
 from PySide6.QtCore import QThread
 
 from .config import APP_NAME
+from .debug_log import log_line
 
 try:
     from pypresence.types import ActivityType
@@ -199,6 +200,7 @@ class DiscordRPCWorker(QThread):
             self._presence = Presence(self._client_id)
             self._presence.connect()
             self._connected = True
+            log_line("[connect] verbunden")
             if os.environ.get("PLAYTUBE_DEBUG"):
                 print("[discord-rpc] verbunden", flush=True)
         except Exception as exc:
@@ -224,6 +226,7 @@ class DiscordRPCWorker(QThread):
         now = time.time()
 
         if key != self._track_key:
+            old_key = self._track_key
             self._track_key = key
             # current_time nur als grobe Anfangs-Schaetzung verwenden (z.B. Programm
             # startet waehrend ein Titel schon laeuft) - plausibilisiert, damit ein
@@ -231,6 +234,7 @@ class DiscordRPCWorker(QThread):
             # rein ueber die Systemzeit weiterlaeuft statt ueber currentTime.
             offset = current_time if (duration <= 0 or 0 <= current_time <= duration) else 0
             self._track_start_ts = int(now - offset)
+            log_line(f"[track-change] alt={old_key!r} neu={key!r} offset={offset:.1f}s")
 
         start_ts = self._track_start_ts if self._track_start_ts is not None else int(now)
         end_ts = start_ts + int(duration) if duration and duration > 0 else None
@@ -254,11 +258,22 @@ class DiscordRPCWorker(QThread):
                 start_ts, end_ts = self._track_timestamps(item)
                 payload = build_presence_payload(item, self._session_start, start_ts, end_ts)
                 self._presence.update(**payload)
+                log_line(
+                    "[send] title=%r thumbnail=%r large_image=%r start=%s end=%s"
+                    % (
+                        item.get("title"),
+                        item.get("thumbnail"),
+                        payload.get("large_image"),
+                        start_ts,
+                        end_ts,
+                    )
+                )
             if os.environ.get("PLAYTUBE_DEBUG"):
                 print(f"[discord-rpc] gesendet: {payload!r}", flush=True)
         except Exception as exc:
             # Discord evtl. geschlossen worden -> beim naechsten Mal neu verbinden.
             self._connected = False
+            log_line(f"[send-error] {exc!r}")
             if os.environ.get("PLAYTUBE_DEBUG"):
                 print(f"[discord-rpc] Senden fehlgeschlagen: {exc!r}", flush=True)
 

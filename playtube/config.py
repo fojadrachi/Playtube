@@ -48,6 +48,14 @@ def _app_data_dir() -> Path:
     return d
 
 
+def app_data_dir() -> Path:
+    """Oeffentlicher Zugriff auf den App-Datenordner, z.B. fuer Debug-Logs - die
+    gepackte .exe laeuft ohne Konsolenfenster (console=False), print()-Debugging ist
+    dort also unsichtbar; ein Log-File ist die einzige Moeglichkeit, dort etwas
+    nachtraeglich einzusehen."""
+    return _app_data_dir()
+
+
 def _config_path() -> Path:
     # Im Entwicklungsmodus liegt config.json direkt im Projektordner (leicht editierbar),
     # im gepackten Build im APPDATA-Ordner.
