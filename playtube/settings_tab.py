@@ -25,6 +25,28 @@ from . import __version__ as APP_VERSION
 from .config import APP_NAME, save_config
 from .updater import GITHUB_REPO
 
+# Helle Schrift fuer Versionsnummer, Update-Status und GitHub-Link. palette(text) ist die
+# Standard-Textfarbe (im dunklen Design weiss, im hellen dunkel) - das fruehere
+# palette(mid) war ein dunkles Grau, das auf dem dunklen Hintergrund kaum lesbar war.
+_LIGHT_TEXT_STYLE = "color: palette(text);"
+
+# Update-Fortschrittsbalken: helle Beschriftung und gut sichtbarer Balken. Sobald ein
+# Stylesheet gesetzt ist, zeichnet Qt den Balken nicht mehr mit dem nativen Stil - deshalb
+# hier Rahmen, Hintergrund und Balken (chunk) vollstaendig angegeben.
+_PROGRESS_BAR_STYLE = """
+QProgressBar {
+    color: palette(text);
+    background-color: palette(base);
+    border: 1px solid palette(mid);
+    border-radius: 4px;
+    text-align: center;
+}
+QProgressBar::chunk {
+    background-color: #2f81f7;
+    border-radius: 3px;
+}
+"""
+
 
 class SettingsTab(QWidget):
     """Speichert Aenderungen sofort in config.json und meldet sie per Signal an
@@ -48,7 +70,7 @@ class SettingsTab(QWidget):
         title.setStyleSheet("font-size: 20px; font-weight: 600;")
         header.addWidget(title)
         version_label = QLabel(f"Version {APP_VERSION}")
-        version_label.setStyleSheet("color: palette(mid);")
+        version_label.setStyleSheet(_LIGHT_TEXT_STYLE)
         header.addWidget(version_label)
         outer.addLayout(header)
 
@@ -97,13 +119,14 @@ class SettingsTab(QWidget):
         update_form.addRow(update_actions)
 
         self._update_status_label = QLabel("")
-        self._update_status_label.setStyleSheet("color: palette(mid);")
+        self._update_status_label.setStyleSheet(_LIGHT_TEXT_STYLE)
         self._update_status_label.setWordWrap(True)
         update_form.addRow(self._update_status_label)
 
         self._update_progress = QProgressBar()
         self._update_progress.setRange(0, 100)
         self._update_progress.setTextVisible(True)
+        self._update_progress.setStyleSheet(_PROGRESS_BAR_STYLE)
         self._update_progress.setVisible(False)
         update_form.addRow(self._update_progress)
 
@@ -127,7 +150,7 @@ class SettingsTab(QWidget):
         outer.addLayout(button_row)
 
         info = QLabel(f"github.com/{GITHUB_REPO}")
-        info.setStyleSheet("color: palette(mid);")
+        info.setStyleSheet(_LIGHT_TEXT_STYLE)
         outer.addWidget(info)
 
         outer.addStretch(1)
