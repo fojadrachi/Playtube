@@ -33,7 +33,27 @@ jobs:
       - name: Playtube.exe bauen
         run: pyinstaller packaging\playtube.spec --noconfirm --distpath dist --workpath build
 
-      - name: Als .zip packen (volles Paket)
+      - name: Setup-Installer bauen (Inno Setup)
+        # Der Installer ist der empfohlene Download fuer Neueinsteiger UND das, was
+        # Playtube fuer volle Updates benutzt (siehe playtube/updater.py): eine einzige
+        # Installation, die jedes Update an Ort und Stelle ueberschreibt (feste AppId in
+        # packaging/playtube.iss) - keine parallelen Versionsordner mehr.
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path playtube\__init__.py -Pattern '__version__\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          & $iscc "/DAppVersion=$version" packaging\playtube.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno-Setup-Build fehlgeschlagen." }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-setup
+          path: dist/installer/Playtube-Setup-v*.exe
+
+      - name: Als .zip packen (volles Paket, portabel)
         run: Compress-Archive -Path dist\Playtube -DestinationPath Playtube-${{ github.ref_name }}-win64.zip
 
       - uses: actions/upload-artifact@v4
@@ -46,14 +66,20 @@ jobs:
         # Windows-Dateizuordnung registriert (siehe shortcuts.py) - ein manuell
         # heruntergeladenes Patch laesst sich so auch per Doppelklick installieren.
         # Technisch bleibt es ein ganz normales ZIP-Archiv.
+        # Die PySide6-Version steht im Dateinamen: hat sich die Laufzeit gegenueber der
+        # installierten App geaendert, ist ein reines .exe-Patch nicht mehr kompatibel und
+        # der Updater nimmt stattdessen den Setup-Installer (siehe _patch_is_compatible).
+        shell: pwsh
         run: |
-          Compress-Archive -Path dist\Playtube\Playtube.exe -DestinationPath Playtube-${{ github.ref_name }}-win64-patch.zip
-          Rename-Item -Path Playtube-${{ github.ref_name }}-win64-patch.zip -NewName Playtube-${{ github.ref_name }}-win64-patch.play
+          $pyside = python -c "import PySide6; print(PySide6.__version__)"
+          $name = "Playtube-${{ github.ref_name }}-win64-pyside${pyside}-patch"
+          Compress-Archive -Path dist\Playtube\Playtube.exe -DestinationPath "$name.zip"
+          Rename-Item -Path "$name.zip" -NewName "$name.play"
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-patch
-          path: Playtube-${{ github.ref_name }}-win64-patch.play
+          path: Playtube-*-win64-pyside*-patch.play
 
   build-linux:
     runs-on: ubuntu-latest

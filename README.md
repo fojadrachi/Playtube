@@ -16,6 +16,27 @@ Erweiterung) mit:
 - **Eigener Name** – erscheint als "Playtube" im Taskmanager, Fenstertitel, Alt-Tab
   und (nach dem Packaging, siehe unten) im Lautstaerkemixer statt als "python".
 
+## Installation (Windows)
+
+Lade auf der [Releases-Seite](https://github.com/fojadrachi/Playtube/releases)
+`Playtube-Setup-vX.Y.Z.exe` herunter und starte sie. Der Installer
+
+- installiert Playtube **pro Benutzer** nach `%LOCALAPPDATA%\Programs\Playtube` (keine
+  Admin-Rechte noetig) und legt Startmenue-Eintrag (optional Desktop-Verknuepfung) an,
+- ersetzt bei jeder spaeteren Ausfuehrung die vorhandene Installation **an Ort und
+  Stelle** (feste Installer-ID) - es gibt also immer genau EINE installierte Version, nie
+  mehrere nebeneinander,
+- beendet dafuer ein noch laufendes Playtube selbst und raeumt den alten Programmordner
+  auf, damit keine Reste alter Versionen uebrig bleiben,
+- laesst Login und Einstellungen (`%APPDATA%\Playtube`) unangetastet; beim Deinstallieren
+  ueber "Apps & Features" wird gefragt, ob sie mitgeloescht werden sollen.
+
+Ab dann aktualisiert sich Playtube selbst (siehe "Automatische Updates") - die
+Setup-Datei wird dafuer nicht erneut von Hand gebraucht. Das ZIP-Paket
+(`Playtube-vX.Y.Z-win64.zip`) bleibt als portable Variante ohne Installation erhalten;
+Playtube bietet einer portablen Kopie beim naechsten Update automatisch an, in die
+regulaere Installation zu wechseln (danach kann der alte Ordner geloescht werden).
+
 ## Schnellstart (Entwicklung)
 
 ```powershell
@@ -55,10 +76,14 @@ nur eine kompilierte .exe mit eigenem Namen und eigener Versionsinfo kann das ae
 powershell -ExecutionPolicy Bypass -File packaging\build.ps1
 ```
 
-Ergebnis liegt danach unter `dist\Playtube\Playtube.exe`. Beim ersten Start dieser
-`.exe` legt Playtube automatisch eine Verknuepfung im Windows-Startmenue an (Playtube
-wird ja als portables ZIP ohne Installer ausgeliefert - ohne diesen Schritt gaebe es
-sonst keinen Startmenue-Eintrag).
+Ergebnis liegt danach unter `dist\Playtube\Playtube.exe`. Ist
+[Inno Setup 6](https://jrsoftware.org/isinfo.php) installiert
+(`winget install --id JRSoftware.InnoSetup -e`), baut das Skript daraus ausserdem den
+Installer `dist\installer\Playtube-Setup-vX.Y.Z.exe` (Skript:
+[packaging/playtube.iss](packaging/playtube.iss); mit `-SkipInstaller` ueberspringbar).
+Eine portable, nicht per Setup installierte `.exe` legt beim ersten Start automatisch eine
+Verknuepfung im Windows-Startmenue an - eine per Setup installierte Kopie hat den
+Eintrag bereits vom Installer.
 
 Das Build-Skript benennt
 zusaetzlich den QtWebEngine-Hilfsprozess (der den eigentlichen Ton ausgibt) zu
@@ -82,14 +107,24 @@ Einstellungen-Tab gibt es zusaetzlich einen "Jetzt nach Updates suchen"-Button m
 Status-Anzeige und Fortschrittsbalken fuer den Download. Gibt es eine neuere Version,
 fragt ein Dialog, ob sie installiert werden soll:
 
-- **Gepackte `Playtube.exe`/`Playtube`**: laedt bevorzugt das kleine **Patch-Paket**
-  herunter (nur die ausfuehrbare Datei mit unserem Anwendungscode, ca. 2-3 MB statt
-  ~200 MB) und ersetzt ausschliesslich diese - der riesige PySide6/QtWebEngine-
-  Laufzeitordner (`_internal/`) bleibt unangetastet, da er sich zwischen normalen
-  Patch-Releases nicht aendert. Nur wenn kein Patch-Paket verfuegbar ist (z.B. beim
-  allerersten Release oder nach einem Wechsel der PySide6-Version), wird automatisch
-  auf das volle Release-Paket zurueckgefallen und der komplette Installationsordner
-  ersetzt. Die App startet sich in beiden Faellen danach selbst neu.
+- **Windows, per Setup installiert** (siehe "Installation"): laedt bevorzugt das kleine
+  **Patch-Paket** herunter (nur die `Playtube.exe` mit unserem Anwendungscode, ca. 2-3 MB)
+  und ueberschreibt damit die Datei im Installationsordner - der riesige PySide6/
+  QtWebEngine-Laufzeitordner (`_internal/`) bleibt unangetastet, da er sich zwischen
+  normalen Patch-Releases nicht aendert. Die PySide6-Version steht im Dateinamen des
+  Patches (`...-pyside6.11.2-patch.play`); weicht sie von der installierten Laufzeit ab,
+  ist ein reines .exe-Patch nicht mehr passend und Playtube nimmt stattdessen den
+  **Setup-Installer**, der alles (auch die Laufzeit) an Ort und Stelle erneuert und
+  Playtube danach wieder startet. Der Versionseintrag in "Apps & Features" wird nach
+  einem Patch ebenfalls nachgezogen.
+- **Windows, portable Kopie** (aus dem ZIP entpackt, z.B. in Downloads): laedt den
+  **Setup-Installer** und fuehrt ihn still aus. Playtube liegt danach in der regulaeren
+  Installation - Startmenue-Eintrag und Dateizuordnung zeigen dorthin, die alte portable
+  Kopie ist nicht mehr noetig (und kann geloescht werden). So entstehen nicht laenger
+  versionierte Ordner nebeneinander. Gibt es (bei aelteren Releases) keinen Installer,
+  wird wie frueher das volle ZIP ueber den vorhandenen Ordner kopiert.
+- **Linux** (`Playtube`-Binary): Patch-Paket (nur das Binary) bzw. volles `.tar.gz`.
+  Die App startet sich in allen Faellen danach selbst neu.
 - **Entwicklungsmodus** (`python main.py`): fuehrt `git pull` + `pip install -r
   requirements.txt` aus und startet den Python-Prozess neu.
 
@@ -125,6 +160,11 @@ loest automatisch die GitHub-Actions-Pipeline
 eine Windows- als auch eine Linux-Version baut** und beide als Assets an einem GitHub
 Release veroeffentlicht - Fortschritt unter
 https://github.com/fojadrachi/Playtube/actions.
+
+Fuer Windows entstehen dabei drei Dateien: `Playtube-Setup-vX.Y.Z.exe` (Installer, fuer
+Neueinsteiger und volle Updates), `Playtube-vX.Y.Z-win64.zip` (portabel) und das kleine
+`...-pyside<Version>-patch.play` (schnelles Update). Der Installer bekommt seine
+Versionsnummer aus `playtube/__init__.py` (das `release.ps1` vor dem Tag setzt).
 
 Alle Nutzer mit einer laufenden Playtube-Installation (Windows oder Linux) bekommen die
 neue Version danach automatisch angeboten.
@@ -166,6 +206,17 @@ QtWebEngine benoetigt unter Linux ein paar System-Bibliotheken (auf Debian/Ubunt
   starten (die Header greifen erst ab dem naechsten Prozessstart), notfalls einmal den
   Profilordner `%APPDATA%\Playtube\webprofile` (bzw. `PlaytubeDev` im
   Entwicklungsmodus) loeschen und neu anmelden.
+- **Auf YouTube/YouTube Music fehlen alle Icons (Play/Pause, Suche, Menue ...):** Fast
+  sicher laufen zwei Playtube-Prozesse gleichzeitig auf demselben Browser-Profil - die
+  zweite Instanz rendert dann keine Icons mehr. Passiert leicht, weil das Schliessen des
+  Fensters Playtube nur in den Tray minimiert: eine aeltere Version laeuft unsichtbar
+  weiter, waehrend eine neu heruntergeladene zusaetzlich gestartet wird. Abhilfe: alle
+  Playtube-Instanzen ueber das Tray-Icon (Rechtsklick -> Beenden) bzw. im Taskmanager
+  beenden und nur EINE neu starten. Ab der Version mit
+  [playtube/single_instance.py](playtube/single_instance.py) verhindert Playtube den
+  Doppelstart selbst (ein zweiter Start holt das laufende Fenster nach vorn); eine
+  aeltere Instanz ohne diesen Schutz wird dabei nicht erkannt und muss einmalig manuell
+  beendet werden.
 - 4K/Premium-Videoqualitaet kann eingeschraenkt sein, da die Open-Source-Variante von
   QtWebEngine kein Widevine-DRM mitbringt (Standard-Qualitaeten funktionieren normal).
 - Icon/Branding-Bilder liegen unter `assets/` und wurden mit `tools/generate_icon.py`

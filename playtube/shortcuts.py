@@ -1,10 +1,12 @@
 """Erstellt bei Bedarf eine Windows-Startmenue-Verknuepfung sowie die Dateizuordnung
 fuer die eigene ".play"-Patchdateiendung.
 
-Playtube wird als portables ZIP ausgeliefert (kein MSI/Installer) - ohne das gaebe es
-also nie einen Eintrag im Windows-Startmenue, wie man ihn von "richtig installierten"
-Programmen kennt. Wird beim Start der gepackten .exe einmalig nachgeholt (idempotent -
-prueft vorher, ob die Verknuepfung schon existiert)."""
+Playtube-Setup (packaging/playtube.iss) legt Startmenue-Eintrag und Dateizuordnung
+selbst an. Fuer eine portable, aus einem ZIP entpackte Kopie gaebe es sonst nie einen
+Eintrag im Windows-Startmenue - der wird beim Start der gepackten .exe einmalig
+nachgeholt (idempotent - prueft vorher, ob die Verknuepfung schon existiert). Eine durch
+Setup installierte Kopie fasst die Verknuepfung nicht an, damit sie nicht versehentlich
+wieder auf eine andere (portable) Kopie umgebogen wird."""
 from __future__ import annotations
 
 import os
@@ -21,6 +23,12 @@ def _find_icon(exe_dir: Path) -> Path | None:
 def ensure_start_menu_shortcut(app_name: str) -> None:
     if sys.platform != "win32" or not getattr(sys, "frozen", False):
         return
+    # Import erst hier: shortcuts.py wird vor dem restlichen Qt-Setup importiert (siehe
+    # main.py), updater.py zieht PySide6 nach.
+    from .updater import is_installed_via_setup
+
+    if is_installed_via_setup():
+        return  # Verknuepfung gehoert dem Installer (siehe Moduldoku)
     try:
         appdata = os.environ.get("APPDATA")
         if not appdata:

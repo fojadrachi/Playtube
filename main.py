@@ -11,11 +11,13 @@ from pathlib import Path
 # Branding-Schritte MUESSEN vor dem Import von QtWebEngine passieren.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from playtube import __version__, app_id  # noqa: E402
-from playtube.config import APP_NAME, clear_cache_on_update, load_config  # noqa: E402
+from playtube.config import APP_NAME, app_data_dir, clear_cache_on_update, load_config  # noqa: E402
+from playtube.single_instance import SingleInstanceGuard  # noqa: E402
 from playtube.shortcuts import (  # noqa: E402
     ensure_play_file_association,
     ensure_start_menu_shortcut,
 )
+from playtube.updater import cleanup_old_staging  # noqa: E402
 
 app_id.set_app_user_model_id()
 app_id.configure_webengine_process_path()
@@ -57,6 +59,18 @@ def main() -> int:
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
 
+    # Nur EINE Playtube-Instanz pro Datenordner: laufen zwei gleichzeitig auf demselben
+    # Browser-Profil, zeigt die zweite auf YouTube keine Icons mehr (siehe
+    # playtube/single_instance.py). Muss vor jedem Profil-Zugriff (Cache-Reset, Browser)
+    # passieren. Die Instanz eines aelteren Playtube ohne diesen Schutz wird dadurch
+    # allerdings nicht erkannt - die muss einmalig ueber das Tray-Icon beendet werden.
+    local_patch = _pending_local_patch()
+    instance_guard = SingleInstanceGuard(f"{APP_NAME}.SingleInstance.{app_data_dir().name}", app)
+    if not instance_guard.acquire(local_patch):
+        return 0
+
+    cleanup_old_staging()  # Reste eines frueheren Updates (heruntergeladenes Setup) entfernen
+
     config = load_config()
     # Cache leeren, wenn seit dem letzten Start ein Update installiert wurde (Login
     # bleibt erhalten, siehe clear_cache_on_update); Startmenue-Verknuepfung fehlt sonst
@@ -68,9 +82,13 @@ def main() -> int:
     window = MainWindow(config)
     window.show()
 
+    # Ein zweiter Start (Verknuepfung, .play-Doppelklick) landet hier in der laufenden
+    # Instanz: Fenster aus dem Tray holen bzw. den Patch installieren.
+    instance_guard.showRequested.connect(window.show_and_raise)
+    instance_guard.patchRequested.connect(window.install_local_patch)
+
     # Playtube wurde per Doppelklick auf eine heruntergeladene .play-Patchdatei
     # gestartet -> direkt installieren statt selbst etwas herunterzuladen.
-    local_patch = _pending_local_patch()
     if local_patch:
         window.install_local_patch(local_patch)
 

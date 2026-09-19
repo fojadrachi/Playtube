@@ -5,16 +5,22 @@ Ablauf:
      Version als die aktuell laufende (playtube.__version__).
   2. Bei Fund fragt die UI (siehe mainwindow.py) nach Bestaetigung.
   3. UpdateInstaller installiert das Update:
-       - Gepackte App (Windows Playtube.exe oder Linux Playtube-Binary): laedt
-         bevorzugt das kleine "Patch"-Paket herunter (enthaelt NUR die eigentliche
-         .exe/Binary mit unserem Anwendungscode, ca. 2-3 MB statt ~200 MB) und
-         ersetzt lediglich diese Datei - der riesige PySide6/QtWebEngine-Laufzeit-
-         Ordner (_internal/) bleibt unangetastet, da er sich zwischen Patch-Releases
-         normalerweise nicht aendert. Gibt es kein Patch-Paket (z.B. beim allerersten
-         Release oder wenn CI es nicht gebaut hat), faellt es automatisch auf das
-         volle Release-Paket zurueck und ersetzt den kompletten Installationsordner.
-         Ein kurzes Skript wartet dafuer (nach Prozessende) und startet die App neu -
-         PowerShell unter Windows, ein Shell-Skript unter Linux.
+       - Gepackte App unter Windows: Es gibt EINE Installation (Playtube-Setup, siehe
+         packaging/playtube.iss, Ordner %LOCALAPPDATA%/Programs/Playtube), die jedes
+         Update an Ort und Stelle ueberschreibt - keine parallelen Versionsordner.
+           * Installierte Kopie: laedt bevorzugt das kleine "Patch"-Paket (nur die
+             Playtube.exe, ca. 2-3 MB) und ersetzt lediglich diese Datei; der grosse
+             PySide6/QtWebEngine-Ordner (_internal/) bleibt unangetastet. Passt die
+             PySide6-Version des Patches nicht zur installierten Laufzeit (siehe
+             _patch_is_compatible), wird stattdessen der Setup-Installer benutzt.
+           * Portable Kopie (aus einem ZIP entpackt, z.B. in Downloads): laedt den
+             Setup-Installer und fuehrt ihn still aus. Danach liegt Playtube in der
+             regulaeren Installation und Startmenue/Desktop zeigen dorthin - die alte
+             portable Kopie wird nicht mehr gebraucht.
+           * Ohne Setup-Asset (aeltere Releases): Fallback auf das volle ZIP wie frueher.
+       - Gepackte App unter Linux: Patch-Paket (nur das Binary) bzw. volles .tar.gz.
+       Ein kurzes Skript wartet dafuer (nach Prozessende) und startet die App neu -
+       PowerShell unter Windows (Patch/ZIP), Inno Setup selbst (Setup), Shell unter Linux.
        - Entwicklungsmodus (python main.py): fuehrt 'git pull' + 'pip install -r
          requirements.txt' aus, die App startet sich danach selbst neu (os.execv).
 
@@ -30,6 +36,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -52,6 +60,17 @@ _USER_AGENT = "Playtube-Updater"
 _LINUX_BINARY_NAME = "Playtube"
 _WINDOWS_BINARY_NAME = "Playtube.exe"
 
+# Muss mit "AppId" in packaging/playtube.iss uebereinstimmen. Unter dieser ID legt Inno
+# Setup den Deinstallations-Eintrag ("Apps & Features") an - nach einem Patch-Update
+# wird dort die angezeigte Versionsnummer nachgezogen (siehe _install_patch_windows).
+_INNO_APP_ID = "{87FBA502-2B84-4C42-A66B-2F03F490912D}"
+
+_STAGING_PREFIX = "playtube_update_"
+
+# Release-Asset-Arten (siehe _asset_kind): "setup" = Inno-Installer (nur Windows),
+# "patch" = kleines Paket mit nur der .exe/dem Binary, "full" = komplettes ZIP/.tar.gz.
+_KIND_SETUP, _KIND_PATCH, _KIND_FULL = "setup", "patch", "full"
+
 
 def _parse_version(v: str) -> tuple[int, ...]:
     v = v.strip().lstrip("vV")
@@ -66,6 +85,20 @@ def is_newer(remote: str, local: str = CURRENT_VERSION) -> bool:
     return _parse_version(remote) > _parse_version(local)
 
 
+def _version_from_asset_name(name: str) -> str | None:
+    """Zieht "X.Y.Z" aus einem Release-Asset-Namen wie "Playtube-v2.4.0-win64-patch.play"
+    (die PySide6-Version im Patch-Namen, "pyside6.11.2", wird dabei uebersprungen)."""
+    match = re.search(r"v(\d+\.\d+\.\d+)", name, flags=re.IGNORECASE)
+    return match.group(1) if match else None
+
+
+def cleanup_old_staging() -> None:
+    """Loescht Reste frueherer Update-Laeufe im Temp-Ordner (u.a. den heruntergeladenen
+    Setup-Installer - er laesst sich nicht selbst loeschen, solange er laeuft)."""
+    for old in Path(tempfile.gettempdir()).glob(f"{_STAGING_PREFIX}*"):
+        shutil.rmtree(old, ignore_errors=True)
+
+
 def fetch_latest_release() -> dict[str, Any] | None:
     req = urllib.request.Request(
         _API_URL, headers={"User-Agent": _USER_AGENT, "Accept": "application/vnd.github+json"}
@@ -77,41 +110,91 @@ def fetch_latest_release() -> dict[str, Any] | None:
         return None
 
 
-def _find_platform_asset(release: dict[str, Any]) -> dict[str, Any] | None:
-    """Sucht das zur laufenden Plattform passende Release-Paket. Bevorzugt das kleine
-    "-patch"-Paket (nur die .exe/Binary) gegenueber dem vollen Release-Paket - siehe
-    Moduldoku. Windows: volles Paket -> *.zip, Patch -> *.play (unsere eigene
-    Dateiendung, technisch ein ganz normales .zip - siehe Moduldoku), beide mit "win" im
-    Namen. Linux -> *.tar.gz mit "linux"."""
-    assets = release.get("assets", [])
+def is_installed_via_setup() -> bool:
+    """True, wenn diese Playtube.exe aus einer Installation durch Playtube-Setup stammt
+    (Inno Setup legt im Installationsordner immer unins000.exe ab) - im Gegensatz zu
+    einer portablen, aus einem ZIP entpackten Kopie."""
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return False
+    return (Path(sys.executable).resolve().parent / "unins000.exe").exists()
+
+
+def _asset_kind(name: str) -> str | None:
+    """Ordnet ein Release-Asset (nach Dateiname) einer Art zu - oder None, wenn es fuer
+    die laufende Plattform nicht in Frage kommt. Windows: Setup -> *Setup*.exe, Patch ->
+    *.play (unsere eigene Dateiendung, technisch ein ganz normales .zip), Voll -> *.zip.
+    Linux: *.tar.gz, "patch" im Namen kennzeichnet das Patch-Paket."""
+    name = name.lower()
     if sys.platform == "win32":
-        hints = ("win",)
-        patch_exts, full_exts = (".play",), (".zip",)
+        if name.endswith(".exe") and "setup" in name:
+            return _KIND_SETUP
+        if name.endswith(".play"):
+            return _KIND_PATCH
+        if name.endswith(".zip") and "patch" not in name:
+            return _KIND_FULL
+        return None
+    if sys.platform.startswith("linux") and name.endswith((".tar.gz", ".tgz")):
+        return _KIND_PATCH if "patch" in name else _KIND_FULL
+    return None
+
+
+def _patch_is_compatible(name: str) -> bool:
+    """Patch-Pakete tragen die PySide6-Version, gegen die sie gebaut wurden, im Namen
+    (z.B. "Playtube-v2.4.0-win64-pyside6.11.2-patch.play"). Weicht sie von der Laufzeit
+    der installierten App ab, waere die neue Playtube.exe mit dem vorhandenen _internal/
+    inkompatibel - dann muss stattdessen der Setup-Installer die Laufzeit mit erneuern.
+    Ohne Angabe im Namen (aeltere Releases) wird wie frueher Kompatibilitaet angenommen."""
+    match = re.search(r"pyside(\d+\.\d+\.\d+)", name.lower())
+    if not match:
+        return True
+    try:
+        import PySide6
+
+        return match.group(1) == PySide6.__version__
+    except Exception:  # noqa: BLE001 - im Zweifel wie frueher patchen
+        return True
+
+
+def _preferred_kinds() -> tuple[str, ...]:
+    """Reihenfolge, in der Release-Asset-Arten ausprobiert werden."""
+    if sys.platform == "win32":
+        if is_installed_via_setup():
+            # Installierte Kopie: kleines Patch zuerst (schnell, ueberschreibt nur die
+            # .exe im Installationsordner).
+            return (_KIND_PATCH, _KIND_SETUP, _KIND_FULL)
+        # Portable Kopie: Setup zuerst - danach liegt Playtube in der regulaeren
+        # Installation, statt dass weiter versionierte Ordner nebeneinander entstehen.
+        return (_KIND_SETUP, _KIND_PATCH, _KIND_FULL)
+    return (_KIND_PATCH, _KIND_FULL)
+
+
+def _find_platform_asset(release: dict[str, Any]) -> dict[str, Any] | None:
+    """Sucht das zur laufenden Plattform passende Release-Paket (Reihenfolge der Arten
+    siehe _preferred_kinds). Innerhalb einer Art wird ein Asset mit Plattformhinweis
+    ("win"/"linux") im Namen bevorzugt."""
+    if sys.platform == "win32":
+        hint = "win"
     elif sys.platform.startswith("linux"):
-        hints = ("linux",)
-        patch_exts = full_exts = (".tar.gz", ".tgz")
+        hint = "linux"
     else:
         return None
 
-    def find(want_patch: bool, require_hint: bool) -> dict[str, Any] | None:
-        exts = patch_exts if want_patch else full_exts
-        for asset in assets:
-            name = asset.get("name", "").lower()
-            if not name.endswith(exts):
-                continue
-            if require_hint and not any(h in name for h in hints):
-                continue
-            if ("patch" in name) != want_patch:
-                continue
-            return asset
-        return None
+    candidates: list[tuple[str, bool, dict[str, Any]]] = []
+    for asset in release.get("assets", []):
+        name = asset.get("name", "")
+        kind = _asset_kind(name)
+        if kind is None:
+            continue
+        if kind == _KIND_PATCH and not _patch_is_compatible(name):
+            continue
+        candidates.append((kind, hint in name.lower(), asset))
 
-    return (
-        find(True, True)
-        or find(True, False)
-        or find(False, True)
-        or find(False, False)
-    )
+    for kind in _preferred_kinds():
+        matching = [(has_hint, asset) for k, has_hint, asset in candidates if k == kind]
+        if matching:
+            matching.sort(key=lambda item: not item[0])  # stabil: Treffer mit Hinweis zuerst
+            return matching[0][1]
+    return None
 
 
 class UpdateChecker(QThread):
@@ -172,7 +255,8 @@ class UpdateInstaller(QThread):
 
     def _run_packaged_update(self) -> None:
         install_dir = Path(sys.executable).resolve().parent
-        staging = Path(tempfile.mkdtemp(prefix="playtube_update_"))
+        cleanup_old_staging()
+        staging = Path(tempfile.mkdtemp(prefix=_STAGING_PREFIX))
         extract_dir = staging / "extracted"
 
         if self._local_archive_path:
@@ -214,6 +298,16 @@ class UpdateInstaller(QThread):
                                 last_emitted = percent
             self.progress_percent.emit(100)
 
+        if sys.platform == "win32" and archive_name.lower().endswith(".exe"):
+            # Setup-Installer: nichts zu entpacken - er installiert selbst ueber die
+            # vorhandene Installation (bzw. richtet bei einer portablen Kopie die
+            # regulaere Installation ein) und startet Playtube danach neu.
+            self.progress.emit("Starte Installer …")
+            self.progress_percent.emit(-1)
+            self._install_setup_windows(archive_path)
+            self.finished_ok.emit()
+            return
+
         self.progress.emit("Entpacke Update …")
         # Unbestimmter Fortschritt waehrend Entpacken/Installieren - die UI zeigt
         # dafuer einen "laufenden" Balken statt einer Prozentzahl.
@@ -243,7 +337,9 @@ class UpdateInstaller(QThread):
                 )
                 return
             if sys.platform == "win32":
-                self._install_patch_windows(matches[0], install_dir, staging)
+                self._install_patch_windows(
+                    matches[0], install_dir, staging, _version_from_asset_name(archive_name)
+                )
             else:
                 self._install_patch_posix(matches[0], install_dir, staging)
         else:
@@ -291,8 +387,23 @@ $form.Refresh()
 
     # -- Patch (nur .exe/Binary tauschen, _internal/ bleibt unangetastet) --
 
-    def _install_patch_windows(self, new_exe: Path, install_dir: Path, staging: Path) -> None:
+    def _install_patch_windows(
+        self, new_exe: Path, install_dir: Path, staging: Path, version: str | None = None
+    ) -> None:
         exe_path = install_dir / _WINDOWS_BINARY_NAME
+        # Nach einem Patch zeigt "Apps & Features" sonst weiter die Version des zuletzt
+        # ausgefuehrten Setups an. Nur relevant fuer Installationen durch Playtube-Setup
+        # (der Eintrag existiert bei portablen Kopien nicht - dann ist Test-Path $false).
+        registry_update = ""
+        if version and is_installed_via_setup():
+            registry_update = f"""
+if ($copied) {{
+    $uninstallKey = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{_INNO_APP_ID}_is1"
+    if (Test-Path -LiteralPath $uninstallKey) {{
+        Set-ItemProperty -LiteralPath $uninstallKey -Name DisplayVersion -Value "{version}"
+    }}
+}}
+"""
         script = self._WINDOWS_PROGRESS_FORM_PS + f"""
 $ErrorActionPreference = "SilentlyContinue"
 $targetPid = {os.getpid()}
@@ -304,6 +415,8 @@ $label.Text = "Kopiere aktualisierte Datei …"
 $form.Refresh()
 [System.Windows.Forms.Application]::DoEvents()
 Copy-Item -Path "{new_exe}" -Destination "{exe_path}" -Force
+$copied = $?
+{registry_update}
 $label.Text = "Fertig – Playtube wird neu gestartet …"
 $form.Refresh()
 [System.Windows.Forms.Application]::DoEvents()
@@ -343,6 +456,29 @@ nohup "{exe_path}" >/dev/null 2>&1 &
 rm -rf "{staging}"
 """
         self._spawn_posix_script(script, staging)
+
+    # -- Setup-Installer (Windows): eine einzige, ueberschriebene Installation --
+
+    def _install_setup_windows(self, setup_path: Path) -> None:
+        """Startet Playtube-Setup still (nur Fortschrittsfenster, keine Rueckfragen).
+        Der Installer beendet laufende Playtube-Prozesse selbst, ueberschreibt die
+        vorhandene Installation im selben Ordner (gleiche AppId, siehe
+        packaging/playtube.iss) und startet Playtube dank /RELAUNCH=1 danach neu. Die
+        laufende App beendet sich direkt nach diesem Aufruf (siehe MainWindow), muss
+        hier also nicht auf Setup warten. Setup wird abgekoppelt gestartet, damit es das
+        Beenden dieses Prozesses ueberlebt."""
+        subprocess.Popen(
+            [
+                str(setup_path),
+                "/SILENT",
+                "/SUPPRESSMSGBOXES",
+                "/NORESTART",
+                "/NOCANCEL",
+                "/RELAUNCH=1",
+            ],
+            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+            close_fds=True,
+        )
 
     # -- Volles Paket (kein Patch verfuegbar/passend) - kompletten Ordner ersetzen --
 

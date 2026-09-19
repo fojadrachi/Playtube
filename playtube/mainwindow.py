@@ -221,6 +221,11 @@ class MainWindow(QMainWindow):
         self.raise_()
         self.activateWindow()
 
+    def show_and_raise(self) -> None:
+        """Oeffentlicher Einstieg fuer den Einzelinstanz-Schutz (main.py): holt das Fenster
+        aus dem Tray, wenn Playtube ein zweites Mal gestartet wird."""
+        self._show_and_raise()
+
     def _quit(self) -> None:
         if self._rpc_worker is not None:
             self._rpc_worker.stop()
