@@ -112,6 +112,24 @@ def build_idle_payload(session_start: int) -> dict[str, Any]:
     }
 
 
+SETTINGS_DETAILS = "In den Einstellungen"
+SETTINGS_DEFAULT_STATE = "Schaut sich die Einstellungen an"
+
+
+def build_settings_payload(session_start: int, activity: str | None) -> dict[str, Any]:
+    """Presence, solange der Einstellungen-Tab offen ist. `activity` beschreibt, was
+    gerade bearbeitet wird (z.B. "Bearbeitet: Discord Rich Presence › Client-ID") - es
+    wird bewusst nur der NAME des Feldes uebergeben, nie sein Inhalt (sonst wuerde
+    z.B. die eingetragene Client-ID oeffentlich im Discord-Profil stehen)."""
+    return {
+        "details": SETTINGS_DETAILS,
+        "state": _truncate(activity, fallback=SETTINGS_DEFAULT_STATE),
+        "large_image": ASSET_DEFAULT,
+        "large_text": APP_NAME,
+        "start": session_start,
+    }
+
+
 class DiscordRPCWorker(QThread):
     """Eigener Thread, der die Verbindung zu Discord haelt und Presence-Updates
     debounced (max. 1 Update pro `interval` Sekunden) versendet."""
@@ -142,6 +160,11 @@ class DiscordRPCWorker(QThread):
     def submit_media_info(self, info: dict[str, Any] | None) -> None:
         """Neuester bekannter Zustand (None = nichts spielt / idle)."""
         self._replace_queue(info if info is not None else _IDLE_SENTINEL)
+
+    def submit_settings_activity(self, activity: str | None) -> None:
+        """Nutzer ist im Einstellungen-Tab; `activity` = was gerade bearbeitet wird
+        (None = nur "schaut sich die Einstellungen an")."""
+        self._replace_queue(_SettingsActivity(activity))
 
     def _replace_queue(self, item) -> None:
         try:
@@ -254,6 +277,14 @@ class DiscordRPCWorker(QThread):
                 else:
                     payload = None
                     self._presence.clear()
+            elif isinstance(item, _SettingsActivity):
+                # Wie beim Leerlauf: der naechste echte Track bekommt einen frischen
+                # Zeit-Anker.
+                self._track_key = None
+                self._track_start_ts = None
+                payload = build_settings_payload(self._session_start, item.activity)
+                self._presence.update(**payload)
+                log_line("[send-settings] state=%r" % (payload["state"],))
             else:
                 start_ts, end_ts = self._track_timestamps(item)
                 payload = build_presence_payload(item, self._session_start, start_ts, end_ts)
@@ -285,6 +316,15 @@ class DiscordRPCWorker(QThread):
                 self._presence.close()
             except Exception:
                 pass
+
+
+class _SettingsActivity:
+    """Queue-Eintrag: Nutzer ist in den Einstellungen und bearbeitet `activity`."""
+
+    __slots__ = ("activity",)
+
+    def __init__(self, activity: str | None) -> None:
+        self.activity = activity
 
 
 class _Sentinel:

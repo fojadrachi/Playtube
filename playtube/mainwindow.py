@@ -62,6 +62,7 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self._settings_tab, "Einstellungen")
         self._tabs.setCurrentIndex(0 if config.get("start_tab") != "music" else 1)
         self._settings_tab.settingsSaved.connect(self._on_settings_saved)
+        self._settings_tab.activityChanged.connect(lambda _activity: self._update_discord_presence())
         self._settings_tab.checkUpdatesRequested.connect(self._check_for_updates)
         self._settings_tab.installUpdateRequested.connect(
             lambda: self._start_update_install(self._pending_download_url)
@@ -180,26 +181,46 @@ class MainWindow(QMainWindow):
         tab = self._current_browser_tab()
         self._url_bar.setEnabled(tab is not None)
         self._url_bar.setText(tab.url().toString() if tab is not None else "")
+        # Tab-Wechsel von/zu den Einstellungen aendert, was Discord anzeigen soll.
+        self._update_discord_presence()
+
+    def _active_media_info(self) -> dict | None:
+        """Bevorzugt der Tab, der gerade wirklich abspielt, sonst der aktuell sichtbare."""
+        playing_info = next((i for i in self._latest_media.values() if i.get("playing")), None)
+        return playing_info or self._latest_media.get(id(self._current_tab()))
 
     def _on_media_info(self, info: dict) -> None:
         sender = self.sender()
         self._latest_media[id(sender)] = info
 
-        # Update Fenstertitel + Discord: bevorzugt der Tab, der gerade wirklich
-        # abspielt, sonst der aktuell sichtbare Tab.
-        playing_info = next((i for i in self._latest_media.values() if i.get("playing")), None)
-        active_info = playing_info or self._latest_media.get(id(self._current_tab()))
-
+        active_info = self._active_media_info()
         if active_info and active_info.get("title"):
             self.setWindowTitle(f"{active_info['title']} – {APP_NAME}")
         else:
             self.setWindowTitle(APP_NAME)
 
-        if self._rpc_worker is not None:
-            if active_info and active_info.get("hasVideo"):
-                self._rpc_worker.submit_media_info(active_info)
-            else:
-                self._rpc_worker.submit_media_info(None)
+        self._update_discord_presence()
+
+    def _update_discord_presence(self) -> None:
+        """Entscheidet, was Discord gerade anzeigt: solange der Einstellungen-Tab offen
+        ist, "In den Einstellungen" samt dem gerade bearbeiteten Feld; sonst wie bisher
+        die laufende Wiedergabe bzw. den Leerlauf. Die Einstellungs-Anzeige folgt der
+        Option "Status anzeigen, wenn gerade nichts laeuft" (show_idle_presence) - wer den
+        Leerlauf-Status abgeschaltet hat, bekommt auch keinen Einstellungs-Status."""
+        worker = getattr(self, "_rpc_worker", None)
+        if worker is None:
+            return
+
+        discord_cfg = self._config.get("discord", {})
+        if self._current_tab() is self._settings_tab and discord_cfg.get("show_idle_presence", True):
+            worker.submit_settings_activity(self._settings_tab.current_activity())
+            return
+
+        active_info = self._active_media_info()
+        if active_info and active_info.get("hasVideo"):
+            worker.submit_media_info(active_info)
+        else:
+            worker.submit_media_info(None)
 
     def _start_discord_worker(self) -> None:
         discord_cfg = self._config.get("discord", {})
@@ -219,6 +240,7 @@ class MainWindow(QMainWindow):
             self._rpc_worker.wait(2000)
             self._rpc_worker = None
         self._start_discord_worker()
+        self._update_discord_presence()  # frischen Worker sofort mit dem aktuellen Stand versorgen
 
         self._setup_auto_update()
 

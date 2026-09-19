@@ -6,6 +6,7 @@ from typing import Any
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QFormLayout,
@@ -55,6 +56,9 @@ class SettingsTab(QWidget):
     settingsSaved = Signal(dict)
     checkUpdatesRequested = Signal()
     installUpdateRequested = Signal()
+    # Neue Beschreibung, was gerade bearbeitet wird (fuer die Discord-Presence, siehe
+    # MainWindow._update_discord_presence).
+    activityChanged = Signal(str)
 
     def __init__(self, config: dict[str, Any], parent=None):
         super().__init__(parent)
@@ -154,6 +158,42 @@ class SettingsTab(QWidget):
         outer.addWidget(info)
 
         outer.addStretch(1)
+
+        # Beschreibung je Eingabefeld fuer die Discord-Presence ("was wird bearbeitet").
+        # Bewusst nur Feld-NAMEN, nie Inhalte (z.B. nicht die Client-ID selbst).
+        self._activity_by_widget: dict[QWidget, str] = {
+            self._discord_enabled: "Bearbeitet: Discord Rich Presence › Aktiviert",
+            self._client_id: "Bearbeitet: Discord Rich Presence › Client-ID",
+            self._discord_interval: "Bearbeitet: Discord Rich Presence › Update-Intervall",
+            self._show_idle: "Bearbeitet: Discord Rich Presence › Status im Leerlauf",
+            self._updates_enabled: "Bearbeitet: Automatische Updates › Aktiviert",
+            self._check_interval: "Bearbeitet: Automatische Updates › Prüfintervall",
+            self._check_updates_btn: "Sucht nach Updates",
+            self._install_update_btn: "Installiert ein Update",
+            self._start_tab: "Bearbeitet: Allgemein › Beim Start öffnen",
+            save_btn: "Speichert die Einstellungen",
+        }
+        self._current_activity: str | None = None
+        app = QApplication.instance()
+        if app is not None:
+            app.focusChanged.connect(self._on_focus_changed)
+
+    def current_activity(self) -> str | None:
+        """Zuletzt bearbeitetes Feld (None, solange noch kein Feld angeklickt wurde)."""
+        return self._current_activity
+
+    def _on_focus_changed(self, _old: QWidget | None, new: QWidget | None) -> None:
+        # Vom fokussierten Widget nach oben suchen: bei QSpinBox/QComboBox liegt der Fokus
+        # auf einem internen Kind-Widget (z.B. dem Textfeld des Spinners).
+        widget = new
+        while widget is not None and widget is not self:
+            activity = self._activity_by_widget.get(widget)
+            if activity:
+                if activity != self._current_activity:
+                    self._current_activity = activity
+                    self.activityChanged.emit(activity)
+                return
+            widget = widget.parentWidget()
 
     def _on_save(self) -> None:
         self._config.setdefault("discord", {})

@@ -8,7 +8,12 @@ Erweiterung) mit:
 - **Login/Premium** – eigenes, persistentes Profil (`%APPDATA%\Playtube`), einmal bei
   Google anmelden reicht für beide Dienste.
 - **Discord Rich Presence** – zeigt Titel, Kanal/Interpret, Fortschrittsbalken und
-  einen Link-Button in deinem Discord-Profil, sobald etwas läuft.
+  einen Link-Button in deinem Discord-Profil, sobald etwas läuft. Ist der
+  **Einstellungen-Tab** offen, steht dort stattdessen „In den Einstellungen“ und welches
+  Feld du gerade bearbeitest (z.B. „Discord Rich Presence › Client-ID“) - nur der
+  Feldname, nie der Inhalt. Das folgt der Option „Status anzeigen, wenn gerade nichts
+  läuft“ (aus = auch kein Einstellungs-Status). Discord übernimmt Änderungen höchstens
+  alle 15 Sekunden, die Anzeige hinkt dem Klicken also etwas hinterher.
 - **System-Tray** – Fenster schliessen minimiert nur (Musik läuft weiter), Rechtsklick
   aufs Tray-Icon zum Beenden, Play/Pause/Skip direkt aus dem Menü.
 - **Eigener Name** – erscheint als "Playtube" im Taskmanager, Fenstertitel, Alt-Tab
