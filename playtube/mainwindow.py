@@ -20,7 +20,8 @@ from PySide6.QtWidgets import (
 )
 
 from . import __version__ as APP_VERSION
-from .browser import BrowserTab
+from .audio_routing import sync_audio_permissions
+from .browser import BrowserTab, get_shared_profile
 from .config import APP_NAME
 from .discord_rpc import DiscordRPCWorker
 from .settings_tab import SettingsTab
@@ -54,13 +55,20 @@ class MainWindow(QMainWindow):
         self._tabs.setDocumentMode(True)
         self.setCentralWidget(self._tabs)
 
+        self._sync_audio_permission()
         self._youtube_tab = BrowserTab(config["home_youtube"], self)
         self._music_tab = BrowserTab(config["home_music"], self)
+        # Zusaetzlich nach JEDEM Seitenaufbau erneut erteilen: eine nur VOR dem Laden erteilte
+        # Freigabe greift auf der YouTube-Startseite nicht (per Test ermittelt), eine danach
+        # erteilte schon (siehe audio_routing.py).
+        for tab in (self._youtube_tab, self._music_tab):
+            tab.loadFinished.connect(self._on_tab_load_finished)
         self._settings_tab = SettingsTab(config, self)
         self._tabs.addTab(self._youtube_tab, "YouTube")
         self._tabs.addTab(self._music_tab, "YouTube Music")
         self._tabs.addTab(self._settings_tab, "Einstellungen")
         self._tabs.setCurrentIndex(0 if config.get("start_tab") != "music" else 1)
+        self._apply_audio_routing()
         self._settings_tab.settingsSaved.connect(self._on_settings_saved)
         self._settings_tab.activityChanged.connect(lambda _activity: self._update_discord_presence())
         self._settings_tab.checkUpdatesRequested.connect(self._check_for_updates)
@@ -232,8 +240,34 @@ class MainWindow(QMainWindow):
             )
             self._rpc_worker.start()
 
+    def _audio_outputs(self) -> tuple[str, str]:
+        """(Geraet fuer YouTube, Geraet fuer YouTube Musik) aus der Konfiguration; leer =
+        Systemstandard."""
+        audio_cfg = self._config.get("audio", {})
+        return (
+            str(audio_cfg.get("youtube_output", "") or ""),
+            str(audio_cfg.get("music_output", "") or ""),
+        )
+
+    def _sync_audio_permission(self) -> None:
+        """Erteilt bzw. entzieht die Freigabe der Geraetenamen (siehe audio_routing.py) -
+        nur solange mindestens ein Tab ein eigenes Geraet nutzt."""
+        sync_audio_permissions(get_shared_profile(), any(self._audio_outputs()))
+
+    def _on_tab_load_finished(self, _ok: bool) -> None:
+        if any(self._audio_outputs()):
+            self._sync_audio_permission()
+
+    def _apply_audio_routing(self) -> None:
+        """Wendet die in den Einstellungen gewaehlten Ausgabegeraete pro Tab an."""
+        youtube_output, music_output = self._audio_outputs()
+        self._youtube_tab.set_audio_output(youtube_output)
+        self._music_tab.set_audio_output(music_output)
+
     def _on_settings_saved(self, new_config: dict) -> None:
         self._config = new_config
+        self._sync_audio_permission()
+        self._apply_audio_routing()
 
         if self._rpc_worker is not None:
             self._rpc_worker.stop()

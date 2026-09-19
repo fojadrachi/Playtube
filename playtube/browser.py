@@ -17,6 +17,8 @@ from PySide6.QtWebEngineCore import (
 )
 from PySide6.QtWebEngineWidgets import QWebEngineView
 
+from .audio_routing import SCRIPT_NAME as AUDIO_SCRIPT_NAME
+from .audio_routing import build_router_script
 from .chrome_shim import CHROME_FULL, CHROME_MAJOR, CHROME_SHIM_JS
 from .config import profile_dir
 from .media_probe import MEDIA_PROBE_JS, NEXT_TRACK_JS, PREV_TRACK_JS, TOGGLE_PLAYBACK_JS
@@ -116,6 +118,7 @@ class BrowserTab(QWebEngineView):
     def __init__(self, home_url: str, parent=None):
         super().__init__(parent)
         self._home_url = home_url
+        self._audio_output_set = False  # war schon ein eigenes Ausgabegeraet gewaehlt? (siehe set_audio_output)
 
         page = QWebEnginePage(get_shared_profile(), self)
         self.setPage(page)
@@ -141,6 +144,32 @@ class BrowserTab(QWebEngineView):
 
     def go_home(self) -> None:
         self.load(QUrl(self._home_url))
+
+    def set_audio_output(self, device_name: str) -> None:
+        """Legt den Ton dieses Tabs auf das Ausgabegeraet `device_name` (leer =
+        Systemstandard), siehe audio_routing.py. Wirkt sofort auf die geoeffnete Seite und
+        bleibt bei Seitenwechseln/Neuladen erhalten (Skript pro Seite)."""
+        page = self.page()
+        scripts = page.scripts()
+        for old in scripts.find(AUDIO_SCRIPT_NAME):
+            scripts.remove(old)
+
+        source = build_router_script(device_name)
+        if device_name:
+            script = QWebEngineScript()
+            script.setName(AUDIO_SCRIPT_NAME)
+            script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
+            script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+            script.setRunsOnSubFrames(False)
+            script.setSourceCode(source)
+            scripts.insert(script)
+
+        # Bereits geladene Seite sofort umstellen - auch zurueck auf den Systemstandard,
+        # falls vorher ein eigenes Geraet gewaehlt war. Ohne jemals gewaehltes Geraet wird die
+        # Seite gar nicht angefasst.
+        if device_name or self._audio_output_set:
+            page.runJavaScript(source)
+        self._audio_output_set = bool(device_name)
 
     def toggle_playback(self) -> None:
         self.page().runJavaScript(TOGGLE_PLAYBACK_JS)

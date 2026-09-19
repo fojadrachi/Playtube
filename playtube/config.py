@@ -32,6 +32,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "enabled": True,
         "check_interval_hours": 6,
     },
+    # Ausgabegeraet pro Tab (Name des Geraets, wie in den Einstellungen gewaehlt; leer =
+    # Systemstandard) - siehe playtube/audio_routing.py.
+    "audio": {
+        "youtube_output": "",
+        "music_output": "",
+    },
     "start_tab": "youtube",  # "youtube" oder "music"
     "home_youtube": "https://www.youtube.com/",
     "home_music": "https://music.youtube.com/",

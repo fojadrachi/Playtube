@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import Signal
+from PySide6.QtMultimedia import QMediaDevices
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import __version__ as APP_VERSION
+from .audio_routing import SYSTEM_DEFAULT_LABEL, list_output_devices
 from .config import APP_NAME, save_config
 from .updater import GITHUB_REPO
 
@@ -136,6 +138,31 @@ class SettingsTab(QWidget):
 
         outer.addWidget(update_box)
 
+        audio_cfg = config.get("audio", {})
+        audio_box = QGroupBox("Audioausgabe")
+        audio_form = QFormLayout(audio_box)
+        self._youtube_output = QComboBox()
+        self._music_output = QComboBox()
+        audio_form.addRow("YouTube:", self._youtube_output)
+        audio_form.addRow("YouTube Musik:", self._music_output)
+        audio_hint = QLabel(
+            "Legt den Ton von YouTube und YouTube Musik auf verschiedene Ausgabegeräte, z. B. "
+            "auf getrennte Sonar-Kanäle. Windows zeigt beide unter „Playtube“ - getrennt wird "
+            "über das Gerät. Damit die Seite das Gerät finden kann, erlaubt Playtube ihr dafür "
+            "den Zugriff auf die Audiogeräte-Namen (es wird nichts aufgenommen); die Freigabe "
+            "gilt nur, solange hier ein eigenes Gerät gewählt ist."
+        )
+        audio_hint.setWordWrap(True)
+        audio_hint.setStyleSheet(_LIGHT_TEXT_STYLE)
+        audio_form.addRow(audio_hint)
+        outer.addWidget(audio_box)
+
+        # QMediaDevices meldet, wenn Geraete ein-/ausgesteckt werden -> Listen aktuell halten.
+        self._media_devices = QMediaDevices(self)
+        self._fill_output_combo(self._youtube_output, str(audio_cfg.get("youtube_output", "") or ""))
+        self._fill_output_combo(self._music_output, str(audio_cfg.get("music_output", "") or ""))
+        self._media_devices.audioOutputsChanged.connect(self._reload_output_devices)
+
         general_box = QGroupBox("Allgemein")
         general_form = QFormLayout(general_box)
         self._start_tab = QComboBox()
@@ -168,6 +195,8 @@ class SettingsTab(QWidget):
             self._show_idle: "Bearbeitet: Discord Rich Presence › Status im Leerlauf",
             self._updates_enabled: "Bearbeitet: Automatische Updates › Aktiviert",
             self._check_interval: "Bearbeitet: Automatische Updates › Prüfintervall",
+            self._youtube_output: "Bearbeitet: Audioausgabe › YouTube",
+            self._music_output: "Bearbeitet: Audioausgabe › YouTube Musik",
             self._check_updates_btn: "Sucht nach Updates",
             self._install_update_btn: "Installiert ein Update",
             self._start_tab: "Bearbeitet: Allgemein › Beim Start öffnen",
@@ -177,6 +206,25 @@ class SettingsTab(QWidget):
         app = QApplication.instance()
         if app is not None:
             app.focusChanged.connect(self._on_focus_changed)
+
+    def _fill_output_combo(self, combo: QComboBox, saved: str) -> None:
+        """Fuellt eine Ausgabe-Auswahl: "Systemstandard" + alle vorhandenen Geraete. Ist das
+        gespeicherte Geraet gerade nicht angeschlossen, bleibt es (als "nicht verfuegbar")
+        ausgewaehlt, statt die Einstellung stillschweigend zu verlieren."""
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem(SYSTEM_DEFAULT_LABEL, "")
+        names = list_output_devices()
+        for name in names:
+            combo.addItem(name, name)
+        if saved and saved not in names:
+            combo.addItem(f"{saved} (nicht verfügbar)", saved)
+        combo.setCurrentIndex(max(0, combo.findData(saved)))
+        combo.blockSignals(False)
+
+    def _reload_output_devices(self) -> None:
+        for combo in (self._youtube_output, self._music_output):
+            self._fill_output_combo(combo, combo.currentData() or "")
 
     def current_activity(self) -> str | None:
         """Zuletzt bearbeitetes Feld (None, solange noch kein Feld angeklickt wurde)."""
@@ -206,6 +254,10 @@ class SettingsTab(QWidget):
 
         self._config["updates"]["enabled"] = self._updates_enabled.isChecked()
         self._config["updates"]["check_interval_hours"] = self._check_interval.value()
+
+        self._config.setdefault("audio", {})
+        self._config["audio"]["youtube_output"] = self._youtube_output.currentData() or ""
+        self._config["audio"]["music_output"] = self._music_output.currentData() or ""
 
         self._config["start_tab"] = self._start_tab.currentData()
 

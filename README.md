@@ -14,6 +14,8 @@ Erweiterung) mit:
   Feldname, nie der Inhalt. Das folgt der Option „Status anzeigen, wenn gerade nichts
   läuft“ (aus = auch kein Einstellungs-Status). Discord übernimmt Änderungen höchstens
   alle 15 Sekunden, die Anzeige hinkt dem Klicken also etwas hinterher.
+- **Audioausgabe pro Tab** – YouTube und YouTube Musik lassen sich in den Einstellungen
+  auf verschiedene Ausgabegeräte legen (z.B. getrennte Sonar-Kanäle), siehe unten.
 - **System-Tray** – Fenster schliessen minimiert nur (Musik läuft weiter), Rechtsklick
   aufs Tray-Icon zum Beenden, Play/Pause/Skip direkt aus dem Menü.
 - **Eigener Name** – erscheint als "Playtube" im Taskmanager, Fenstertitel, Alt-Tab
@@ -67,6 +69,33 @@ sie ändern oder eine eigene Anwendung nutzen willst:
 
 In `config.json` lassen sich zudem `update_interval_seconds` (Mindestabstand zwischen
 Updates) und `show_idle_presence` (Status anzeigen, wenn gerade nichts läuft) anpassen.
+
+## Audioausgabe pro Tab (YouTube / YouTube Musik)
+
+Im **Einstellungen-Tab** legst du unter „Audioausgabe“ getrennt fest, über welches
+Ausgabegerät der Ton von **YouTube** und von **YouTube Musik** läuft (Standard:
+Systemstandard). So kannst du z.B. YouTube auf „Sonar - Media“ und YouTube Musik auf
+„Sonar - Aux“ legen und beide getrennt regeln. Nach „Speichern“ gilt die Auswahl sofort,
+auch für bereits geöffnete Seiten (kein Neuladen nötig).
+
+Wichtig zu wissen:
+
+- **Windows zeigt weiterhin einen Eintrag „Playtube“.** Chromium (QtWebEngine) spielt den
+  Ton beider Tabs über *einen* gemeinsamen Audio-Prozess ab, deshalb kann Windows (auch
+  „App-Lautstärke und Geräteeinstellungen“) die Tabs nicht einzeln benennen oder routen.
+  Getrennt wird stattdessen über das **Gerät** - in Sonar & Co. also über den gewählten
+  Kanal/das gewählte Gerät.
+- **Freigabe der Gerätenamen:** Chromium blendet Gerätenamen aus, solange die Seite keine
+  Mikrofon-Berechtigung hat. Damit die Seite das gewählte Gerät findet, erteilt Playtube
+  YouTube/YouTube Musik diese Freigabe - nur, solange mindestens ein Tab ein eigenes Gerät
+  nutzt, nur für diese beiden Seiten und nur für die laufende Sitzung (sie wird nicht
+  gespeichert und bei jedem Start neu erteilt). Es wird nichts aufgenommen.
+- Ist das gewählte Gerät gerade nicht angeschlossen, bleibt die Auswahl (als „nicht
+  verfügbar“) gespeichert und der Ton läuft solange über den Systemstandard.
+- Technik: [playtube/audio_routing.py](playtube/audio_routing.py) legt per
+  `HTMLMediaElement.setSinkId` die Medienelemente der Seite auf das Gerät (Suche über den
+  Gerätenamen). In der Konfiguration stehen die Namen unter `audio.youtube_output` und
+  `audio.music_output` (leer = Systemstandard).
 
 ## App als eigenständige Playtube.exe packen
 
