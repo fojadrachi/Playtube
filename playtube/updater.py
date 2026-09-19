@@ -466,7 +466,12 @@ rm -rf "{staging}"
         packaging/playtube.iss) und startet Playtube dank /RELAUNCH=1 danach neu. Die
         laufende App beendet sich direkt nach diesem Aufruf (siehe MainWindow), muss
         hier also nicht auf Setup warten. Setup wird abgekoppelt gestartet, damit es das
-        Beenden dieses Prozesses ueberlebt."""
+        Beenden dieses Prozesses ueberlebt.
+
+        /WAITPID=<eigene PID>: Setup wartet, bis sich diese App wirklich beendet hat,
+        bevor es Dateien tauscht. /LOG (ohne Pfad): Setup schreibt ein Protokoll nach
+        %TEMP% ("Setup Log ....txt") - so laesst sich ein fehlgeschlagenes Update
+        nachtraeglich nachvollziehen, obwohl die Installation selbst still laeuft."""
         subprocess.Popen(
             [
                 str(setup_path),
@@ -475,6 +480,8 @@ rm -rf "{staging}"
                 "/NORESTART",
                 "/NOCANCEL",
                 "/RELAUNCH=1",
+                f"/WAITPID={os.getpid()}",
+                "/LOG",
             ],
             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
             close_fds=True,
@@ -497,7 +504,9 @@ $form.Refresh()
 # Ueber Start-Process (statt direktem Aufruf) gestartet und per Polling statt -Wait
 # abgewartet, damit die Fensternachrichtenschleife per DoEvents() weiterlaeuft -
 # sonst wuerde Windows das Fenster waehrend robocopy als "Keine Rueckmeldung" anzeigen.
-$roboArgs = @("{source_dir}", "{install_dir}", "/MIR", "/NFL", "/NDL", "/NJH", "/NJS", "/NC", "/NS", "/NP")
+# /R:3 /W:2 begrenzt die Wiederholungen bei gesperrten Dateien (Standard: praktisch endlos,
+# das Update haengt dann sichtbar "fuer immer" im Fortschrittsfenster).
+$roboArgs = @("{source_dir}", "{install_dir}", "/MIR", "/R:3", "/W:2", "/NFL", "/NDL", "/NJH", "/NJS", "/NC", "/NS", "/NP")
 $roboProc = Start-Process -FilePath "robocopy" -ArgumentList $roboArgs -WindowStyle Hidden -PassThru
 while (-not $roboProc.HasExited) {{
     Start-Sleep -Milliseconds 200
