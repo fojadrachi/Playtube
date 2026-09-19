@@ -1,4 +1,4 @@
 ﻿"""Playtube - ein eigenstaendiger YouTube- & YouTube-Music-Player mit Discord Rich Presence."""
 
 __app_name__ = "Playtube"
-__version__ = "2.3.2"
+__version__ = "2.4.0"
