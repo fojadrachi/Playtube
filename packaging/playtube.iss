@@ -98,27 +98,61 @@ begin
   Result := ExpandConstant('{param:RELAUNCH|0}') = '1';
 end;
 
-procedure StopRunningPlaytube();
+function PowerShellPath(): String;
+begin
+  Result := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+end;
+
+procedure WaitForOldInstance();
+var
+  OldPid, ResultCode: Integer;
+begin
+  { Playtubes Updater startet Setup aus der laufenden App heraus und uebergibt deren
+    Prozess-ID (/WAITPID=...). Setup wartet, bis sich diese Instanz selbst beendet hat,
+    statt sie hart abzuschiessen (max. 20 s). Ohne Angabe (Setup per Doppelklick) passiert
+    hier nichts. }
+  OldPid := StrToIntDef(ExpandConstant('{param:WAITPID|0}'), 0);
+  if OldPid > 0 then
+    Exec(PowerShellPath(),
+         '-NoProfile -NonInteractive -WindowStyle Hidden -Command "Wait-Process -Id ' + IntToStr(OldPid) + ' -Timeout 20 -ErrorAction SilentlyContinue"',
+         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+procedure StopLeftoverProcesses();
 var
   ResultCode: Integer;
 begin
-  { /T beendet auch die Kindprozesse (QtWebEngine); der Hilfsprozess wird zusaetzlich
-    einzeln beendet, falls er als Waise ueberlebt hat. }
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM {#AppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  { WICHTIG: bewusst OHNE "/T" (Prozessbaum mitbeenden). Der Updater startet Setup aus
+    Playtube.exe heraus - Setup ist also ein Kindprozess. Solange Playtube noch beendet
+    wird, wuerde "/T" den Installer selbst mit abschiessen, bevor er etwas installiert hat
+    (so ging frueher ein Update still verloren: kein Kopieren, kein Neustart). }
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#AppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#AppHelperName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
+  { QtWebEngine-Kindprozesse, die nach dem Ende von Playtube noch aus dem
+    Installationsordner laufen, wuerden Dateien sperren - gezielt nach Pfad beenden
+    (nicht per Namen: QtWebEngineProcess.exe heisst auch bei anderen Qt-Programmen). }
+  if DirExists(ExpandConstant('{app}')) then
+    Exec(PowerShellPath(),
+         '-NoProfile -NonInteractive -WindowStyle Hidden -Command "$d = ''' + ExpandConstant('{app}') + '\''; ' +
+         'Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($d, [StringComparison]::OrdinalIgnoreCase) } | ' +
+         'ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"',
+         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
   { Dateisperren freigeben lassen, bevor kopiert wird. }
   Sleep(800);
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
-  StopRunningPlaytube();
+  WaitForOldInstance();
+  StopLeftoverProcesses();
   Result := '';
 end;
 
 function InitializeUninstall(): Boolean;
 begin
-  StopRunningPlaytube();
+  StopLeftoverProcesses();
   Result := True;
 end;
 

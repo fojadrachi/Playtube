@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,15 @@ from .settings_tab import SettingsTab
 from .updater import UpdateChecker, UpdateInstaller
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
+
+
+def _force_exit_after(seconds: float) -> None:
+    """Beendet den Prozess nach `seconds` hart (os._exit), falls das normale Beenden bis
+    dahin noch nicht durch ist. Der Timer laeuft als Daemon-Thread und stoert das
+    normale, schnelle Beenden nicht."""
+    timer = threading.Timer(seconds, os._exit, args=(0,))
+    timer.daemon = True
+    timer.start()
 
 
 class MainWindow(QMainWindow):
@@ -359,6 +369,10 @@ class MainWindow(QMainWindow):
                 "Installation abgeschlossen. Playtube wird neu gestartet …"
             )
             self._tray.setToolTip(f"{APP_NAME} – wird neu gestartet …")
+            # Haengt sich Qt/QtWebEngine beim Beenden auf, wuerde der Update-Helfer (bzw.
+            # Setup, siehe /WAITPID) ewig auf das Ende dieses Prozesses warten - und die
+            # alte Version bliebe einfach weiterlaufen. Nach 8 s hart beenden.
+            _force_exit_after(8.0)
             self._quit()
         else:
             QMessageBox.information(
