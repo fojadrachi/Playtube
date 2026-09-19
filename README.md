@@ -5,7 +5,7 @@ Erweiterung) mit:
 
 - **Zwei Tabs** – YouTube und YouTube Music laufen parallel, Musik spielt im
   Hintergrund weiter wenn du zu Videos wechselst.
-- **Login/Premium** – eigenes, persistentes Profil (`%APPDATA%\Playtube`, einmal bei
+- **Login/Premium** – eigenes, persistentes Profil (`%APPDATA%\Playtube`), einmal bei
   Google anmelden reicht für beide Dienste.
 - **Discord Rich Presence** – zeigt Titel, Kanal/Interpret, Fortschrittsbalken und
   einen Link-Button in deinem Discord-Profil, sobald etwas läuft.
@@ -91,7 +91,7 @@ Hilfsprozesses (relevant für den Lautstärkemixer) zusätzlich
 [rcedit](https://github.com/electron/rcedit/releases) als `packaging\rcedit.exe`
 ablegen - das Skript nutzt es automatisch, wenn vorhanden. Ohne rcedit funktioniert
 alles genauso, nur zeigt der Lautstärkemixer für den Ton-Unterprozess je nach
-Windows-Version eventüll weiterhin "QtWebEngineProcess" statt "Playtube" (rein
+Windows-Version eventuell weiterhin "QtWebEngineProcess" statt "Playtube" (rein
 kosmetisch - Namensgebung von Chromium-Hilfsprozessen ist ein bekanntes,
 Windows-versionsabhängiges Verhalten, das selbst grosse Electron-Apps nur mit rcedit
 o.ä. umgehen).
@@ -102,7 +102,7 @@ Playtube prüft beim Start und danach alle `updates.check_interval_hours` Stunde
 (Standard 6, im **Einstellungen-Tab** oder in `config.json` einstellbar) die
 [GitHub Releases](https://github.com/fojadrachi/Playtube/releases) des Projekts. Im
 Einstellungen-Tab gibt es zusätzlich einen "Jetzt nach Updates suchen"-Button mit
-Status-Anzeige und Fortschrittsbalken fü den Download. Gibt es eine neuere Version,
+Status-Anzeige und Fortschrittsbalken für den Download. Gibt es eine neuere Version,
 fragt ein Dialog, ob sie installiert werden soll:
 
 - **Windows, per Setup installiert** (siehe "Installation"): lädt bevorzugt das kleine
