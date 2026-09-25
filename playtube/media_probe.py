@@ -105,6 +105,30 @@ MEDIA_PROBE_JS = r"""
         thumbnail = ytThumbnailUrl(videoId) || (imgY ? imgY.href : null);
     }
 
+    // Zusatzstatus fuer die Fernsteuerung (Stream-Dock-Plugin, siehe remote_control.py).
+    var player = document.getElementById('movie_player');
+    var volume = (player && typeof player.getVolume === 'function')
+        ? player.getVolume() : (video ? Math.round(video.volume * 100) : null);
+    var muted = (player && typeof player.isMuted === 'function')
+        ? player.isMuted() : (video ? video.muted : null);
+    function likeState() {
+        if (isMusic) {
+            var r = document.querySelector('ytmusic-player-bar ytmusic-like-button-renderer');
+            var s = r ? r.getAttribute('like-status') : null;
+            return s ? s.toLowerCase() : null;  // "like" | "dislike" | "indifferent"
+        }
+        var like = document.querySelector('like-button-view-model button, #segmented-like-button button');
+        var dislike = document.querySelector('dislike-button-view-model button, #segmented-dislike-button button');
+        if (like && like.getAttribute('aria-pressed') === 'true') { return 'like'; }
+        if (dislike && dislike.getAttribute('aria-pressed') === 'true') { return 'dislike'; }
+        return like ? 'indifferent' : null;
+    }
+    function repeatMode() {
+        if (!isMusic) { return video && video.loop ? 'ONE' : 'NONE'; }
+        var bar = document.querySelector('ytmusic-player-bar');
+        return bar ? (bar.getAttribute('repeat-mode') || bar.getAttribute('repeat-mode_') || null) : null;
+    }
+
     var timeInfo = isMusic ? musicTimeInfo() : youtubeTimeInfo();
     var currentTime = timeInfo ? timeInfo.current : (video ? video.currentTime : 0);
     var duration = timeInfo ? timeInfo.total : ((video && isFinite(video.duration)) ? video.duration : 0);
@@ -123,7 +147,11 @@ MEDIA_PROBE_JS = r"""
         playing: video ? (!video.paused && !video.ended && video.readyState > 2) : false,
         currentTime: currentTime,
         duration: duration,
-        hasVideo: !!video
+        hasVideo: !!video,
+        volume: volume,
+        muted: muted,
+        likeStatus: likeState(),
+        repeatMode: repeatMode()
     });
 })();
 """

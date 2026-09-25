@@ -21,7 +21,12 @@ from .audio_routing import SCRIPT_NAME as AUDIO_SCRIPT_NAME
 from .audio_routing import build_router_script
 from .chrome_shim import CHROME_FULL, CHROME_MAJOR, CHROME_SHIM_JS
 from .config import profile_dir
+from .media_control import LIST_PLAYLISTS_JS, MUSIC_PLAYLIST_URL, build_control_js
 from .media_probe import MEDIA_PROBE_JS, NEXT_TRACK_JS, PREV_TRACK_JS, TOGGLE_PLAYBACK_JS
+
+# Nach einem Fernsteuerungsbefehl den Status kurz darauf neu auslesen (Seite braucht einen
+# Moment, bis z.B. der neue Titel/Like-Status im DOM steht).
+_REFRESH_AFTER_COMMAND_MS = 300
 
 # Chrome-Versionsnummer, die exakt zur tatsaechlich in QtWebEngine eingebetteten
 # Chromium-Version passt (siehe QWebEngineCore.qWebEngineChromiumVersion()). Legacy-
@@ -179,6 +184,29 @@ class BrowserTab(QWebEngineView):
 
     def previous_track(self) -> None:
         self.page().runJavaScript(PREV_TRACK_JS)
+
+    def run_media_command(self, command: str, value: float = 0) -> None:
+        """Fuehrt einen Fernsteuerungsbefehl (siehe media_control.py) aus und liest den
+        Wiedergabestatus kurz danach neu aus, damit z.B. das Stream Dock den neuen Zustand
+        sofort statt erst beim naechsten 2-Sekunden-Poll sieht."""
+        self.page().runJavaScript(build_control_js(command, value))
+        QTimer.singleShot(_REFRESH_AFTER_COMMAND_MS, self._poll_media_state)
+
+    def list_playlists(self, callback) -> None:
+        """Ruft callback(list | None) mit den Playlists aus der Seitenleiste auf."""
+
+        def on_result(result) -> None:
+            try:
+                callback(json.loads(result) if isinstance(result, str) and result else None)
+            except json.JSONDecodeError:
+                callback(None)
+
+        self.page().runJavaScript(LIST_PLAYLISTS_JS, on_result)
+
+    def play_playlist(self, playlist_id: str) -> None:
+        """Oeffnet die Playlist (ID vorher in remote_control validiert); Autoplay startet
+        die Wiedergabe (PlaybackRequiresUserGesture ist aus)."""
+        self.load(QUrl(MUSIC_PLAYLIST_URL.format(playlist_id=playlist_id)))
 
     def _on_full_screen_requested(self, request) -> None:
         # Erlaubt echtes Fullscreen-Video (z.B. per YouTube-Fullscreen-Button).

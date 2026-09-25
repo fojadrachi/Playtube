@@ -24,6 +24,8 @@ from .audio_routing import sync_audio_permissions
 from .browser import BrowserTab, get_shared_profile
 from .config import APP_NAME
 from .discord_rpc import DiscordRPCWorker
+from .remote_control import build_state as build_remote_state
+from .remote_control import resolve_target as resolve_remote_target
 from .settings_tab import SettingsTab
 from .updater import UpdateChecker, UpdateInstaller
 
@@ -291,6 +293,43 @@ class MainWindow(QMainWindow):
         """Oeffentlicher Einstieg fuer den Einzelinstanz-Schutz (main.py): holt das Fenster
         aus dem Tray, wenn Playtube ein zweites Mal gestartet wird."""
         self._show_and_raise()
+
+    # ------------------------------------------------- Fernsteuerung (remote_control.py)
+
+    def _browser_tabs_by_name(self) -> dict[str, BrowserTab]:
+        return {"youtube": self._youtube_tab, "music": self._music_tab}
+
+    def _visible_tab_name(self) -> str:
+        current = self._current_tab()
+        for name, tab in self._browser_tabs_by_name().items():
+            if current is tab:
+                return name
+        return "settings"
+
+    def _media_by_tab_name(self) -> dict[str, dict | None]:
+        return {name: self._latest_media.get(id(tab)) for name, tab in self._browser_tabs_by_name().items()}
+
+    def remote_state(self) -> dict:
+        return build_remote_state(APP_VERSION, self._visible_tab_name(), self._media_by_tab_name())
+
+    def remote_show(self) -> None:
+        self._show_and_raise()
+
+    def remote_switch_tab(self, target: str) -> None:
+        """"youtube"/"music" waehlt den Tab; "auto" wechselt zwischen beiden hin und her."""
+        if target == "auto":
+            target = "music" if self._visible_tab_name() == "youtube" else "youtube"
+        self._tabs.setCurrentWidget(self._browser_tabs_by_name()[target])
+
+    def remote_media_command(self, target: str, command: str, value: float) -> None:
+        name = resolve_remote_target(target, self._visible_tab_name(), self._media_by_tab_name())
+        self._browser_tabs_by_name()[name].run_media_command(command, value)
+
+    def remote_list_playlists(self, callback) -> None:
+        self._music_tab.list_playlists(callback)
+
+    def remote_play_playlist(self, playlist_id: str) -> None:
+        self._music_tab.play_playlist(playlist_id)
 
     def _quit(self) -> None:
         if self._rpc_worker is not None:

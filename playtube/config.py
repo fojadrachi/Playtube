@@ -38,6 +38,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "youtube_output": "",
         "music_output": "",
     },
+    # Lokale Fernsteuerung fuer das Stream-Dock-Plugin (Named Pipe, nur dieser Benutzer) -
+    # siehe playtube/remote_control.py.
+    "remote_control": {"enabled": True},
     "start_tab": "youtube",  # "youtube" oder "music"
     "home_youtube": "https://www.youtube.com/",
     "home_music": "https://music.youtube.com/",

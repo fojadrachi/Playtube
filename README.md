@@ -97,6 +97,24 @@ Wichtig zu wissen:
   Gerätenamen). In der Konfiguration stehen die Namen unter `audio.youtube_output` und
   `audio.music_output` (leer = Systemstandard).
 
+## Fernsteuerung (Stream Dock)
+
+Playtube lässt sich lokal fernsteuern, z.B. über das Stream-Dock-Plugin
+`com.fojadrachi.playtube.sdPlugin` (Ajazz/Mirabox AKP153E & Co.). Dafür lauscht Playtube
+auf einer Named Pipe (`\\.\pipe\Playtube.Remote.Playtube`, im Entwicklungsmodus
+`...PlaytubeDev`). Es gibt keinen Netzwerk-Port, verbinden darf nur der angemeldete
+Benutzer.
+
+- Protokoll: eine JSON-Nachricht pro Zeile, z.B. `{"id":1,"cmd":"play_pause","target":"auto"}`,
+  Antwort `{"id":1,"ok":true}`. Details in [playtube/remote_control.py](playtube/remote_control.py).
+- Befehle: `status`, `show`, `switch_tab`, `play_pause`, `play`, `pause`, `next`,
+  `previous`, `seek`, `volume_change`, `set_volume`, `mute_toggle`, `like`, `dislike`,
+  `shuffle`, `repeat`, `list_playlists`, `play_playlist`. Es gibt eine feste Whitelist;
+  beliebiges JavaScript oder URLs lassen sich nicht senden.
+- `target: "auto"` steuert den Tab, der gerade abspielt, sonst den sichtbaren.
+- Abschalten: in `config.json` `"remote_control": {"enabled": false}`.
+- Tests: `.venv\Scripts\python -m unittest discover -s tests -v`
+
 ## App als eigenständige Playtube.exe packen
 
 Für die volle Taskmanager-/Audiomixer-Markierung wird die App als eigene .exe gebaut
