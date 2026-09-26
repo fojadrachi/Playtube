@@ -68,36 +68,23 @@ jobs:
     needs: [build-windows]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
 
-      - name: GitHub Release veroeffentlichen (Vorabversion)
-        uses: softprops/action-gh-release@v2
-        with:
-          name: Playtube Edge ${{ github.ref_name }}
-          files: artifacts/*
-          prerelease: true
-          make_latest: "false"
-          body: |
-            ## Playtube Edge - die Version fuer eigene (hochgeladene) Musik
-
-            **Diese Version brauchst du, wenn du selbst hochgeladene Songs in YouTube Music hoeren willst.**
-            Die normale Playtube-Version kann sie nicht abspielen ("Dieses Videoformat wird nicht
-            unterstuetzt"), weil ihre eingebaute Browser-Engine (QtWebEngine) kein AAC und kein H.264
-            kann. Playtube Edge benutzt stattdessen die Microsoft-Edge-Engine (WebView2) - damit
-            laufen auch hochgeladene Titel.
-
-            ### Installieren
-            - Download: **PlaytubeEdge-Setup-vX.Y.Z.exe** (Setup, empfohlen) oder die ZIP-Datei (portabel).
-            - Voraussetzung: Windows 10/11 mit "WebView2 Runtime" (auf Windows 11 schon vorhanden,
-              sonst kostenlos bei Microsoft).
-            - Playtube Edge laeuft **neben** der normalen Playtube (eigener Ordner, eigene Einstellungen).
-              Beim ersten Start musst du dich in YouTube/YouTube Music einmal neu anmelden.
-              Lass am besten nur eine der beiden Versionen gleichzeitig spielen.
-            - Updates: Playtube Edge aktualisiert sich nur ueber diese "Edge"-Releases - nie ueber die
-              normale Playtube.
-
-            Wer keine eigenen Uploads abspielt, braucht diese Version nicht - die normale Playtube
-            reicht dann.
+      - name: GitHub Release veroeffentlichen (Vorabversion, nie "latest")
+        # gh statt softprops/action-gh-release: letzteres brach beim erneuten Veroeffentlichen
+        # desselben Tags mit "Too many retries" ab. Ein vorhandenes Release zum selben Tag wird
+        # zuerst entfernt (der Tag bleibt), dann sauber neu angelegt.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete "${{ github.ref_name }}" --repo "${{ github.repository }}" --yes || true
+          gh release create "${{ github.ref_name }}" artifacts/* \
+            --repo "${{ github.repository }}" \
+            --title "Playtube Edge ${{ github.ref_name }}" \
+            --notes-file packaging/release_notes.md \
+            --prerelease --latest=false --verify-tag
