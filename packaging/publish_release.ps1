@@ -24,7 +24,12 @@ $ErrorActionPreference = "Stop"
 
 $token = $env:GITEA_TOKEN
 if (-not $token) {
-    throw "GITEA_TOKEN ist nicht gesetzt (Zugriffstoken aus Gitea > Einstellungen > Anwendungen)."
+    # Alternativ aus einer lokalen Datei (nur fuer deinen Benutzer): %USERPROFILE%\.gitea-token
+    $tokenFile = Join-Path $env:USERPROFILE ".gitea-token"
+    if (Test-Path $tokenFile) { $token = (Get-Content -Raw $tokenFile).Trim() }
+}
+if (-not $token) {
+    throw "Kein Token: GITEA_TOKEN setzen oder ihn in %USERPROFILE%\.gitea-token ablegen (Zugriffstoken aus Gitea > Einstellungen > Anwendungen)."
 }
 if (-not $Title) { $Title = $Tag }
 foreach ($file in $Files) {
@@ -44,7 +49,8 @@ try {
 }
 
 $notes = ""
-if ($NotesFile -and (Test-Path $NotesFile)) { $notes = Get-Content -Raw -Encoding UTF8 $NotesFile }
+# [string]: sonst serialisiert ConvertTo-Json die PowerShell-Zusatzeigenschaften mit (Objekt statt Text).
+if ($NotesFile -and (Test-Path $NotesFile)) { $notes = [string](Get-Content -Raw -Encoding UTF8 $NotesFile) }
 
 $payload = @{
     tag_name   = $Tag
