@@ -1,14 +1,19 @@
-name: Release
+name: Release (Edge)
 
-# Baut Playtube fuer Windows und Linux und veroeffentlicht beide als Assets an einem
-# GitHub Release, sobald ein Tag im Format "vX.Y.Z" gepusht wird (z.B. durch
-# packaging/release.ps1). Playtube.exe/Playtube auf den Nutzer-Rechnern erkennt neue
-# Releases danach automatisch (siehe playtube/updater.py) und bietet die Installation an.
+# Baut Playtube Edge (Microsoft-Edge-Engine / WebView2) fuer Windows und veroeffentlicht Setup
+# und ZIP an einem GitHub Release, sobald ein Tag im Format "vX.Y.Z-edge" gepusht wird.
+#
+# WICHTIG:
+#  - Nur Tags mit dem Suffix "-edge" loesen diesen Workflow aus - die normale (Qt-)Playtube
+#    baut aus dem Branch "main" mit Tags "vX.Y.Z" und bleibt davon unberuehrt.
+#  - Das Release wird als VORABVERSION veroeffentlicht und nie als "latest" markiert. Die Qt-
+#    Version fragt "/releases/latest" ab und sieht dieses Release dadurch nie; der Updater der
+#    Edge-Version sucht seinerseits nur nach Tags "...-edge" (siehe playtube/updater.py).
 
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "v*-edge"
   workflow_dispatch: {}
 
 permissions:
@@ -30,14 +35,10 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Playtube.exe bauen
+      - name: PlaytubeEdge.exe bauen
         run: pyinstaller packaging\playtube.spec --noconfirm --distpath dist --workpath build
 
       - name: Setup-Installer bauen (Inno Setup)
-        # Der Installer ist der empfohlene Download fuer Neueinsteiger UND das, was
-        # Playtube fuer volle Updates benutzt (siehe playtube/updater.py): eine einzige
-        # Installation, die jedes Update an Ort und Stelle ueberschreibt (feste AppId in
-        # packaging/playtube.iss) - keine parallelen Versionsordner mehr.
         shell: pwsh
         run: |
           $version = (Select-String -Path playtube\__init__.py -Pattern '__version__\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
@@ -48,85 +49,18 @@ jobs:
           & $iscc "/DAppVersion=$version" packaging\playtube.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno-Setup-Build fehlgeschlagen." }
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-setup
-          path: dist/installer/Playtube-Setup-v*.exe
-
-      - name: Als .zip packen (volles Paket, portabel)
-        run: Compress-Archive -Path dist\Playtube -DestinationPath Playtube-${{ github.ref_name }}-win64.zip
+      - name: Als .zip packen (portabel)
+        run: Compress-Archive -Path dist\PlaytubeEdge -DestinationPath PlaytubeEdge-${{ github.ref_name }}-win64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-build
-          path: Playtube-${{ github.ref_name }}-win64.zip
-
-      - name: Patch-Paket packen (nur Playtube.exe, fuer schnelle Updates)
-        # .play statt .zip: eigene Dateiendung, die Playtube nach dem ersten Start als
-        # Windows-Dateizuordnung registriert (siehe shortcuts.py) - ein manuell
-        # heruntergeladenes Patch laesst sich so auch per Doppelklick installieren.
-        # Technisch bleibt es ein ganz normales ZIP-Archiv.
-        # Die PySide6-Version steht im Dateinamen: hat sich die Laufzeit gegenueber der
-        # installierten App geaendert, ist ein reines .exe-Patch nicht mehr kompatibel und
-        # der Updater nimmt stattdessen den Setup-Installer (siehe _patch_is_compatible).
-        shell: pwsh
-        run: |
-          $pyside = python -c "import PySide6; print(PySide6.__version__)"
-          $name = "Playtube-${{ github.ref_name }}-win64-pyside${pyside}-patch"
-          Compress-Archive -Path dist\Playtube\Playtube.exe -DestinationPath "$name.zip"
-          Rename-Item -Path "$name.zip" -NewName "$name.play"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-patch
-          path: Playtube-*-win64-pyside*-patch.play
-
-  build-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Qt-WebEngine-Laufzeitabhaengigkeiten installieren
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libxkbcommon0 libegl1 libopengl0 libnss3 libnspr4 \
-            libxcomposite1 libxdamage1 libxrandr2 libxtst6 libxcursor1 \
-            libgbm1 libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2 \
-            libdbus-1-3 libdrm2 libpango-1.0-0 libpangocairo-1.0-0 \
-            libxfixes3 libxi6 libxext6 fonts-liberation
-
-      - name: Abhaengigkeiten installieren
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-
-      - name: Playtube-Binary bauen
-        run: pyinstaller packaging/playtube.spec --noconfirm --distpath dist --workpath build
-
-      - name: Als .tar.gz packen (volles Paket)
-        run: tar -C dist -czf Playtube-${{ github.ref_name }}-linux-x86_64.tar.gz Playtube
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-build
-          path: Playtube-${{ github.ref_name }}-linux-x86_64.tar.gz
-
-      - name: Patch-Paket packen (nur Playtube-Binary, fuer schnelle Updates)
-        run: tar -C dist/Playtube -czf Playtube-${{ github.ref_name }}-linux-x86_64-patch.tar.gz Playtube
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-patch
-          path: Playtube-${{ github.ref_name }}-linux-x86_64-patch.tar.gz
+          name: windows-edge
+          path: |
+            dist/installer/PlaytubeEdge-Setup-v*.exe
+            PlaytubeEdge-*-win64.zip
 
   publish-release:
-    needs: [build-windows, build-linux]
+    needs: [build-windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -134,8 +68,31 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: GitHub Release veroeffentlichen
+      - name: GitHub Release veroeffentlichen (Vorabversion)
         uses: softprops/action-gh-release@v2
         with:
+          name: Playtube Edge ${{ github.ref_name }}
           files: artifacts/*
-          generate_release_notes: true
+          prerelease: true
+          make_latest: "false"
+          body: |
+            ## Playtube Edge - die Version fuer eigene (hochgeladene) Musik
+
+            **Diese Version brauchst du, wenn du selbst hochgeladene Songs in YouTube Music hoeren willst.**
+            Die normale Playtube-Version kann sie nicht abspielen ("Dieses Videoformat wird nicht
+            unterstuetzt"), weil ihre eingebaute Browser-Engine (QtWebEngine) kein AAC und kein H.264
+            kann. Playtube Edge benutzt stattdessen die Microsoft-Edge-Engine (WebView2) - damit
+            laufen auch hochgeladene Titel.
+
+            ### Installieren
+            - Download: **PlaytubeEdge-Setup-vX.Y.Z.exe** (Setup, empfohlen) oder die ZIP-Datei (portabel).
+            - Voraussetzung: Windows 10/11 mit "WebView2 Runtime" (auf Windows 11 schon vorhanden,
+              sonst kostenlos bei Microsoft).
+            - Playtube Edge laeuft **neben** der normalen Playtube (eigener Ordner, eigene Einstellungen).
+              Beim ersten Start musst du dich in YouTube/YouTube Music einmal neu anmelden.
+              Lass am besten nur eine der beiden Versionen gleichzeitig spielen.
+            - Updates: Playtube Edge aktualisiert sich nur ueber diese "Edge"-Releases - nie ueber die
+              normale Playtube.
+
+            Wer keine eigenen Uploads abspielt, braucht diese Version nicht - die normale Playtube
+            reicht dann.

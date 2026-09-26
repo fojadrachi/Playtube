@@ -14,10 +14,7 @@ from playtube import __version__, app_id  # noqa: E402
 from playtube.config import APP_NAME, app_data_dir, clear_cache_on_update, load_config  # noqa: E402
 from playtube.remote_control import PIPE_PREFIX, RemoteControlServer  # noqa: E402
 from playtube.single_instance import SingleInstanceGuard  # noqa: E402
-from playtube.shortcuts import (  # noqa: E402
-    ensure_play_file_association,
-    ensure_start_menu_shortcut,
-)
+from playtube.shortcuts import ensure_start_menu_shortcut  # noqa: E402
 from playtube.updater import cleanup_old_staging  # noqa: E402
 
 app_id.set_app_user_model_id()
@@ -26,12 +23,6 @@ app_id.configure_webengine_process_path()
 # High-DPI, sauberes GPU-Verhalten und (in Kombination mit den Sec-CH-UA-Headern in
 # playtube/browser.py) ein moeglichst "normales" Chrome-Fingerprint, damit Google-Login
 # das eingebettete QtWebEngine nicht als Embedded-WebView blockiert.
-os.environ.setdefault(
-    "QTWEBENGINE_CHROMIUM_FLAGS",
-    "--disable-features=WinRetrieveSuggestionsOnlyOnDemand "
-    "--disable-blink-features=AutomationControlled",
-)
-
 from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtGui import QIcon  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
@@ -78,7 +69,7 @@ def main() -> int:
     # komplett, da Playtube als portables ZIP ohne Installer ausgeliefert wird.
     clear_cache_on_update(__version__)
     ensure_start_menu_shortcut(APP_NAME)
-    ensure_play_file_association(APP_NAME)
+    # Keine ".play"-Dateizuordnung: die gehoert der Qt-Version von Playtube (Edge nutzt nur Setup-Updates).
 
     window = MainWindow(config)
     window.show()

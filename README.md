@@ -1,4 +1,23 @@
-# Playtube
+# Playtube Edge
+
+> **Das ist die „Edge“-Variante von Playtube (Branch `edge`).**
+> **Diese Version brauchst du, wenn du selbst hochgeladene Musik in YouTube Music hören
+> willst.** Die normale Playtube (Branch `main`) zeigt bei eigenen Uploads „Dieses
+> Videoformat wird nicht unterstützt“, weil ihre Browser-Engine (QtWebEngine) kein AAC und
+> kein H.264 abspielen kann. Playtube Edge rendert stattdessen mit der **Microsoft-Edge-Engine
+> (WebView2)** – damit laufen auch Uploads.
+>
+> - Download: [Releases](https://github.com/fojadrachi/Playtube/releases) → Eintrag „Playtube
+>   Edge vX.Y.Z-edge“ → `PlaytubeEdge-Setup-vX.Y.Z.exe`. Voraussetzung: Windows 10/11 mit
+>   WebView2-Runtime (Windows 11: vorinstalliert).
+> - Läuft **neben** der normalen Playtube (eigener Ordner `%APPDATA%\PlaytubeEdge`, eigenes
+>   Login – beim ersten Start einmal bei Google anmelden).
+> - Updates kommen nur über die `-edge`-Releases (die normale Playtube sieht sie nie).
+> - Entwicklung: `pip install -r requirements.txt`, dann `python main.py`. Die
+>   WebView2-DLLs liegen in `vendor/webview2` (Microsoft, NuGet `Microsoft.Web.WebView2`).
+>
+> Der Rest dieser README beschreibt die gemeinsame Basis mit der normalen Playtube; wo dort
+> „QtWebEngine“ steht, ist in dieser Variante WebView2 gemeint.
 
 Eigenständige Desktop-App für YouTube & YouTube Music (kein Browser-Fenster, keine
 Erweiterung) mit:

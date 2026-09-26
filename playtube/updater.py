@@ -54,16 +54,19 @@ from PySide6.QtCore import QThread, Signal
 from . import __version__ as CURRENT_VERSION
 
 GITHUB_REPO = "fojadrachi/Playtube"
-_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-_USER_AGENT = "Playtube-Updater"
+# Edge-Variante: eigene Releases mit Tag "vX.Y.Z-edge" (als Vorabversion markiert, damit die
+# Qt-Version sie nie als "neueste Version" sieht) - deshalb die Liste statt /releases/latest.
+_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases?per_page=30"
+_EDGE_TAG_SUFFIX = "-edge"
+_USER_AGENT = "PlaytubeEdge-Updater"
 
-_LINUX_BINARY_NAME = "Playtube"
-_WINDOWS_BINARY_NAME = "Playtube.exe"
+_LINUX_BINARY_NAME = "PlaytubeEdge"
+_WINDOWS_BINARY_NAME = "PlaytubeEdge.exe"
 
 # Muss mit "AppId" in packaging/playtube.iss uebereinstimmen. Unter dieser ID legt Inno
 # Setup den Deinstallations-Eintrag ("Apps & Features") an - nach einem Patch-Update
 # wird dort die angezeigte Versionsnummer nachgezogen (siehe _install_patch_windows).
-_INNO_APP_ID = "{87FBA502-2B84-4C42-A66B-2F03F490912D}"
+_INNO_APP_ID = "{4F0F3698-DAF3-4028-B0A4-896D31292C28}"
 
 _STAGING_PREFIX = "playtube_update_"
 
@@ -105,9 +108,18 @@ def fetch_latest_release() -> dict[str, Any] | None:
     )
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+            releases = json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError, ValueError):
         return None
+    if not isinstance(releases, list):
+        return None
+    # Neueste Edge-Version = hoechste Versionsnummer unter den "-edge"-Releases (ohne Entwuerfe).
+    edge_releases = [
+        release for release in releases
+        if isinstance(release, dict) and not release.get("draft")
+        and str(release.get("tag_name", "")).endswith(_EDGE_TAG_SUFFIX)
+    ]
+    return max(edge_releases, key=lambda r: _parse_version(str(r.get("tag_name", ""))), default=None)
 
 
 def is_installed_via_setup() -> bool:
@@ -125,6 +137,10 @@ def _asset_kind(name: str) -> str | None:
     *.play (unsere eigene Dateiendung, technisch ein ganz normales .zip), Voll -> *.zip.
     Linux: *.tar.gz, "patch" im Namen kennzeichnet das Patch-Paket."""
     name = name.lower()
+    # Zweite Absicherung neben dem "-edge"-Tag: nur Dateien der Edge-Variante kommen in Frage,
+    # nie ein Paket der Qt-Version ("Playtube-...").
+    if "playtubeedge" not in name:
+        return None
     if sys.platform == "win32":
         if name.endswith(".exe") and "setup" in name:
             return _KIND_SETUP

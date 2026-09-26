@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 
 from . import __version__ as APP_VERSION
 from .audio_routing import sync_audio_permissions
-from .browser import BrowserTab, get_shared_profile
+from .browser import BrowserTab
 from .config import APP_NAME
 from .discord_rpc import DiscordRPCWorker
 from .remote_control import build_state as build_remote_state
@@ -57,9 +57,9 @@ class MainWindow(QMainWindow):
         self._tabs.setDocumentMode(True)
         self.setCentralWidget(self._tabs)
 
-        self._sync_audio_permission()
         self._youtube_tab = BrowserTab(config["home_youtube"], self)
         self._music_tab = BrowserTab(config["home_music"], self)
+        self._sync_audio_permission()
         # Zusaetzlich nach JEDEM Seitenaufbau erneut erteilen: eine nur VOR dem Laden erteilte
         # Freigabe greift auf der YouTube-Startseite nicht (per Test ermittelt), eine danach
         # erteilte schon (siehe audio_routing.py).
@@ -254,7 +254,7 @@ class MainWindow(QMainWindow):
     def _sync_audio_permission(self) -> None:
         """Erteilt bzw. entzieht die Freigabe der Geraetenamen (siehe audio_routing.py) -
         nur solange mindestens ein Tab ein eigenes Geraet nutzt."""
-        sync_audio_permissions(get_shared_profile(), any(self._audio_outputs()))
+        sync_audio_permissions((self._youtube_tab, self._music_tab), any(self._audio_outputs()))
 
     def _on_tab_load_finished(self, _ok: bool) -> None:
         if any(self._audio_outputs()):

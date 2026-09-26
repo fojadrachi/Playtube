@@ -19,12 +19,12 @@ VSVersionInfo(
       StringTable(
         u'040704B0',
         [StringStruct(u'CompanyName', u'Playtube'),
-        StringStruct(u'FileDescription', u'Playtube'),
+        StringStruct(u'FileDescription', u'Playtube Edge'),
         StringStruct(u'FileVersion', u'1.0.0.0'),
-        StringStruct(u'InternalName', u'Playtube'),
+        StringStruct(u'InternalName', u'PlaytubeEdge'),
         StringStruct(u'LegalCopyright', u''),
-        StringStruct(u'OriginalFilename', u'Playtube.exe'),
-        StringStruct(u'ProductName', u'Playtube'),
+        StringStruct(u'OriginalFilename', u'PlaytubeEdge.exe'),
+        StringStruct(u'ProductName', u'Playtube Edge'),
         StringStruct(u'ProductVersion', u'1.0.0.0')])
       ]),
     VarFileInfo([VarStruct(u'Translation', [1031, 1200])])

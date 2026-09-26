@@ -30,15 +30,7 @@ from __future__ import annotations
 
 import json
 
-from PySide6.QtCore import QUrl
 from PySide6.QtMultimedia import QMediaDevices
-from PySide6.QtWebEngineCore import QWebEnginePermission, QWebEngineProfile
-
-# Name des eingeschleusten Skripts (pro Seite), um es beim Aendern ersetzen zu koennen.
-SCRIPT_NAME = "playtube-audio-output"
-
-# Herkunft (Origin), fuer die die Berechtigung erteilt wird - nur die beiden Tabs.
-YOUTUBE_ORIGINS = ("https://www.youtube.com", "https://music.youtube.com")
 
 SYSTEM_DEFAULT_LABEL = "Systemstandard"
 
@@ -54,19 +46,13 @@ def list_output_devices() -> list[str]:
     return names
 
 
-def sync_audio_permissions(profile: QWebEngineProfile, wanted: bool) -> None:
-    """Erteilt (wanted=True) bzw. entzieht (wanted=False) die Audiogeraete-Berechtigung fuer
-    YouTube/YouTube Musik - damit die Seite die Namen der Ausgabegeraete sehen kann (siehe
-    Moduldoku). Gilt nur fuer die laufende Sitzung, deshalb bei jedem Start aufrufen. Der
-    Status wird von Qt fuer Mikrofon-Freigaben nicht zuverlaessig gemeldet (bleibt "Ask"),
-    daher wird hier einfach jedes Mal erteilt bzw. zurueckgesetzt."""
-    permission_type = QWebEnginePermission.PermissionType.MediaAudioCapture
-    for origin in YOUTUBE_ORIGINS:
-        permission = profile.queryPermission(QUrl(origin), permission_type)
-        if wanted:
-            permission.grant()
-        else:
-            permission.reset()
+def sync_audio_permissions(tabs, wanted: bool) -> None:
+    """Erlaubt (wanted=True) bzw. entzieht (wanted=False) den Browser-Tabs die
+    Audiogeraete-Berechtigung fuer YouTube/YouTube Musik - damit die Seite die Namen der
+    Ausgabegeraete sehen kann (siehe Moduldoku). In der Edge-Variante setzt jeder Tab die
+    Freigabe selbst (WebView2-Profil, bleibt dort gespeichert)."""
+    for tab in tabs:
+        tab.set_device_names_allowed(wanted)
 
 
 # JavaScript-Vorlage; __TARGET__ wird durch den (JSON-kodierten) Geraetenamen ersetzt.

@@ -4,4 +4,8 @@ __pycache__/
 build/
 dist/
 run*.log
+*_run.log
+build_edge.log
+.claude/
+.pytest_cache/
 test_login*.log
