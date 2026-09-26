@@ -7,7 +7,7 @@
 > kein H.264 abspielen kann. Playtube Edge rendert stattdessen mit der **Microsoft-Edge-Engine
 > (WebView2)** – damit laufen auch Uploads.
 >
-> - Download: [Releases](https://github.com/fojadrachi/Playtube/releases) → Eintrag „Playtube
+> - Download: [Releases](https://git.fojadrachi.de/Fojadrachi/Playtube/releases) → Eintrag „Playtube
 >   Edge vX.Y.Z-edge“ → `PlaytubeEdge-Setup-vX.Y.Z.exe`. Voraussetzung: Windows 10/11 mit
 >   WebView2-Runtime (Windows 11: vorinstalliert).
 > - Läuft **neben** der normalen Playtube (eigener Ordner `%APPDATA%\PlaytubeEdge`, eigenes
@@ -42,8 +42,8 @@ Erweiterung) mit:
 
 ## Installation (Windows)
 
-Lade auf der [Releases-Seite](https://github.com/fojadrachi/Playtube/releases)
-`Playtube-Setup-vX.Y.Z.exe` herunter und starte sie. Der Installer
+Lade auf der [Releases-Seite](https://git.fojadrachi.de/Fojadrachi/Playtube/releases)
+`PlaytubeEdge-Setup-vX.Y.Z.exe` herunter und starte sie. Der Installer
 
 - installiert Playtube **pro Benutzer** nach `%LOCALAPPDATA%\Programs\Playtube` (keine
   Admin-Rechte nötig) und legt Startmenü-Eintrag (optional Desktop-Verknüpfung) an,
@@ -171,7 +171,7 @@ o.ä. umgehen).
 
 Playtube prüft beim Start und danach alle `updates.check_interval_hours` Stunden
 (Standard 6, im **Einstellungen-Tab** oder in `config.json` einstellbar) die
-[GitHub Releases](https://github.com/fojadrachi/Playtube/releases) des Projekts. Im
+[Releases](https://git.fojadrachi.de/Fojadrachi/Playtube/releases) auf dem eigenen Gitea-Server (nur Tags `-edge`). Im
 Einstellungen-Tab gibt es zusätzlich einen "Jetzt nach Updates suchen"-Button mit
 Status-Anzeige und Fortschrittsbalken für den Download. Gibt es eine neuere Version,
 fragt ein Dialog, ob sie installiert werden soll:
@@ -212,7 +212,7 @@ Windows-Patch-Pakete tragen die eigene Dateiendung `.play` statt `.zip` (technis
 weiterhin ein ganz normales ZIP-Archiv). Playtube registriert `.play` beim ersten Start
 automatisch als Windows-Dateizuordnung - eine manuell heruntergeladene
 `Playtube-vX.Y.Z-win64-patch.play` (z.B. von der
-[Releases-Seite](https://github.com/fojadrachi/Playtube/releases)) lässt sich also
+[Releases-Seite](https://git.fojadrachi.de/Fojadrachi/Playtube/releases)) lässt sich also
 einfach per Doppelklick installieren, ohne dass Playtube selbst etwas herunterladen
 muss.
 
@@ -223,12 +223,32 @@ powershell -ExecutionPolicy Bypass -File packaging\release.ps1 -Version 1.1.0
 ```
 
 Das Skript setzt die Versionsnummer, committet, erstellt Git-Tag `v1.1.0` und pusht zu
-`origin` (dein Repo unter https://github.com/fojadrachi/Playtube). Der gepushte Tag
-löst automatisch die GitHub-Actions-Pipeline
-([.github/workflows/release.yml](.github/workflows/release.yml)) aus, die **sowohl
-eine Windows- als auch eine Linux-Version baut** und beide als Assets an einem GitHub
-Release veröffentlicht - Fortschritt unter
-https://github.com/fojadrachi/Playtube/actions.
+`origin` (dein Gitea unter https://git.fojadrachi.de/Fojadrachi/Playtube). Für Playtube Edge
+trägt der Tag den Zusatz `-edge` (z. B. `v1.0.1-edge`). Der gepushte Tag löst automatisch die
+Gitea-Actions-Pipeline ([.gitea/workflows/release.yml](.gitea/workflows/release.yml)) aus, die
+Playtube Edge für Windows baut und als **Vorabversion** auf dem Gitea veröffentlicht -
+Fortschritt unter https://git.fojadrachi.de/Fojadrachi/Playtube/actions.
+
+#### Releases bauen (einmalige Einrichtung)
+
+GitHub wird nirgends mehr benutzt. Die Pipeline braucht:
+
+1. **Einen Gitea-Actions-Runner unter Windows** (`act_runner`, Label `windows`, Host-Modus)
+   mit Python 3.12, git, PowerShell und [Inno Setup 6](https://jrsoftware.org/isinfo.php).
+   Registrierung z. B.:
+   `act_runner register --instance https://git.fojadrachi.de --token <Runner-Token> --labels windows:host`
+2. **Ein Secret `RELEASE_TOKEN`** im Repo (Einstellungen → Actions → Secrets): ein
+   Zugriffstoken (Gitea → Einstellungen → Anwendungen) mit Schreibrecht auf das Repo.
+3. In Gitea **Actions für das Repo aktivieren** (Einstellungen → Erweitert → Repository-Einheiten).
+
+**Ohne Runner** kannst du selbst bauen und veröffentlichen:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\build.ps1
+$env:GITEA_TOKEN = "<Zugriffstoken>"
+powershell -ExecutionPolicy Bypass -File packaging\publish_release.ps1 -Tag v1.0.1-edge -Prerelease `
+    -Files dist\installer\PlaytubeEdge-Setup-v1.0.1.exe -NotesFile packaging\release_notes.md
+```
 
 Für Windows entstehen dabei drei Dateien: `Playtube-Setup-vX.Y.Z.exe` (Installer, für
 Neueinsteiger und volle Updates), `Playtube-vX.Y.Z-win64.zip` (portabel) und das kleine
@@ -240,9 +260,9 @@ neue Version danach automatisch angeboten.
 
 ## Native Linux-Version
 
-Playtube läuft genauso unter Linux (gleicher Code, gleiches PySide6/QtWebEngine) und
-wird bei jedem Release automatisch als `Playtube-vX.Y.Z-linux-x86_64.tar.gz` unter
-https://github.com/fojadrachi/Playtube/releases mitgebaut.
+**Hinweis:** Playtube Edge nutzt WebView2 und läuft nur unter Windows. Die Linux-Beschreibung
+unten gehört zur normalen Playtube (Branch `main`, QtWebEngine); für Edge entstehen keine
+Linux-Pakete.
 
 **Fertiges Release installieren** (richtet Startmenü-Eintrag + Icon ein):
 
@@ -263,8 +283,7 @@ python3 -m venv .venv
 ```
 
 QtWebEngine benötigt unter Linux ein paar System-Bibliotheken (auf Debian/Ubuntu):
-`sudo apt install libxkbcommon0 libegl1 libnss3 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libasound2t64 libatk-bridge2.0-0 libcups2` (siehe auch die vollstaendige Liste in
-[.github/workflows/release.yml](.github/workflows/release.yml)).
+`sudo apt install libxkbcommon0 libegl1 libnss3 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libasound2t64 libatk-bridge2.0-0 libcups2`.
 
 ## Hinweise
 

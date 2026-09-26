@@ -1,0 +1,78 @@
+name: Release (Edge)
+
+# Baut Playtube Edge (Microsoft-Edge-Engine / WebView2) fuer Windows und veroeffentlicht Setup
+# und ZIP als Release auf dem eigenen Gitea-Server, sobald ein Tag im Format "vX.Y.Z-edge"
+# gepusht wird (z.B. durch packaging/release.ps1).
+#
+# WICHTIG:
+#  - Nur Tags mit dem Suffix "-edge" loesen diesen Workflow aus - die normale (Qt-)Playtube
+#    baut aus dem Branch "main" mit Tags "vX.Y.Z" und bleibt davon unberuehrt.
+#  - Das Release wird als VORABVERSION veroeffentlicht. Der Updater der normalen Playtube
+#    ignoriert Vorabversionen und Tags mit "-edge"; der Updater der Edge-Version sucht seinerseits
+#    nur nach Tags "...-edge" (siehe playtube/updater.py).
+#
+# Voraussetzungen (einmalig, siehe README "Releases bauen"):
+#  - Gitea-Actions-Runner unter Windows mit Label "windows" (Host-Modus) mit Python 3.12, git,
+#    PowerShell und Inno Setup 6.
+#  - Repo-Secret "RELEASE_TOKEN" (Zugriffstoken mit Schreibrecht); ersatzweise der automatische Token.
+# Bewusst KEINE "uses:"-Aktionen: die wuerden standardmaessig von github.com geladen.
+
+on:
+  push:
+    tags:
+      - "v*-edge"
+
+jobs:
+  release:
+    runs-on: windows
+    steps:
+      - name: Quellcode holen
+        shell: pwsh
+        run: |
+          git clone "${{ gitea.server_url }}/${{ gitea.repository }}.git" src
+          git -C src checkout "${{ gitea.ref_name }}"
+
+      - name: Abhaengigkeiten installieren
+        shell: pwsh
+        working-directory: src
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install --upgrade pip
+          .\.venv\Scripts\python.exe -m pip install -r requirements.txt pyinstaller
+
+      - name: PlaytubeEdge.exe bauen
+        shell: pwsh
+        working-directory: src
+        run: .\.venv\Scripts\python.exe -m PyInstaller packaging\playtube.spec --noconfirm --distpath dist --workpath build
+
+      - name: Setup-Installer bauen (Inno Setup)
+        shell: pwsh
+        working-directory: src
+        run: |
+          $version = (Select-String -Path playtube\__init__.py -Pattern '__version__\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+          $candidates = @(
+            (Get-Command iscc -ErrorAction SilentlyContinue | ForEach-Object { $_.Source }),
+            (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"),
+            (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
+            (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe")
+          )
+          $iscc = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (-not $iscc) { throw "Inno Setup 6 ist auf dem Runner nicht installiert." }
+          & $iscc "/DAppVersion=$version" packaging\playtube.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno-Setup-Build fehlgeschlagen." }
+
+      - name: ZIP packen (portabel)
+        shell: pwsh
+        working-directory: src
+        run: Compress-Archive -Path dist\PlaytubeEdge -DestinationPath "PlaytubeEdge-${{ gitea.ref_name }}-win64.zip"
+
+      - name: Release auf Gitea veroeffentlichen (Vorabversion)
+        shell: pwsh
+        working-directory: src
+        env:
+          GITEA_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ gitea.ref_name }}"
+          $files = @((Get-ChildItem dist\installer\PlaytubeEdge-Setup-v*.exe).FullName) + @((Get-ChildItem "PlaytubeEdge-*-win64.zip").FullName)
+          .\packaging\publish_release.ps1 -Tag $tag -Title "Playtube Edge $tag" -NotesFile packaging\release_notes.md `
+            -Files $files -Prerelease -Server "${{ gitea.server_url }}" -Repo "${{ gitea.repository }}"

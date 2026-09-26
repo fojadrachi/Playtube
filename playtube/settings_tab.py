@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 from . import __version__ as APP_VERSION
 from .audio_routing import SYSTEM_DEFAULT_LABEL, list_output_devices
 from .config import APP_NAME, save_config
-from .updater import GITHUB_REPO
+from .updater import REPO_URL
 
 # Helle Schrift fuer Versionsnummer, Update-Status und GitHub-Link. palette(text) ist die
 # Standard-Textfarbe (im dunklen Design weiss, im hellen dunkel) - das fruehere
@@ -180,7 +180,7 @@ class SettingsTab(QWidget):
         button_row.addStretch(1)
         outer.addLayout(button_row)
 
-        info = QLabel(f"github.com/{GITHUB_REPO}")
+        info = QLabel(REPO_URL.removeprefix("https://"))
         info.setStyleSheet(_LIGHT_TEXT_STYLE)
         outer.addWidget(info)
 

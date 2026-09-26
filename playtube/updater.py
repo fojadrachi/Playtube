@@ -1,7 +1,7 @@
-"""Auto-Update ueber GitHub Releases (https://github.com/fojadrachi/Playtube).
+"""Auto-Update ueber die Releases des eigenen Gitea-Servers (siehe UPDATE_SERVER).
 
 Ablauf:
-  1. UpdateChecker prueft im Hintergrund die GitHub-Releases-API auf eine neuere
+  1. UpdateChecker prueft im Hintergrund die Gitea-Releases-API auf eine neuere
      Version als die aktuell laufende (playtube.__version__).
   2. Bei Fund fragt die UI (siehe mainwindow.py) nach Bestaetigung.
   3. UpdateInstaller installiert das Update:
@@ -53,10 +53,14 @@ from PySide6.QtCore import QThread, Signal
 
 from . import __version__ as CURRENT_VERSION
 
-GITHUB_REPO = "fojadrachi/Playtube"
+# Eigener Gitea-Server (kein GitHub). Die Releases dort werden von .gitea/workflows/release.yml
+# bzw. packaging/publish_release.ps1 veroeffentlicht.
+UPDATE_SERVER = "https://git.fojadrachi.de"
+REPO_SLUG = "Fojadrachi/Playtube"
+REPO_URL = f"{UPDATE_SERVER}/{REPO_SLUG}"
 # Edge-Variante: eigene Releases mit Tag "vX.Y.Z-edge" (als Vorabversion markiert, damit die
 # Qt-Version sie nie als "neueste Version" sieht) - deshalb die Liste statt /releases/latest.
-_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases?per_page=30"
+_API_URL = f"{UPDATE_SERVER}/api/v1/repos/{REPO_SLUG}/releases?limit=30"
 _EDGE_TAG_SUFFIX = "-edge"
 _USER_AGENT = "PlaytubeEdge-Updater"
 
@@ -103,9 +107,7 @@ def cleanup_old_staging() -> None:
 
 
 def fetch_latest_release() -> dict[str, Any] | None:
-    req = urllib.request.Request(
-        _API_URL, headers={"User-Agent": _USER_AGENT, "Accept": "application/vnd.github+json"}
-    )
+    req = urllib.request.Request(_API_URL, headers={"User-Agent": _USER_AGENT, "Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             releases = json.loads(resp.read().decode("utf-8"))

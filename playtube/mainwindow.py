@@ -392,7 +392,7 @@ class MainWindow(QMainWindow):
     def _on_update_check_failed(self) -> None:
         self._settings_tab.set_check_done()
         self._settings_tab.set_update_status(
-            "Update-Prüfung fehlgeschlagen (keine Internetverbindung oder GitHub nicht erreichbar)."
+            "Update-Prüfung fehlgeschlagen (keine Internetverbindung oder Update-Server nicht erreichbar)."
         )
 
     def _on_update_available(self, version: str, notes: str, download_url: str) -> None:
