@@ -49,15 +49,20 @@ jobs:
           & $iscc "/DAppVersion=$version" packaging\playtube.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno-Setup-Build fehlgeschlagen." }
 
+      # Zwei getrennte Artefakte: bei mehreren Pfaden in EINEM Artefakt behielte das Setup seinen
+      # Unterordner (dist/installer/) und wuerde beim Veroeffentlichen nicht gefunden.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-edge-setup
+          path: dist/installer/PlaytubeEdge-Setup-v*.exe
+
       - name: Als .zip packen (portabel)
         run: Compress-Archive -Path dist\PlaytubeEdge -DestinationPath PlaytubeEdge-${{ github.ref_name }}-win64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-edge
-          path: |
-            dist/installer/PlaytubeEdge-Setup-v*.exe
-            PlaytubeEdge-*-win64.zip
+          name: windows-edge-zip
+          path: PlaytubeEdge-*-win64.zip
 
   publish-release:
     needs: [build-windows]
