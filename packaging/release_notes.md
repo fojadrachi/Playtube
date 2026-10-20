@@ -1,19 +1,27 @@
-## Playtube Edge - die Version für eigene (hochgeladene) Musik
+## Playtube 1.0.0 – Neustart mit der Microsoft-Edge-Engine
 
-**Diese Version brauchst du, wenn du selbst hochgeladene Songs in YouTube Music hören willst.**
-Die normale Playtube-Version kann sie nicht abspielen („Dieses Videoformat wird nicht
-unterstützt“), weil ihre eingebaute Browser-Engine (QtWebEngine) kein AAC und kein H.264 kann.
-Playtube Edge benutzt stattdessen die Microsoft-Edge-Engine (WebView2) – damit laufen auch
-hochgeladene Titel.
+Playtube läuft jetzt mit der **Microsoft-Edge-Engine (WebView2)**. Damit spielen auch selbst
+hochgeladene Songs in YouTube Music, und Deutsch/Englisch ist im Einstellungen-Tab umschaltbar.
 
 ### Installieren
-- Download: **PlaytubeEdge-Setup-vX.Y.Z.exe** (Setup, empfohlen) oder die ZIP-Datei (portabel).
+- Download: **Playtube-Setup-v1.0.0.exe** (Setup, empfohlen) oder die ZIP-Datei (portabel).
 - Voraussetzung: Windows 10/11 mit „WebView2 Runtime“ (auf Windows 11 schon vorhanden, sonst
   kostenlos bei Microsoft).
-- Playtube Edge läuft **neben** der normalen Playtube (eigener Ordner, eigene Einstellungen).
-  Beim ersten Start musst du dich in YouTube/YouTube Music einmal neu anmelden. Lass am besten
-  nur eine der beiden Versionen gleichzeitig spielen.
-- Updates: Playtube Edge aktualisiert sich nur über diese „Edge“-Releases – nie über die
-  normale Playtube (und umgekehrt).
+- Das Setup ersetzt eine vorhandene ältere Playtube-Installation. Deine Einstellungen bleiben
+  erhalten; bei YouTube/YouTube Music musst du dich einmal neu anmelden.
+- Wer bisher „Playtube Edge“ benutzt hat: einfach dieses Setup installieren und Playtube Edge
+  danach über „Apps & Features“ deinstallieren.
 
-Wer keine eigenen Uploads abspielt, braucht diese Version nicht – die normale Playtube reicht dann.
+---
+
+## Playtube 1.0.0 – a fresh start with the Microsoft Edge engine
+
+Playtube now runs on the **Microsoft Edge engine (WebView2)**, so your own uploads in YouTube
+Music play too, and German/English can be switched in the Settings tab.
+
+- Download **Playtube-Setup-v1.0.0.exe** (recommended) or the portable ZIP.
+- Requires Windows 10/11 with the WebView2 Runtime (preinstalled on Windows 11).
+- The setup replaces an older Playtube installation. Your settings are kept; sign in to
+  YouTube/YouTube Music once more.
+- Coming from “Playtube Edge”: install this setup, then uninstall Playtube Edge via
+  “Apps & features”.

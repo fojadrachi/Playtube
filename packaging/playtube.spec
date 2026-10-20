@@ -10,7 +10,7 @@ block_cipher = None
 
 ROOT = Path(SPECPATH).resolve().parent
 
-# Edge-Variante: pythonnet + clr_loader (bringen Python.Runtime.dll/ClrLoader.dll mit) und die
+# WebView2: pythonnet + clr_loader (bringen Python.Runtime.dll/ClrLoader.dll mit) und die
 # Microsoft-WebView2-DLLs aus vendor/webview2 (siehe playtube/webview2_runtime.py).
 pythonnet_datas, pythonnet_binaries, pythonnet_hidden = collect_all("pythonnet")
 clr_datas, clr_binaries, clr_hidden = collect_all("clr_loader")
@@ -38,7 +38,7 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 # Linux/macOS gibt es diese Konzepte fuer ELF-Binaries nicht, deshalb nur dort setzen.
 exe_kwargs = dict(
     exclude_binaries=True,
-    name="PlaytubeEdge",
+    name="Playtube",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -58,5 +58,5 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=False,
-    name="PlaytubeEdge",
+    name="Playtube",
 )

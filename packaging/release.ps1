@@ -1,5 +1,5 @@
 # Veroeffentlicht eine neue Playtube-Version: setzt die Versionsnummer, committet,
-# taggt und pusht. Der eigentliche Build fuer Windows UND Linux sowie die
+# taggt und pusht. Der eigentliche Build fuer Windows sowie die
 # Veroeffentlichung als GitHub Release passiert danach automatisch per GitHub Actions
 # (.github/workflows/release.yml), ausgeloest durch den gepushten Tag.
 #
@@ -37,6 +37,6 @@ git push origin HEAD
 git push origin $tag
 
 Write-Host ""
-Write-Host "Fertig. GitHub Actions baut jetzt Windows- und Linux-Pakete und" -ForegroundColor Green
+Write-Host "Fertig. GitHub Actions baut jetzt Setup und ZIP fuer Windows und" -ForegroundColor Green
 Write-Host "veroeffentlicht sie als Release $tag - Fortschritt unter:" -ForegroundColor Green
 Write-Host "https://github.com/fojadrachi/Playtube/actions" -ForegroundColor Green

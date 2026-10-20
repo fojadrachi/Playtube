@@ -1,19 +1,15 @@
-name: Release (Edge)
+name: Release
 
-# Baut Playtube Edge (Microsoft-Edge-Engine / WebView2) fuer Windows und veroeffentlicht Setup
-# und ZIP an einem GitHub Release, sobald ein Tag im Format "vX.Y.Z-edge" gepusht wird.
+# Baut Playtube (Microsoft-Edge-Engine / WebView2) fuer Windows und veroeffentlicht Setup und
+# ZIP an einem GitHub Release, sobald ein Tag im Format "vX.Y.Z" gepusht wird.
 #
-# WICHTIG:
-#  - Nur Tags mit dem Suffix "-edge" loesen diesen Workflow aus - die normale (Qt-)Playtube
-#    baut aus dem Branch "main" mit Tags "vX.Y.Z" und bleibt davon unberuehrt.
-#  - Das Release wird als VORABVERSION veroeffentlicht und nie als "latest" markiert. Die Qt-
-#    Version fragt "/releases/latest" ab und sieht dieses Release dadurch nie; der Updater der
-#    Edge-Version sucht seinerseits nur nach Tags "...-edge" (siehe playtube/updater.py).
+# WICHTIG: Der Release-Titel muss mit "Playtube v" beginnen - der Updater beruecksichtigt nur
+# solche Releases (siehe _RELEASE_TITLE_PREFIX in playtube/updater.py).
 
 on:
   push:
     tags:
-      - "v*-edge"
+      - "v*"
   workflow_dispatch: {}
 
 permissions:
@@ -35,7 +31,7 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: PlaytubeEdge.exe bauen
+      - name: Playtube.exe bauen
         run: pyinstaller packaging\playtube.spec --noconfirm --distpath dist --workpath build
 
       - name: Setup-Installer bauen (Inno Setup)
@@ -53,16 +49,16 @@ jobs:
       # Unterordner (dist/installer/) und wuerde beim Veroeffentlichen nicht gefunden.
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-edge-setup
-          path: dist/installer/PlaytubeEdge-Setup-v*.exe
+          name: windows-setup
+          path: dist/installer/Playtube-Setup-v*.exe
 
       - name: Als .zip packen (portabel)
-        run: Compress-Archive -Path dist\PlaytubeEdge -DestinationPath PlaytubeEdge-${{ github.ref_name }}-win64.zip
+        run: Compress-Archive -Path dist\Playtube -DestinationPath Playtube-${{ github.ref_name }}-win64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-edge-zip
-          path: PlaytubeEdge-*-win64.zip
+          name: windows-zip
+          path: Playtube-*-win64.zip
 
   publish-release:
     needs: [build-windows]
@@ -75,7 +71,7 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: GitHub Release veroeffentlichen (Vorabversion, nie "latest")
+      - name: GitHub Release veroeffentlichen
         # gh statt softprops/action-gh-release: letzteres brach beim erneuten Veroeffentlichen
         # desselben Tags mit "Too many retries" ab. Ein vorhandenes Release zum selben Tag wird
         # zuerst entfernt (der Tag bleibt), dann sauber neu angelegt.
@@ -85,6 +81,6 @@ jobs:
           gh release delete "${{ github.ref_name }}" --repo "${{ github.repository }}" --yes || true
           gh release create "${{ github.ref_name }}" artifacts/* \
             --repo "${{ github.repository }}" \
-            --title "Playtube Edge ${{ github.ref_name }}" \
+            --title "Playtube ${{ github.ref_name }}" \
             --notes-file packaging/release_notes.md \
-            --prerelease --latest=false --verify-tag
+            --latest --verify-tag

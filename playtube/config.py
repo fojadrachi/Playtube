@@ -8,8 +8,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-APP_NAME = "Playtube Edge"
-APP_AUMID = "Playtube.Edge.DesktopClient"  # Windows AppUserModelID
+APP_NAME = "Playtube"
+APP_AUMID = "Playtube.DesktopClient"  # Windows AppUserModelID
 
 # Der Entwicklungsmodus (python main.py) benutzt einen eigenen APPDATA-Ordner
 # ("PlaytubeDev" statt "Playtube"), damit Login-Profil und Config sich NIE mit einer
@@ -17,9 +17,9 @@ APP_AUMID = "Playtube.Edge.DesktopClient"  # Windows AppUserModelID
 # ein lokaler Test-Build und die echte Installation sich dieselbe config.json bzw.
 # denselben Browser-Profil-Lock geteilt haben).
 #
-# Edge-Variante (WebView2): eigene Ordnernamen ("PlaytubeEdge"/"PlaytubeEdgeDev"), damit sie sich
-# nie mit der Qt-Variante ueberschneidet (Profil, Einzelinstanz-Schutz, Fernsteuerungs-Pipe).
-_DATA_DIR_NAME = "PlaytubeEdge" if getattr(sys, "frozen", False) else "PlaytubeEdgeDev"
+# Derselbe Ordner wie bei der frueheren Qt-Version: config.json bleibt erhalten, das
+# WebView2-Profil liegt in einem eigenen Unterordner (webprofile/webview2, siehe browser.py).
+_DATA_DIR_NAME = APP_NAME if getattr(sys, "frozen", False) else f"{APP_NAME}Dev"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "app_name": APP_NAME,
@@ -31,7 +31,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
         # Wenn nichts laeuft: Idle-Status anzeigen statt Presence komplett zu leeren.
         "show_idle_presence": True,
     },
-    # Die Edge-Variante aktualisiert sich nur ueber eigene Releases (Tag "...-edge", siehe updater.py).
     "updates": {
         "enabled": True,
         "check_interval_hours": 6,

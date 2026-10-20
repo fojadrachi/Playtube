@@ -47,7 +47,7 @@ def list_output_devices() -> list[str]:
 def sync_audio_permissions(tabs, wanted: bool) -> None:
     """Erlaubt (wanted=True) bzw. entzieht (wanted=False) den Browser-Tabs die
     Audiogeraete-Berechtigung fuer YouTube/YouTube Musik - damit die Seite die Namen der
-    Ausgabegeraete sehen kann (siehe Moduldoku). In der Edge-Variante setzt jeder Tab die
+    Ausgabegeraete sehen kann (siehe Moduldoku). Mit WebView2 setzt jeder Tab die
     Freigabe selbst (WebView2-Profil, bleibt dort gespeichert)."""
     for tab in tabs:
         tab.set_device_names_allowed(wanted)

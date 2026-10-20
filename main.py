@@ -71,7 +71,7 @@ def main() -> int:
     # komplett, da Playtube als portables ZIP ohne Installer ausgeliefert wird.
     clear_cache_on_update(__version__)
     ensure_start_menu_shortcut(APP_NAME)
-    # Keine ".play"-Dateizuordnung: die gehoert der Qt-Version von Playtube (Edge nutzt nur Setup-Updates).
+    # Keine ".play"-Dateizuordnung: Updates kommen nur noch ueber den Setup-Installer.
 
     window = MainWindow(config)
     window.show()

@@ -2,9 +2,9 @@
 persistentem Login-Profil und periodischem Auslesen der aktuellen Wiedergabe fuer Discord Rich
 Presence.
 
-Edge-Variante von Playtube: statt QtWebEngine (kein AAC/H.264 - hochgeladene Titel liessen sich
-nicht abspielen) rendert hier WebView2. Die Schnittstelle von BrowserTab ist dieselbe wie in der
-Qt-Variante, damit MainWindow, Fernsteuerung und Discord unveraendert bleiben.
+Seit Playtube 1.0.0 rendert WebView2 statt QtWebEngine (kein AAC/H.264 - hochgeladene Titel
+liessen sich nicht abspielen). Die Schnittstelle von BrowserTab ist dieselbe wie in der
+frueheren Qt-Version, damit MainWindow, Fernsteuerung und Discord unveraendert bleiben.
 """
 from __future__ import annotations
 

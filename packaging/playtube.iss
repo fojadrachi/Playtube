@@ -1,19 +1,15 @@
-; Inno-Setup-Skript fuer den Playtube-Edge-Windows-Installer (PlaytubeEdge-Setup-vX.Y.Z.exe).
+; Inno-Setup-Skript fuer den Playtube-Windows-Installer (Playtube-Setup-vX.Y.Z.exe).
 ;
 ; Bauen (Inno Setup 6.3+ noetig, https://jrsoftware.org/isinfo.php):
 ;   ISCC.exe /DAppVersion=1.0.0 packaging\playtube.iss
-; Voraussetzung: dist\PlaytubeEdge\ existiert bereits (PyInstaller-Build, siehe build.ps1).
-; Ergebnis: dist\installer\PlaytubeEdge-Setup-v1.0.0.exe
+; Voraussetzung: dist\Playtube\ existiert bereits (PyInstaller-Build, siehe build.ps1).
+; Ergebnis: dist\installer\Playtube-Setup-v1.0.0.exe
 ;
-; Playtube Edge ist bewusst eine EIGENE Anwendung neben der Qt-Version von Playtube:
-;  - Eigene AppId, eigener Installationsordner (%LOCALAPPDATA%\Programs\PlaytubeEdge), eigener
-;    Datenordner (%APPDATA%\PlaytubeEdge), eigene Exe (PlaytubeEdge.exe). Beide Versionen koennen
-;    parallel installiert sein; keine ueberschreibt die andere.
-;  - Feste AppId: jede neue Edge-Setup-Version erkennt darueber die vorhandene Edge-Installation
-;    und ueberschreibt sie im SELBEN Ordner. Muss mit _INNO_APP_ID in playtube/updater.py
-;    uebereinstimmen.
-;  - Keine ".play"-Dateizuordnung und kein Beenden von Playtube.exe / PlaytubeHelper.exe - das
-;    gehoert alles der Qt-Version.
+;  - Feste AppId (dieselbe wie bei der frueheren Qt-Version bis 4.5.1): jede Setup-Version
+;    erkennt darueber die vorhandene Installation - auch eine alte Qt-Playtube - und
+;    ueberschreibt sie im SELBEN Ordner (%LOCALAPPDATA%\Programs\Playtube). Muss mit
+;    _INNO_APP_ID in playtube/updater.py uebereinstimmen.
+;  - Reste der Qt-Version (PlaytubeHelper.exe, alte _internal-Laufzeit) werden dabei entfernt.
 ;
 ; Hinweis zur Datei: bewusst reines ASCII (kein BOM), damit die Umlaute-Kodierung von
 ; Inno Setup nicht ins Spiel kommt.
@@ -22,13 +18,15 @@
   #define AppVersion "0.0.0"
 #endif
 
-#define AppName "Playtube Edge"
-#define AppDirName "PlaytubeEdge"
-#define AppExeName "PlaytubeEdge.exe"
+#define AppName "Playtube"
+#define AppDirName "Playtube"
+#define AppExeName "Playtube.exe"
+; Hilfsprozess der frueheren Qt-Version - wird beim Update beendet und entfernt.
+#define OldHelperName "PlaytubeHelper.exe"
 
 [Setup]
-; NIEMALS aendern - identifiziert die Edge-Installation ueber alle Versionen hinweg.
-AppId={{4F0F3698-DAF3-4028-B0A4-896D31292C28}
+; NIEMALS aendern - identifiziert die Playtube-Installation ueber alle Versionen hinweg.
+AppId={{87FBA502-2B84-4C42-A66B-2F03F490912D}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
@@ -43,14 +41,14 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist\installer
-OutputBaseFilename=PlaytubeEdge-Setup-v{#AppVersion}
+OutputBaseFilename=Playtube-Setup-v{#AppVersion}
 SetupIconFile=..\assets\icon.ico
 UninstallDisplayIcon={app}\{#AppExeName}
 UninstallDisplayName={#AppName}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
-; Prozesse beenden wir selbst (siehe [Code]) - Playtube Edge versteckt sich beim Schliessen des
+; Prozesse beenden wir selbst (siehe [Code]) - Playtube versteckt sich beim Schliessen des
 ; Fensters nur im Tray und reagiert daher nicht zuverlaessig auf CloseApplications.
 CloseApplications=no
 RestartApplications=no
@@ -66,16 +64,17 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; Vor dem Kopieren die PyInstaller-Laufzeit der alten Version entfernen, damit nach einem
 ; Update keine Dateien einer aelteren Version uebrig bleiben.
 Type: filesandordirs; Name: "{app}\_internal"
+Type: files; Name: "{app}\{#OldHelperName}"
 
 [Files]
-Source: "..\dist\PlaytubeEdge\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\Playtube\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Run]
-; Normale (sichtbare) Installation: Haekchen "Playtube Edge jetzt starten" am Ende.
+; Normale (sichtbare) Installation: Haekchen "Playtube jetzt starten" am Ende.
 Filename: "{app}\{#AppExeName}"; Description: "{#AppName} jetzt starten"; Flags: nowait postinstall skipifsilent
 ; Stilles Update durch den eigenen Updater (/RELAUNCH=1): App danach automatisch wieder starten.
 Filename: "{app}\{#AppExeName}"; Flags: nowait; Check: ShouldRelaunch
@@ -108,10 +107,10 @@ procedure StopLeftoverProcesses();
 var
   ResultCode: Integer;
 begin
-  { WICHTIG: bewusst OHNE "/T" - der Updater startet Setup aus PlaytubeEdge.exe heraus, Setup ist
-    also ein Kindprozess; "/T" wuerde den Installer selbst mit abschiessen. Es wird nur
-    PlaytubeEdge.exe beendet, NIE Playtube.exe der Qt-Version. }
+  { WICHTIG: bewusst OHNE "/T" - der Updater startet Setup aus Playtube.exe heraus, Setup ist
+    also ein Kindprozess; "/T" wuerde den Installer selbst mit abschiessen. }
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#AppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#OldHelperName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 
   { WebView2-Kindprozesse (msedgewebview2.exe), die noch aus dem Installationsordner laufen,
     wuerden Dateien sperren - gezielt nach Pfad beenden. }
