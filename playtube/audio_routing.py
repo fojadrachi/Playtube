@@ -32,8 +32,6 @@ import json
 
 from PySide6.QtMultimedia import QMediaDevices
 
-SYSTEM_DEFAULT_LABEL = "Systemstandard"
-
 
 def list_output_devices() -> list[str]:
     """Namen aller aktuell vorhandenen Ausgabegeraete (Reihenfolge des Systems, ohne

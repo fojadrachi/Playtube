@@ -17,6 +17,7 @@ from PySide6.QtCore import QThread
 
 from .config import APP_NAME
 from .debug_log import log_line
+from .i18n import tr
 
 try:
     from pypresence.types import ActivityType
@@ -64,7 +65,7 @@ def build_presence_payload(
     werden."""
     is_music = bool(info.get("isMusic"))
     playing = bool(info.get("playing"))
-    title = _truncate(info.get("title"), fallback="Unbekannter Titel")
+    title = _truncate(info.get("title"), fallback=tr("rpc.unknown_title"))
     default_state = "YouTube Music" if is_music else "YouTube"
     state = _truncate(info.get("subtitle"), fallback=default_state)
 
@@ -88,7 +89,7 @@ def build_presence_payload(
         "large_image": large_image,
         "large_text": "YouTube Music" if is_music else "YouTube",
         "small_image": ASSET_PLAY if playing else ASSET_PAUSE,
-        "small_text": "Spielt" if playing else "Pausiert",
+        "small_text": tr("rpc.playing") if playing else tr("rpc.paused"),
         "start": start_ts,
     }
     if end_ts:
@@ -96,7 +97,7 @@ def build_presence_payload(
 
     url = info.get("url")
     if url and isinstance(url, str) and url.startswith("http"):
-        label = "In YouTube Music öffnen" if is_music else "Auf YouTube ansehen"
+        label = tr("rpc.open_music") if is_music else tr("rpc.watch_youtube")
         payload["buttons"] = [{"label": label, "url": url}]
 
     return payload
@@ -104,16 +105,12 @@ def build_presence_payload(
 
 def build_idle_payload(session_start: int) -> dict[str, Any]:
     return {
-        "details": f"Bei {APP_NAME}",
-        "state": "Stöbert gerade",
+        "details": tr("rpc.idle_details", app=APP_NAME),
+        "state": tr("rpc.idle_state"),
         "large_image": ASSET_DEFAULT,
         "large_text": APP_NAME,
         "start": session_start,
     }
-
-
-SETTINGS_DETAILS = "In den Einstellungen"
-SETTINGS_DEFAULT_STATE = "Schaut sich die Einstellungen an"
 
 
 def build_settings_payload(session_start: int, activity: str | None) -> dict[str, Any]:
@@ -122,8 +119,8 @@ def build_settings_payload(session_start: int, activity: str | None) -> dict[str
     wird bewusst nur der NAME des Feldes uebergeben, nie sein Inhalt (sonst wuerde
     z.B. die eingetragene Client-ID oeffentlich im Discord-Profil stehen)."""
     return {
-        "details": SETTINGS_DETAILS,
-        "state": _truncate(activity, fallback=SETTINGS_DEFAULT_STATE),
+        "details": tr("rpc.settings_details"),
+        "state": _truncate(activity, fallback=tr("rpc.settings_default")),
         "large_image": ASSET_DEFAULT,
         "large_text": APP_NAME,
         "start": session_start,

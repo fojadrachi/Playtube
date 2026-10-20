@@ -52,6 +52,8 @@ from typing import Any
 from PySide6.QtCore import QThread, Signal
 
 from . import __version__ as CURRENT_VERSION
+from .config import APP_NAME
+from .i18n import tr
 
 # Eigener Gitea-Server (kein GitHub). Die Releases dort werden von .gitea/workflows/release.yml
 # bzw. packaging/publish_release.ps1 veroeffentlicht.
@@ -280,19 +282,17 @@ class UpdateInstaller(QThread):
         if self._local_archive_path:
             archive_path = Path(self._local_archive_path)
             if not archive_path.exists():
-                self.failed.emit(f"Patch-Datei nicht gefunden: {archive_path}")
+                self.failed.emit(tr("updater.patch_not_found", path=archive_path))
                 return
             archive_name = archive_path.name
-            self.progress.emit(f"Verwende lokale Patch-Datei {archive_name} …")
+            self.progress.emit(tr("updater.using_local", name=archive_name))
             self.progress_percent.emit(-1)
         else:
             if not self._download_url:
-                self.failed.emit(
-                    "Kein passendes Release-Paket fuer dieses Betriebssystem gefunden."
-                )
+                self.failed.emit(tr("updater.no_package"))
                 return
 
-            self.progress.emit("Lade Update herunter …")
+            self.progress.emit(tr("update.downloading"))
             self.progress_percent.emit(0)
             archive_name = self._download_url.rsplit("/", 1)[-1]
             archive_path = staging / archive_name
@@ -320,13 +320,13 @@ class UpdateInstaller(QThread):
             # Setup-Installer: nichts zu entpacken - er installiert selbst ueber die
             # vorhandene Installation (bzw. richtet bei einer portablen Kopie die
             # regulaere Installation ein) und startet Playtube danach neu.
-            self.progress.emit("Starte Installer …")
+            self.progress.emit(tr("updater.starting_installer"))
             self.progress_percent.emit(-1)
             self._install_setup_windows(archive_path)
             self.finished_ok.emit()
             return
 
-        self.progress.emit("Entpacke Update …")
+        self.progress.emit(tr("updater.extracting"))
         # Unbestimmter Fortschritt waehrend Entpacken/Installieren - die UI zeigt
         # dafuer einen "laufenden" Balken statt einer Prozentzahl.
         self.progress_percent.emit(-1)
@@ -341,7 +341,7 @@ class UpdateInstaller(QThread):
                 zf.extractall(extract_dir)
 
         is_patch = "patch" in archive_name.lower() or archive_name.lower().endswith(".play")
-        self.progress.emit("Bereite Installation vor …")
+        self.progress.emit(tr("updater.preparing"))
 
         if is_patch:
             binary_name = _WINDOWS_BINARY_NAME if sys.platform == "win32" else _LINUX_BINARY_NAME
@@ -350,9 +350,7 @@ class UpdateInstaller(QThread):
                 # Unerwartet leeres/falsches Patch-Paket -> nicht kaputt installieren,
                 # lieber sauber fehlschlagen und den Nutzer auf das volle Paket
                 # hinweisen (naechster Check faellt automatisch darauf zurueck).
-                self.failed.emit(
-                    f"Patch-Paket enthielt kein '{binary_name}'. Bitte erneut versuchen."
-                )
+                self.failed.emit(tr("updater.patch_missing_binary", binary=binary_name))
                 return
             if sys.platform == "win32":
                 self._install_patch_windows(
@@ -377,18 +375,20 @@ class UpdateInstaller(QThread):
     # der Nutzer nach dem Schliessen der App fuer die Dauer der Installation (bei
     # einem vollen Paket ggf. mehrere Sekunden) gar nichts sehen, was wie ein Absturz
     # oder Haenger wirkt.
-    _WINDOWS_PROGRESS_FORM_PS = """
+    @staticmethod
+    def _windows_progress_form_ps() -> str:
+        return f"""
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "Playtube-Update"
+$form.Text = "{tr("updater.window_title", app=APP_NAME)}"
 $form.Size = New-Object System.Drawing.Size(380,130)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
 $form.ControlBox = $false
 $form.TopMost = $true
 $label = New-Object System.Windows.Forms.Label
-$label.Text = "Playtube wird aktualisiert – bitte warten …"
+$label.Text = "{tr("updater.updating", app=APP_NAME)}"
 $label.AutoSize = $false
 $label.Size = New-Object System.Drawing.Size(340,20)
 $label.Location = New-Object System.Drawing.Point(20,15)
@@ -422,20 +422,20 @@ if ($copied) {{
     }}
 }}
 """
-        script = self._WINDOWS_PROGRESS_FORM_PS + f"""
+        script = self._windows_progress_form_ps() + f"""
 $ErrorActionPreference = "SilentlyContinue"
 $targetPid = {os.getpid()}
 while (Get-Process -Id $targetPid -ErrorAction SilentlyContinue) {{
     Start-Sleep -Milliseconds 300
     [System.Windows.Forms.Application]::DoEvents()
 }}
-$label.Text = "Kopiere aktualisierte Datei …"
+$label.Text = "{tr("updater.copying_file")}"
 $form.Refresh()
 [System.Windows.Forms.Application]::DoEvents()
 Copy-Item -Path "{new_exe}" -Destination "{exe_path}" -Force
 $copied = $?
 {registry_update}
-$label.Text = "Fertig – Playtube wird neu gestartet …"
+$label.Text = "{tr("updater.done_restarting", app=APP_NAME)}"
 $form.Refresh()
 [System.Windows.Forms.Application]::DoEvents()
 Start-Process -FilePath "{exe_path}"
@@ -448,11 +448,13 @@ Remove-Item -Recurse -Force "{staging}" -ErrorAction SilentlyContinue
     # Falls zenity installiert ist (auf den meisten Desktop-Distros vorhanden), waehrend
     # Wartezeit/Installation ein pulsierendes Fortschrittsfenster zeigen - rein optisch,
     # das Update funktioniert auch ohne (dann passiert der Neustart einfach unsichtbar).
-    _POSIX_PROGRESS_HEADER = """#!/bin/sh
+    @staticmethod
+    def _posix_progress_header() -> str:
+        return f"""#!/bin/sh
 ZPID=""
 if command -v zenity >/dev/null 2>&1; then
-    tail -f /dev/null | zenity --progress --title="Playtube-Update" \
-        --text="Playtube wird aktualisiert - bitte warten ..." --pulsate --no-cancel \
+    tail -f /dev/null | zenity --progress --title="{tr("updater.window_title", app=APP_NAME)}" \
+        --text="{tr("updater.updating", app=APP_NAME)}" --pulsate --no-cancel \
         >/dev/null 2>&1 &
     ZPID=$!
 fi
@@ -463,7 +465,7 @@ fi
 
     def _install_patch_posix(self, new_binary: Path, install_dir: Path, staging: Path) -> None:
         exe_path = install_dir / _LINUX_BINARY_NAME
-        script = self._POSIX_PROGRESS_HEADER + f"""
+        script = self._posix_progress_header() + f"""
 while kill -0 {os.getpid()} 2>/dev/null; do
     sleep 0.5
 done
@@ -509,14 +511,14 @@ rm -rf "{staging}"
 
     def _install_full_windows(self, source_dir: Path, install_dir: Path, staging: Path) -> None:
         exe_path = install_dir / _WINDOWS_BINARY_NAME
-        script = self._WINDOWS_PROGRESS_FORM_PS + f"""
+        script = self._windows_progress_form_ps() + f"""
 $ErrorActionPreference = "SilentlyContinue"
 $targetPid = {os.getpid()}
 while (Get-Process -Id $targetPid -ErrorAction SilentlyContinue) {{
     Start-Sleep -Milliseconds 300
     [System.Windows.Forms.Application]::DoEvents()
 }}
-$label.Text = "Kopiere Programmdateien … (kann etwas dauern)"
+$label.Text = "{tr("updater.copying_files")}"
 $form.Refresh()
 [System.Windows.Forms.Application]::DoEvents()
 # Ueber Start-Process (statt direktem Aufruf) gestartet und per Polling statt -Wait
@@ -530,7 +532,7 @@ while (-not $roboProc.HasExited) {{
     Start-Sleep -Milliseconds 200
     [System.Windows.Forms.Application]::DoEvents()
 }}
-$label.Text = "Fertig – Playtube wird neu gestartet …"
+$label.Text = "{tr("updater.done_restarting", app=APP_NAME)}"
 $form.Refresh()
 [System.Windows.Forms.Application]::DoEvents()
 Start-Process -FilePath "{exe_path}"
@@ -542,7 +544,7 @@ Remove-Item -Recurse -Force "{staging}" -ErrorAction SilentlyContinue
 
     def _install_full_posix(self, source_dir: Path, install_dir: Path, staging: Path) -> None:
         exe_path = install_dir / _LINUX_BINARY_NAME
-        script = self._POSIX_PROGRESS_HEADER + f"""
+        script = self._posix_progress_header() + f"""
 while kill -0 {os.getpid()} 2>/dev/null; do
     sleep 0.5
 done
@@ -561,7 +563,7 @@ rm -rf "{staging}"
 
     def _spawn_windows_script(self, script: str, staging: Path) -> None:
         script_path = staging / "apply_update.ps1"
-        script_path.write_text(script, encoding="utf-8")
+        script_path.write_text(script, encoding="utf-8-sig")
         subprocess.Popen(
             ["powershell", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", str(script_path)],
             creationflags=subprocess.CREATE_NO_WINDOW,
@@ -583,28 +585,25 @@ rm -rf "{staging}"
     def _run_dev_update(self) -> None:
         project_root = Path(__file__).resolve().parent.parent
         if not (project_root / ".git").exists():
-            self.failed.emit(
-                "Kein Git-Repository gefunden - im Entwicklungsmodus bitte manuell "
-                "'git pull' im Projektordner ausfuehren."
-            )
+            self.failed.emit(tr("updater.dev_no_git"))
             return
 
-        self.progress.emit("Lade Aenderungen per git pull …")
+        self.progress.emit(tr("updater.dev_pulling"))
         result = subprocess.run(
             ["git", "pull", "--ff-only"], cwd=project_root, capture_output=True, text=True
         )
         if result.returncode != 0:
-            self.failed.emit(f"git pull fehlgeschlagen:\n{result.stderr.strip()}")
+            self.failed.emit(tr("updater.dev_pull_failed", error=result.stderr.strip()))
             return
 
-        self.progress.emit("Installiere Abhaengigkeiten …")
+        self.progress.emit(tr("updater.dev_installing_deps"))
         pip_result = subprocess.run(
             [sys.executable, "-m", "pip", "install", "-q", "-r", str(project_root / "requirements.txt")],
             capture_output=True,
             text=True,
         )
         if pip_result.returncode != 0:
-            self.failed.emit(f"pip install fehlgeschlagen:\n{pip_result.stderr.strip()}")
+            self.failed.emit(tr("updater.dev_pip_failed", error=pip_result.stderr.strip()))
             return
 
         self.finished_ok.emit()

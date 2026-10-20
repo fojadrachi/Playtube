@@ -24,6 +24,7 @@ from .audio_routing import sync_audio_permissions
 from .browser import BrowserTab
 from .config import APP_NAME
 from .discord_rpc import DiscordRPCWorker
+from .i18n import get_language, set_language, tr
 from .remote_control import build_state as build_remote_state
 from .remote_control import resolve_target as resolve_remote_target
 from .settings_tab import SettingsTab
@@ -68,7 +69,7 @@ class MainWindow(QMainWindow):
         self._settings_tab = SettingsTab(config, self)
         self._tabs.addTab(self._youtube_tab, "YouTube")
         self._tabs.addTab(self._music_tab, "YouTube Music")
-        self._tabs.addTab(self._settings_tab, "Einstellungen")
+        self._tabs.addTab(self._settings_tab, tr("tab.settings"))
         self._tabs.setCurrentIndex(0 if config.get("start_tab") != "music" else 1)
         self._apply_audio_routing()
         self._settings_tab.settingsSaved.connect(self._on_settings_saved)
@@ -98,7 +99,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ UI
 
     def _build_toolbar(self) -> None:
-        toolbar = QToolBar("Navigation", self)
+        self._toolbar = toolbar = QToolBar(tr("toolbar.navigation"), self)
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
 
@@ -121,7 +122,7 @@ class MainWindow(QMainWindow):
         toolbar.addSeparator()
 
         self._url_bar = QLineEdit(self)
-        self._url_bar.setPlaceholderText("Suche oder URL eingeben …")
+        self._url_bar.setPlaceholderText(tr("url.placeholder"))
         self._url_bar.returnPressed.connect(self._navigate_to_url_bar)
         toolbar.addWidget(self._url_bar)
 
@@ -136,20 +137,20 @@ class MainWindow(QMainWindow):
         self._tray.setToolTip(APP_NAME)
 
         menu = QMenu()
-        show_action = menu.addAction("Anzeigen")
+        self._tray_show_action = show_action = menu.addAction(tr("tray.show"))
         show_action.triggered.connect(self._show_and_raise)
 
-        play_pause_action = menu.addAction("Wiedergabe umschalten")
+        self._tray_play_pause_action = play_pause_action = menu.addAction(tr("tray.play_pause"))
         play_pause_action.triggered.connect(lambda: self._with_browser_tab(lambda t: t.toggle_playback()))
 
-        next_action = menu.addAction("Nächster Titel")
+        self._tray_next_action = next_action = menu.addAction(tr("tray.next"))
         next_action.triggered.connect(lambda: self._with_browser_tab(lambda t: t.next_track()))
 
-        prev_action = menu.addAction("Vorheriger Titel")
+        self._tray_prev_action = prev_action = menu.addAction(tr("tray.previous"))
         prev_action.triggered.connect(lambda: self._with_browser_tab(lambda t: t.previous_track()))
 
         menu.addSeparator()
-        quit_action = menu.addAction("Beenden")
+        self._tray_quit_action = quit_action = menu.addAction(tr("tray.quit"))
         quit_action.triggered.connect(self._quit)
 
         self._tray.setContextMenu(menu)
@@ -268,6 +269,9 @@ class MainWindow(QMainWindow):
 
     def _on_settings_saved(self, new_config: dict) -> None:
         self._config = new_config
+        if new_config.get("language") != get_language():
+            set_language(new_config.get("language"))
+            self._retranslate()
         self._sync_audio_permission()
         self._apply_audio_routing()
 
@@ -279,6 +283,18 @@ class MainWindow(QMainWindow):
         self._update_discord_presence()  # frischen Worker sofort mit dem aktuellen Stand versorgen
 
         self._setup_auto_update()
+
+    def _retranslate(self) -> None:
+        """Setzt die Texte von Fenster, Toolbar und Tray nach einem Sprachwechsel neu."""
+        self._tabs.setTabText(self._tabs.indexOf(self._settings_tab), tr("tab.settings"))
+        self._toolbar.setWindowTitle(tr("toolbar.navigation"))
+        self._url_bar.setPlaceholderText(tr("url.placeholder"))
+        self._tray_show_action.setText(tr("tray.show"))
+        self._tray_play_pause_action.setText(tr("tray.play_pause"))
+        self._tray_next_action.setText(tr("tray.next"))
+        self._tray_prev_action.setText(tr("tray.previous"))
+        self._tray_quit_action.setText(tr("tray.quit"))
+        self._settings_tab.retranslate()
 
     def _on_tray_activated(self, reason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
@@ -348,7 +364,7 @@ class MainWindow(QMainWindow):
         self.hide()
         self._tray.showMessage(
             APP_NAME,
-            f"{APP_NAME} läuft im Hintergrund weiter. Rechtsklick auf das Tray-Icon zum Beenden.",
+            tr("tray.background", app=APP_NAME),
             self._app_icon if not self._app_icon.isNull() else QSystemTrayIcon.MessageIcon.Information,
             3000,
         )
@@ -387,13 +403,11 @@ class MainWindow(QMainWindow):
 
     def _on_update_up_to_date(self) -> None:
         self._settings_tab.set_check_done()
-        self._settings_tab.set_update_status(f"Du hast bereits die neueste Version (v{APP_VERSION}).")
+        self._settings_tab.set_update_status(tr("update.up_to_date", version=APP_VERSION))
 
     def _on_update_check_failed(self) -> None:
         self._settings_tab.set_check_done()
-        self._settings_tab.set_update_status(
-            "Update-Prüfung fehlgeschlagen (keine Internetverbindung oder Update-Server nicht erreichbar)."
-        )
+        self._settings_tab.set_update_status(tr("update.check_failed"))
 
     def _on_update_available(self, version: str, notes: str, download_url: str) -> None:
         self._settings_tab.set_check_done()
@@ -406,14 +420,14 @@ class MainWindow(QMainWindow):
 
         self._show_and_raise()
         notes_preview = (notes[:400] + "…") if len(notes) > 400 else notes
-        text = f"Eine neue Version von {APP_NAME} ist verfügbar: {version}\n(aktuell installiert: {APP_VERSION})"
+        text = tr("update.dialog_text", app=APP_NAME, version=version, current=APP_VERSION)
         if notes_preview:
             text += f"\n\n{notes_preview}"
-        text += "\n\nJetzt installieren?"
+        text += "\n\n" + tr("update.install_now")
 
         answer = QMessageBox.question(
             self,
-            f"{APP_NAME}-Update verfügbar",
+            tr("update.dialog_title", app=APP_NAME),
             text,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
@@ -426,12 +440,12 @@ class MainWindow(QMainWindow):
             return
         self._settings_tab.hide_install_button()
         if local_path:
-            self._settings_tab.set_update_status("Installiere lokale Patch-Datei …")
+            self._settings_tab.set_update_status(tr("update.installing_local"))
             self._settings_tab.set_download_progress(-1)
         else:
-            self._settings_tab.set_update_status("Lade Update herunter …")
+            self._settings_tab.set_update_status(tr("update.downloading"))
             self._settings_tab.set_download_progress(0)
-        self._tray.setToolTip(f"{APP_NAME} – Update wird installiert …")
+        self._tray.setToolTip(tr("update.tray_installing", app=APP_NAME))
         self._update_installer = UpdateInstaller(
             download_url, local_archive_path=local_path, parent=self
         )
@@ -460,10 +474,8 @@ class MainWindow(QMainWindow):
             # es zeigt dabei selbst ein kleines Fortschrittsfenster an (siehe
             # updater.py), damit der Nutzer zwischen "App schliesst sich" und
             # "neue App startet" nicht denkt, etwas sei abgestuerzt.
-            self._settings_tab.set_update_status(
-                "Installation abgeschlossen. Playtube wird neu gestartet …"
-            )
-            self._tray.setToolTip(f"{APP_NAME} – wird neu gestartet …")
+            self._settings_tab.set_update_status(tr("update.done_restarting", app=APP_NAME))
+            self._tray.setToolTip(tr("update.tray_restarting", app=APP_NAME))
             # Haengt sich Qt/QtWebEngine beim Beenden auf, wuerde der Update-Helfer (bzw.
             # Setup, siehe /WAITPID) ewig auf das Ende dieses Prozesses warten - und die
             # alte Version bliebe einfach weiterlaufen. Nach 8 s hart beenden.
@@ -473,15 +485,15 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 APP_NAME,
-                "Update installiert. Die App wird jetzt neu gestartet.",
+                tr("update.dev_done"),
             )
             self._restart_dev_process()
 
     def _on_update_failed(self, error: str) -> None:
         self._tray.setToolTip(APP_NAME)
         self._settings_tab.set_progress_hidden()
-        self._settings_tab.set_update_status(f"Update fehlgeschlagen: {error}")
-        QMessageBox.warning(self, f"{APP_NAME}-Update fehlgeschlagen", error)
+        self._settings_tab.set_update_status(tr("update.failed_status", error=error))
+        QMessageBox.warning(self, tr("update.failed_title", app=APP_NAME), error)
 
     def _restart_dev_process(self) -> None:
         if self._rpc_worker is not None:

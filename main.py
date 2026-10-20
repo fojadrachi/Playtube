@@ -27,6 +27,7 @@ from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtGui import QIcon  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
+from playtube.i18n import set_language  # noqa: E402
 from playtube.mainwindow import MainWindow  # noqa: E402
 
 
@@ -64,6 +65,7 @@ def main() -> int:
     cleanup_old_staging()  # Reste eines frueheren Updates (heruntergeladenes Setup) entfernen
 
     config = load_config()
+    set_language(config.get("language"))
     # Cache leeren, wenn seit dem letzten Start ein Update installiert wurde (Login
     # bleibt erhalten, siehe clear_cache_on_update); Startmenue-Verknuepfung fehlt sonst
     # komplett, da Playtube als portables ZIP ohne Installer ausgeliefert wird.

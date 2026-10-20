@@ -46,6 +46,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # siehe playtube/remote_control.py.
     "remote_control": {"enabled": True},
     "start_tab": "youtube",  # "youtube" oder "music"
+    # Oberflaechensprache: "de" oder "en" (Englisch US); leer = nach Windows-Sprache.
+    "language": "",
     "home_youtube": "https://www.youtube.com/",
     "home_music": "https://music.youtube.com/",
     "window": {"width": 1366, "height": 860},

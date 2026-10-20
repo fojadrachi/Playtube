@@ -19,6 +19,7 @@ from PySide6.QtWidgets import QWidget
 from . import webview2_runtime
 from .audio_routing import build_router_script
 from .config import profile_dir
+from .i18n import webview_language
 from .media_control import LIST_PLAYLISTS_JS, MUSIC_PLAYLIST_URL, build_control_js
 from .media_probe import MEDIA_PROBE_JS, NEXT_TRACK_JS, PREV_TRACK_JS, TOGGLE_PLAYBACK_JS
 
@@ -108,7 +109,9 @@ class BrowserTab(QWidget):
         properties = runtime.CreationProperties()
         properties.UserDataFolder = str(profile_dir() / "webview2")
         properties.AdditionalBrowserArguments = _BROWSER_ARGUMENTS
-        properties.Language = "de-DE"
+        # Sprache der WebView2-Runtime (Kontextmenues, Accept-Language) - wird beim Erzeugen
+        # festgelegt, ein Sprachwechsel greift hier also erst nach einem Neustart.
+        properties.Language = webview_language()
         self._view = runtime.WebView2()
         self._view.CreationProperties = properties
         self._view.CoreWebView2InitializationCompleted += self._on_core_initialized
