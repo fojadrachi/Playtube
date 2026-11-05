@@ -1,30 +1,18 @@
-## Playtube 2.0.0 – komplett neu in Rust
+## Playtube 2.0.1
 
-Playtube ist jetzt eine schnelle, schlanke Rust-App (eine einzelne Datei statt Python-Ordner).
-Login, Einstellungen und gekoppelte Handys bleiben erhalten.
+- **Steuerung vom Handy und Stream Dock:** Playtube schickt die Cover von YouTube Music jetzt in hoher
+  Auflösung (544×544 statt 60×60 Pixel) – in der Android-App waren sie bisher verpixelt.
 
-- **Updates funktionieren wieder:** Playtube prüft GitHub, lädt das Setup, prüft die Prüfsumme und
-  installiert sich still – danach startet es von selbst neu.
-- **Steuerung vom Handy** (wie Spotify Connect) mit Playtube für Android: in den Einstellungen unter
-  „Steuerung vom Handy“ einschalten und koppeln.
-- Weiterhin: YouTube und YouTube Music in Tabs, Discord Rich Presence, Audioausgabe pro Tab,
-  Stream-Dock-Steuerung, Tray, Deutsch/Englisch.
-
-**Installieren:** `Playtube-Setup-2.0.0.exe` laden und starten – ersetzt jede ältere Playtube.
-Voraussetzung: Windows 10/11 mit WebView2-Runtime (unter Windows 11 vorhanden).
+Alles Weitere wie in 2.0.0 (komplett neu in Rust, funktionierende Updates, Steuerung vom Handy).
+**Installieren:** `Playtube-Setup-2.0.1.exe` laden und starten – ersetzt jede ältere Playtube. Ab 2.0.0
+aktualisiert sich Playtube von selbst.
 
 ---
 
-## Playtube 2.0.0 – rebuilt in Rust
+## Playtube 2.0.1
 
-Playtube is now a fast, lean Rust app (a single file instead of a Python folder). Your login,
-settings and paired phones are kept.
+- **Phone control and Stream Dock:** Playtube now sends YouTube Music covers in high resolution
+  (544×544 instead of 60×60 pixels) – they looked pixelated in the Android app.
 
-- **Updates work again:** Playtube checks GitHub, downloads the setup, verifies its checksum and
-  installs silently – then restarts by itself.
-- **Control from your phone** (like Spotify Connect) with Playtube for Android.
-- Still there: YouTube and YouTube Music tabs, Discord Rich Presence, audio output per tab, Stream
-  Dock control, tray, German/English.
-
-**Install:** download and run `Playtube-Setup-2.0.0.exe` – it replaces any older Playtube.
-Requires Windows 10/11 with the WebView2 runtime (included in Windows 11).
+Everything else as in 2.0.0. **Install:** run `Playtube-Setup-2.0.1.exe` – it replaces any older
+Playtube. From 2.0.0 on, Playtube updates itself.

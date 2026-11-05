@@ -157,8 +157,13 @@ pub fn build_state(version: &str, visible: &str, tabs: &[Option<&Value>; 2]) -> 
     let mut public = Map::new();
     for (i, name) in TAB_NAMES.iter().enumerate() {
         let entry = tabs[i].map(|info| {
-            let fields: Map<String, Value> =
+            let mut fields: Map<String, Value> =
                 STATE_FIELDS.iter().map(|k| (k.to_string(), info.get(*k).cloned().unwrap_or(Value::Null))).collect();
+            // Das Cover der YouTube-Music-Player-Leiste ist nur 60x60 Pixel groß - für Handy und
+            // Stream Dock die große Fassung schicken (wie für Discord).
+            if let Some(Value::String(thumb)) = fields.get_mut("thumbnail") {
+                *thumb = crate::discord::upsize_thumbnail(thumb);
+            }
             Value::Object(fields)
         });
         public.insert(name.to_string(), entry.unwrap_or(Value::Null));
@@ -353,6 +358,13 @@ mod tests {
         assert!(state["tabs"]["music"].is_null());
         assert_eq!(state["tabs"]["youtube"]["title"], "T");
         assert!(state["tabs"]["youtube"].get("url").is_none());
+    }
+
+    #[test]
+    fn state_sends_large_music_covers() {
+        let music = json!({"thumbnail": "https://lh3.googleusercontent.com/abc=w60-h60-l90-rj"});
+        let state = build_state("1", "music", &[None, Some(&music)]);
+        assert_eq!(state["tabs"]["music"]["thumbnail"], "https://lh3.googleusercontent.com/abc=w544-h544-l90-rj");
     }
 
     #[tokio::test]
