@@ -1,0 +1,297 @@
+// Playtube-Fenster: Tab-Leiste, Navigationsleiste und Einstellungen. YouTube und YouTube Music
+// sind WebView2-Kindfenster (src/browser.rs), die Rust über den Inhaltsbereich legt
+// (content-top bis Fensterende).
+
+import { Button, LineEdit, CheckBox, ComboBox, SpinBox, ScrollView, ProgressIndicator, GroupBox } from "std-widgets.slint";
+
+export struct Texts {
+    tab-settings: string,
+    url-placeholder: string,
+    settings-title: string,
+    version: string,
+    save: string,
+    section-discord: string,
+    section-updates: string,
+    section-audio: string,
+    section-phone: string,
+    section-general: string,
+    field-enabled: string,
+    field-client-id: string,
+    field-update-interval: string,
+    field-check-interval: string,
+    field-youtube: string,
+    field-music: string,
+    field-start-tab: string,
+    field-language: string,
+    discord-show-idle: string,
+    updates-check-now: string,
+    updates-install: string,
+    audio-hint: string,
+    phone-enabled: string,
+    phone-hint: string,
+    phone-pair: string,
+    phone-forget: string,
+}
+
+component TabButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> active;
+    callback clicked();
+    height: 100%;
+    min-width: label.preferred-width + 32px;
+    background: active ? #26262e : touch.has-hover ? #1c1c22 : transparent;
+    border-radius: 6px;
+    label := Text {
+        text: root.text;
+        color: root.active ? #ffffff : #b8b8c0;
+        font-size: 14px;
+        font-weight: root.active ? 600 : 400;
+        vertical-alignment: center;
+        horizontal-alignment: center;
+    }
+    Rectangle {
+        visible: root.active;
+        y: parent.height - 3px;
+        height: 3px;
+        width: parent.width - 20px;
+        border-radius: 2px;
+        background: @linear-gradient(90deg, #7c3aed 0%, #ec4899 100%);
+    }
+    touch := TouchArea { clicked => { root.clicked(); } }
+}
+
+component NavButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    callback clicked();
+    width: 34px;
+    height: 30px;
+    border-radius: 6px;
+    background: touch.has-hover && root.enabled ? #2a2a33 : transparent;
+    Text {
+        text: root.text;
+        color: root.enabled ? #e8e8ee : #5a5a64;
+        // Windows-Symbolschrift (Windows 10/11): Zurück, Vor, Neu laden, Start.
+        font-family: "Segoe MDL2 Assets";
+        font-size: 14px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea { enabled: root.enabled; clicked => { root.clicked(); } }
+}
+
+component Hint inherits Text {
+    color: #a8a8b2;
+    font-size: 12px;
+    wrap: word-wrap;
+}
+
+component Row inherits HorizontalLayout {
+    spacing: 12px;
+    alignment: start;
+}
+
+component FieldLabel inherits Text {
+    vertical-alignment: center;
+    min-width: 210px;
+    color: #e0e0e6;
+}
+
+export component AppWindow inherits Window {
+    in property <string> window-title: "Playtube";
+    title: root.window-title;
+    icon: @image-url("../assets/icon.png");
+    preferred-width: 1366px;
+    preferred-height: 860px;
+    min-width: 640px;
+    min-height: 420px;
+    background: #0f0f12;
+    default-font-family: "Segoe UI";
+
+    in property <Texts> t;
+    // 0 = YouTube, 1 = YouTube Music, 2 = Einstellungen
+    in-out property <int> current-tab: 0;
+    in property <bool> fullscreen-mode: false;
+    // Oberkante des Bereichs, in dem die WebView2-Tabs liegen.
+    out property <length> content-top: fullscreen-mode ? 0px : 88px;
+    in-out property <string> url-text;
+
+    // Einstellungen
+    in-out property <bool> discord-enabled;
+    in-out property <string> client-id;
+    in-out property <int> discord-interval: 15;
+    in-out property <bool> show-idle;
+    in-out property <bool> updates-enabled;
+    in-out property <int> check-interval: 6;
+    in property <string> update-status;
+    in property <bool> update-available;
+    in property <bool> update-busy;
+    // -1 = kein Download
+    in property <float> update-progress: -1;
+    in property <[string]> audio-devices;
+    in-out property <int> youtube-output: 0;
+    in-out property <int> music-output: 0;
+    in-out property <bool> phone-enabled;
+    in property <bool> phone-running;
+    in property <string> phone-status;
+    in property <string> phone-devices;
+    in property <bool> phone-has-devices;
+    in property <string> pairing-code;
+    in property <[string]> languages;
+    in-out property <int> language-index: 0;
+    in-out property <int> start-tab-index: 0;
+    in property <string> saved-text;
+
+    callback tab-selected(int);
+    callback navigate(string);
+    callback go-back();
+    callback go-forward();
+    callback reload();
+    callback go-home();
+    callback geometry-changed();
+    callback save-settings();
+    callback check-updates();
+    callback install-update();
+    callback pair-phone();
+    callback forget-phones();
+
+    changed width => { root.geometry-changed(); }
+    changed height => { root.geometry-changed(); }
+    changed content-top => { root.geometry-changed(); }
+
+    VerticalLayout {
+        // Tab-Leiste
+        Rectangle {
+            visible: !root.fullscreen-mode;
+            height: root.fullscreen-mode ? 0px : 44px;
+            background: #141419;
+            HorizontalLayout {
+                padding-left: 10px;
+                padding-top: 6px;
+                padding-bottom: 2px;
+                spacing: 4px;
+                Image {
+                    source: @image-url("../assets/icon.png");
+                    width: 22px;
+                    height: 22px;
+                    y: (parent.height - self.height) / 2;
+                }
+                Rectangle { width: 6px; }
+                TabButton { text: "YouTube"; active: root.current-tab == 0; clicked => { root.tab-selected(0); } }
+                TabButton { text: "YouTube Music"; active: root.current-tab == 1; clicked => { root.tab-selected(1); } }
+                TabButton { text: root.t.tab-settings; active: root.current-tab == 2; clicked => { root.tab-selected(2); } }
+                Rectangle { horizontal-stretch: 1; }
+            }
+        }
+        // Navigationsleiste
+        Rectangle {
+            visible: !root.fullscreen-mode;
+            height: root.fullscreen-mode ? 0px : 44px;
+            background: #141419;
+            HorizontalLayout {
+                padding: 6px;
+                padding-left: 10px;
+                padding-right: 10px;
+                spacing: 4px;
+                NavButton { text: "\u{E72B}"; enabled: root.current-tab < 2; clicked => { root.go-back(); } }
+                NavButton { text: "\u{E72A}"; enabled: root.current-tab < 2; clicked => { root.go-forward(); } }
+                NavButton { text: "\u{E72C}"; enabled: root.current-tab < 2; clicked => { root.reload(); } }
+                NavButton { text: "\u{E80F}"; enabled: root.current-tab < 2; clicked => { root.go-home(); } }
+                Rectangle { width: 6px; }
+                url := LineEdit {
+                    enabled: root.current-tab < 2;
+                    text <=> root.url-text;
+                    placeholder-text: root.t.url-placeholder;
+                    accepted(text) => { root.navigate(text); }
+                }
+            }
+        }
+        // Inhalt: Einstellungen (die Browser-Tabs legt Rust als eigene Fenster darüber)
+        Rectangle {
+            vertical-stretch: 1;
+            background: #0f0f12;
+            if root.current-tab == 2: ScrollView {
+                VerticalLayout {
+                    padding: 28px;
+                    padding-left: 32px;
+                    padding-right: 32px;
+                    spacing: 16px;
+                    alignment: start;
+
+                    VerticalLayout {
+                        spacing: 2px;
+                        Text { text: root.t.settings-title; font-size: 22px; font-weight: 600; color: #ffffff; }
+                        Hint { text: root.t.version; }
+                    }
+
+                    GroupBox {
+                        title: root.t.section-discord;
+                        VerticalLayout {
+                            spacing: 8px;
+                            CheckBox { text: root.t.field-enabled; checked <=> root.discord-enabled; }
+                            Row { FieldLabel { text: root.t.field-client-id; } LineEdit { text <=> root.client-id; min-width: 260px; } }
+                            Row { FieldLabel { text: root.t.field-update-interval; } SpinBox { minimum: 15; maximum: 120; value <=> root.discord-interval; } }
+                            CheckBox { text: root.t.discord-show-idle; checked <=> root.show-idle; }
+                        }
+                    }
+
+                    GroupBox {
+                        title: root.t.section-updates;
+                        VerticalLayout {
+                            spacing: 8px;
+                            CheckBox { text: root.t.field-enabled; checked <=> root.updates-enabled; }
+                            Row { FieldLabel { text: root.t.field-check-interval; } SpinBox { minimum: 1; maximum: 168; value <=> root.check-interval; } }
+                            Row {
+                                Button { text: root.t.updates-check-now; enabled: !root.update-busy; clicked => { root.check-updates(); } }
+                                if root.update-available: Button { text: root.t.updates-install; primary: true; enabled: !root.update-busy; clicked => { root.install-update(); } }
+                            }
+                            Hint { text: root.update-status; }
+                            if root.update-progress >= 0: ProgressIndicator { progress: root.update-progress; height: 6px; }
+                        }
+                    }
+
+                    GroupBox {
+                        title: root.t.section-audio;
+                        VerticalLayout {
+                            spacing: 8px;
+                            Row { FieldLabel { text: root.t.field-youtube; } ComboBox { model: root.audio-devices; current-index <=> root.youtube-output; min-width: 360px; } }
+                            Row { FieldLabel { text: root.t.field-music; } ComboBox { model: root.audio-devices; current-index <=> root.music-output; min-width: 360px; } }
+                            Hint { text: root.t.audio-hint; }
+                        }
+                    }
+
+                    GroupBox {
+                        title: root.t.section-phone;
+                        VerticalLayout {
+                            spacing: 8px;
+                            CheckBox { text: root.t.phone-enabled; checked <=> root.phone-enabled; }
+                            Row {
+                                Button { text: root.t.phone-pair; enabled: root.phone-running; clicked => { root.pair-phone(); } }
+                                Button { text: root.t.phone-forget; enabled: root.phone-has-devices; clicked => { root.forget-phones(); } }
+                            }
+                            if root.pairing-code != "": Text { text: root.pairing-code; font-size: 20px; font-weight: 600; color: #ffffff; }
+                            Hint { text: root.phone-status; }
+                            Hint { text: root.phone-devices; }
+                            Hint { text: root.t.phone-hint; }
+                        }
+                    }
+
+                    GroupBox {
+                        title: root.t.section-general;
+                        VerticalLayout {
+                            spacing: 8px;
+                            Row { FieldLabel { text: root.t.field-start-tab; } ComboBox { model: ["YouTube", "YouTube Music"]; current-index <=> root.start-tab-index; min-width: 200px; } }
+                            Row { FieldLabel { text: root.t.field-language; } ComboBox { model: root.languages; current-index <=> root.language-index; min-width: 200px; } }
+                        }
+                    }
+
+                    Row {
+                        Button { text: root.t.save; primary: true; clicked => { root.save-settings(); } }
+                        Hint { text: root.saved-text; vertical-alignment: center; }
+                    }
+                    Hint { text: "github.com/fojadrachi/Playtube"; }
+                }
+            }
+        }
+    }
+}

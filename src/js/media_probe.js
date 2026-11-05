@@ -1,0 +1,149 @@
+(function() {
+    function txt(sel) {
+        var el = document.querySelector(sel);
+        return el ? el.textContent.trim() : null;
+    }
+    // Wichtig: getAttribute('src') statt .src - bei einem noch nicht (nach-)geladenen
+    // <img> (leeres/fehlendes src-Attribut, z.B. waehrend Lazy-Loading) loest die .src
+    // Property faelschlich auf die aktuelle Seiten-URL auf statt null/"" zu liefern.
+    function imgSrc(sel) {
+        var el = document.querySelector(sel);
+        var raw = el ? el.getAttribute('src') : null;
+        return (raw && /^https?:\/\//i.test(raw)) ? raw : null;
+    }
+    // Video-ID aus der URL (?v=... Parameter) - damit laesst sich die Thumbnail-URL
+    // ueber YouTubes CDN immer zuverlaessig selbst bauen, unabhaengig davon, ob
+    // gerade ein passendes <img>/<link> im DOM zu finden ist (das <link
+    // rel="image_src">, auf das sich der Code frueher verlassen hat, fehlt auf
+    // vielen aktuellen YouTube-Seiten schlicht).
+    function videoIdFromUrl(url) {
+        try {
+            return new URL(url).searchParams.get('v');
+        } catch (e) { return null; }
+    }
+    function ytThumbnailUrl(videoId) {
+        return videoId ? ('https://i.ytimg.com/vi/' + videoId + '/hqdefault.jpg') : null;
+    }
+    // "1:23" oder "1:02:03" -> Sekunden.
+    function parseClock(str) {
+        if (!str) { return null; }
+        var parts = String(str).trim().split(':').map(function(p) { return parseInt(p, 10); });
+        if (!parts.length) { return null; }
+        for (var i = 0; i < parts.length; i++) { if (isNaN(parts[i])) { return null; } }
+        var seconds = 0;
+        for (var j = 0; j < parts.length; j++) { seconds = seconds * 60 + parts[j]; }
+        return seconds;
+    }
+    function numAttr(el, name) {
+        if (!el) { return null; }
+        var raw = el.getAttribute(name);
+        var n = raw !== null ? parseFloat(raw) : NaN;
+        return isFinite(n) ? n : null;
+    }
+    // WICHTIG: video.currentTime/video.duration sind bei YouTube Music NICHT
+    // verlaesslich pro Titel - bei nahtlosem (gapless) Songwechsel laeuft darunter
+    // teils ein durchgehender Buffer weiter, dessen currentTime/duration beim
+    // Songwechsel NICHT auf den neuen Titel zurueckgesetzt wird, sondern einfach ueber
+    // mehrere Songs hinweg weiterzaehlt (empirisch bestaetigt: nach einem Songwechsel
+    // wurde die verbleibende Spielzeit des VORHERIGEN Titels als Start-Offset des NEUEN
+    // uebernommen, und die "Dauer" wuchs bei jedem Poll weiter statt konstant zu
+    // bleiben). Deshalb wird die sichtbar angezeigte Fortschrittsanzeige ausgelesen
+    // (ARIA-Attribute des Sliders in Sekunden, sonst der Zeit-Text im Player) - die
+    // zeigt garantiert den Fortschritt des GERADE LAUFENDEN Titels, weil der Nutzer sie
+    // ja selbst so sieht.
+    function musicTimeInfo() {
+        var slider = document.querySelector('#progress-bar, tp-yt-paper-slider#progress-bar');
+        var current = numAttr(slider, 'aria-valuenow');
+        var total = numAttr(slider, 'aria-valuemax');
+        if (current !== null && total !== null && total > 0) {
+            return { current: current, total: total };
+        }
+        var el = document.querySelector('.time-info.ytmusic-player-bar, ytmusic-player-bar .time-info');
+        var parts = el ? (el.textContent || '').split('/') : [];
+        if (parts.length === 2) {
+            var c = parseClock(parts[0]), t = parseClock(parts[1]);
+            if (c !== null && t !== null) { return { current: c, total: t }; }
+        }
+        return null;
+    }
+    function youtubeTimeInfo() {
+        var current = parseClock(txt('.ytp-time-current'));
+        var total = parseClock(txt('.ytp-time-duration'));
+        if (current !== null && total !== null) { return { current: current, total: total }; }
+        return null;
+    }
+
+    var video = document.querySelector('video');
+    var isMusic = location.hostname.indexOf('music.youtube.com') !== -1;
+    var videoId = videoIdFromUrl(location.href);
+    var title = null, subtitle = null, thumbnail = null;
+
+    // WICHTIG: die Video-ID aus der URL ist die zuverlaessigste Thumbnail-Quelle - sie
+    // wechselt garantiert synchron mit dem Titel. Das <img> in der YT-Music-Playerleiste
+    // (fruehere Praeferenz) wird von YouTube per Crossfade/Shadow-DOM animiert und
+    // aktualisiert sein src-Attribut dabei nachweislich NICHT zuverlaessig pro Titel -
+    // empirisch bestaetigt: dieselbe Thumbnail-URL blieb ueber mehrere komplett
+    // unterschiedliche Songs hinweg stehen, obwohl Titel/Zeit schon laengst gewechselt
+    // hatten. Das DOM-<img> dient nur noch als Fallback, falls keine Video-ID in der
+    // URL steckt.
+    if (isMusic) {
+        title = txt('.title.ytmusic-player-bar') || txt('ytmusic-player-bar .title');
+        subtitle = txt('.byline.ytmusic-player-bar') || txt('ytmusic-player-bar .byline');
+        thumbnail = ytThumbnailUrl(videoId) || imgSrc('ytmusic-player-bar img, .image.ytmusic-player-bar img');
+    } else {
+        var t = document.title.replace(/ - YouTube$/, '');
+        title = t || null;
+        subtitle = txt('ytd-video-owner-renderer #channel-name a')
+            || txt('#owner #channel-name a')
+            || txt('#channel-name a')
+            || txt('ytd-channel-name#channel-name a');
+        var imgY = document.querySelector('link[rel="image_src"]');
+        thumbnail = ytThumbnailUrl(videoId) || (imgY ? imgY.href : null);
+    }
+
+    // Zusatzstatus fuer die Fernsteuerung (Stream-Dock-Plugin, siehe remote_control.py).
+    var player = document.getElementById('movie_player');
+    var volume = (player && typeof player.getVolume === 'function')
+        ? player.getVolume() : (video ? Math.round(video.volume * 100) : null);
+    var muted = (player && typeof player.isMuted === 'function')
+        ? player.isMuted() : (video ? video.muted : null);
+    function likeState() {
+        if (isMusic) {
+            var r = document.querySelector('ytmusic-player-bar ytmusic-like-button-renderer');
+            var s = r ? r.getAttribute('like-status') : null;
+            return s ? s.toLowerCase() : null;  // "like" | "dislike" | "indifferent"
+        }
+        var like = document.querySelector('like-button-view-model button, #segmented-like-button button');
+        var dislike = document.querySelector('dislike-button-view-model button, #segmented-dislike-button button');
+        if (like && like.getAttribute('aria-pressed') === 'true') { return 'like'; }
+        if (dislike && dislike.getAttribute('aria-pressed') === 'true') { return 'dislike'; }
+        return like ? 'indifferent' : null;
+    }
+    function repeatMode() {
+        if (!isMusic) { return video && video.loop ? 'ONE' : 'NONE'; }
+        var bar = document.querySelector('ytmusic-player-bar');
+        return bar ? (bar.getAttribute('repeat-mode') || bar.getAttribute('repeat-mode_') || null) : null;
+    }
+
+    var timeInfo = isMusic ? musicTimeInfo() : youtubeTimeInfo();
+    var currentTime = timeInfo ? timeInfo.current : (video ? video.currentTime : 0);
+    var duration = timeInfo ? timeInfo.total : ((video && isFinite(video.duration)) ? video.duration : 0);
+
+    // Als JSON-Text zurueckgeben; WebView2 kodiert ihn noch einmal, src/scripts.rs
+    // (decode_result) packt beides wieder aus.
+    return JSON.stringify({
+        isMusic: isMusic,
+        title: title,
+        subtitle: subtitle,
+        thumbnail: thumbnail,
+        url: location.href,
+        playing: video ? (!video.paused && !video.ended && video.readyState > 2) : false,
+        currentTime: currentTime,
+        duration: duration,
+        hasVideo: !!video,
+        volume: volume,
+        muted: muted,
+        likeStatus: likeState(),
+        repeatMode: repeatMode()
+    });
+})();

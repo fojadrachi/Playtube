@@ -1,0 +1,17 @@
+name: Tests
+
+# Unit-Tests bei jedem Push und Pull Request (Windows, wie die App selbst).
+
+on:
+  push:
+    branches: ["**"]
+  pull_request: {}
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tests
+        run: cargo test --locked

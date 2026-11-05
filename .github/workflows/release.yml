@@ -1,10 +1,9 @@
 name: Release
 
-# Baut Playtube (Microsoft-Edge-Engine / WebView2) fuer Windows und veroeffentlicht Setup und
-# ZIP an einem GitHub Release, sobald ein Tag im Format "vX.Y.Z" gepusht wird.
-#
-# WICHTIG: Der Release-Titel muss mit "Playtube v" beginnen - der Updater beruecksichtigt nur
-# solche Releases (siehe _RELEASE_TITLE_PREFIX in playtube/updater.py).
+# Baut Playtube (Rust) und veröffentlicht das Setup als GitHub-Release, sobald ein
+# Tag "vX.Y.Z" gepusht wird. Die App sucht Updates über /releases/latest und lädt
+# "Playtube-Setup-<Version>.exe" (src/updater.rs); GitHub liefert dazu die SHA-256-Prüfsumme.
+# Der Titel "Playtube vX.Y.Z" lässt auch die alte Python-Version (1.0.0) das Update finden.
 
 on:
   push:
@@ -16,71 +15,30 @@ permissions:
   contents: write
 
 jobs:
-  build-windows:
+  build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Tests
+        run: cargo test --locked
 
-      - name: Abhaengigkeiten installieren
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-
-      - name: Playtube.exe bauen
-        run: pyinstaller packaging\playtube.spec --noconfirm --distpath dist --workpath build
-
-      - name: Setup-Installer bauen (Inno Setup)
+      - name: Inno Setup
         shell: pwsh
         run: |
-          $version = (Select-String -Path playtube\__init__.py -Pattern '__version__\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
-          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) {
-            choco install innosetup -y --no-progress
-          }
-          & $iscc "/DAppVersion=$version" packaging\playtube.iss
-          if ($LASTEXITCODE -ne 0) { throw "Inno-Setup-Build fehlgeschlagen." }
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
 
-      # Zwei getrennte Artefakte: bei mehreren Pfaden in EINEM Artefakt behielte das Setup seinen
-      # Unterordner (dist/installer/) und wuerde beim Veroeffentlichen nicht gefunden.
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-setup
-          path: dist/installer/Playtube-Setup-v*.exe
+      - name: Bauen
+        shell: pwsh
+        run: .\build-release.ps1 -Iscc "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
 
-      - name: Als .zip packen (portabel)
-        run: Compress-Archive -Path dist\Playtube -DestinationPath Playtube-${{ github.ref_name }}-win64.zip
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-zip
-          path: Playtube-*-win64.zip
-
-  publish-release:
-    needs: [build-windows]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
-
-      - name: GitHub Release veroeffentlichen
-        # gh statt softprops/action-gh-release: letzteres brach beim erneuten Veroeffentlichen
-        # desselben Tags mit "Too many retries" ab. Ein vorhandenes Release zum selben Tag wird
-        # zuerst entfernt (der Tag bleibt), dann sauber neu angelegt.
+      - name: Release veröffentlichen
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete "${{ github.ref_name }}" --repo "${{ github.repository }}" --yes || true
-          gh release create "${{ github.ref_name }}" artifacts/* \
-            --repo "${{ github.repository }}" \
-            --title "Playtube ${{ github.ref_name }}" \
-            --notes-file packaging/release_notes.md \
-            --latest --verify-tag
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart('v')
+          gh release delete $tag --repo "${{ github.repository }}" --yes 2>$null
+          gh release create $tag "dist\Playtube-Setup-$version.exe" `
+            --repo "${{ github.repository }}" --title "Playtube $tag" --notes-file release_notes.md --latest --verify-tag
