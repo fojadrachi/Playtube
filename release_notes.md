@@ -1,18 +1,18 @@
-## Playtube 2.0.1
+## Playtube 2.1.0
 
-- **Steuerung vom Handy und Stream Dock:** Playtube schickt die Cover von YouTube Music jetzt in hoher
-  Auflösung (544×544 statt 60×60 Pixel) – in der Android-App waren sie bisher verpixelt.
+- **Warteschlange am Handy:** Die Android-App (ab 1.3.0) zeigt jetzt die Wiedergabeliste von YouTube Music bzw.
+  YouTube und spielt daraus einen angetippten Titel ab. Neue Fernsteuerbefehle `queue` und `play_queue_item`.
 
-Alles Weitere wie in 2.0.0 (komplett neu in Rust, funktionierende Updates, Steuerung vom Handy).
-**Installieren:** `Playtube-Setup-2.0.1.exe` laden und starten – ersetzt jede ältere Playtube. Ab 2.0.0
-aktualisiert sich Playtube von selbst.
+Alles Weitere wie in 2.0.1.
+**Installieren:** `Playtube-Setup-2.1.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
+aktualisiert sich auch von selbst.
 
 ---
 
-## Playtube 2.0.1
+## Playtube 2.1.0
 
-- **Phone control and Stream Dock:** Playtube now sends YouTube Music covers in high resolution
-  (544×544 instead of 60×60 pixels) – they looked pixelated in the Android app.
+- **Queue on your phone:** the Android app (1.3.0+) now shows the YouTube Music / YouTube playback queue and plays
+  a tapped track. New remote commands `queue` and `play_queue_item`.
 
-Everything else as in 2.0.0. **Install:** run `Playtube-Setup-2.0.1.exe` – it replaces any older
-Playtube. From 2.0.0 on, Playtube updates itself.
+Everything else as in 2.0.1. **Install:** run `Playtube-Setup-2.1.0.exe` – it replaces any older Playtube.
+Playtube also updates itself.

@@ -7,6 +7,8 @@ use serde_json::Value;
 
 pub const MEDIA_PROBE: &str = include_str!("js/media_probe.js");
 pub const LIST_PLAYLISTS: &str = include_str!("js/list_playlists.js");
+pub const QUEUE: &str = include_str!("js/queue.js");
+const PLAY_QUEUE_ITEM: &str = include_str!("js/play_queue_item.js");
 const CONTROL_PRELUDE: &str = include_str!("js/control_prelude.js");
 const AUDIO_ROUTER: &str = include_str!("js/audio_router.js");
 
@@ -61,6 +63,11 @@ pub fn control(command: &str, value: f64) -> Option<String> {
     Some(format!("(function() {{{CONTROL_PRELUDE}{body}\n}})();"))
 }
 
+/// Spielt Eintrag Nr. `index` der Wiedergabeliste ab (Reihenfolge wie [`QUEUE`]).
+pub fn play_queue_item(index: u32) -> String {
+    PLAY_QUEUE_ITEM.replace("__INDEX__", &index.to_string())
+}
+
 /// Legt die Medienelemente der Seite auf das Gerät `device_name` (leer = Systemstandard).
 pub fn audio_router(device_name: &str) -> String {
     AUDIO_ROUTER.replace("__TARGET__", &Value::String(device_name.to_string()).to_string())
@@ -109,6 +116,13 @@ mod tests {
         assert!(control("alert", 0.0).is_none());
         assert!(control("seek", f64::INFINITY).is_none());
         assert!(control("seek", f64::NAN).is_none());
+    }
+
+    #[test]
+    fn queue_index_is_a_number() {
+        let script = play_queue_item(7);
+        assert!(script.contains("var index = 7;"));
+        assert!(!script.contains("__INDEX__"));
     }
 
     #[test]

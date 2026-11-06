@@ -325,7 +325,33 @@ impl App {
                 self.tabs[1].load(&format!("{}{id}", scripts::MUSIC_PLAYLIST_URL));
                 reply(Value::Null);
             }
+            Action::Queue(target) => {
+                let index = self.resolve_tab(&target);
+                let reply = Mutex::new(Some(reply));
+                self.tabs[index].eval_with(scripts::QUEUE, move |result| {
+                    if let Some(reply) = reply.lock().unwrap().take() {
+                        reply(result.unwrap_or(Value::Null));
+                    }
+                });
+            }
+            Action::PlayQueueItem { target, index } => {
+                let tab = self.resolve_tab(&target);
+                self.tabs[tab].eval(&scripts::play_queue_item(index));
+                let timer = slint::Timer::default();
+                timer.start(slint::TimerMode::SingleShot, std::time::Duration::from_millis(600), || {
+                    with_app(|app| app.poll_media())
+                });
+                self.timers.borrow_mut().push(timer);
+                self.timers.borrow_mut().retain(|t| t.running());
+                reply(Value::Null);
+            }
         }
+    }
+
+    fn resolve_tab(&self, target: &str) -> usize {
+        let media = self.media.borrow().clone();
+        let name = remote::resolve_target(target, self.visible_name(), &[media[0].as_ref(), media[1].as_ref()]);
+        remote::TAB_NAMES.iter().position(|n| *n == name).unwrap_or(0)
     }
 
     // ------------------------------------------------------------------ Audio

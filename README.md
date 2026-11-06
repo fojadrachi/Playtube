@@ -50,7 +50,7 @@ nur Geräte aus privaten Netzen und nur nach Kopplung; gespeichert wird nur ein 
 Named Pipe `\\.\pipe\Playtube.Remote.Playtube`, eine JSON-Nachricht pro Zeile, z. B.
 `{"id":1,"cmd":"play_pause","target":"auto"}`. Befehle: `status`, `show`, `switch_tab`, `play_pause`,
 `play`, `pause`, `next`, `previous`, `seek`, `volume_change`, `set_volume`, `mute_toggle`, `like`,
-`dislike`, `shuffle`, `repeat`, `list_playlists`, `play_playlist` (feste Whitelist, siehe
+`dislike`, `shuffle`, `repeat`, `list_playlists`, `play_playlist`, `queue` (Warteschlange als Liste), `play_queue_item` (Titel per Index 0–199 abspielen) (feste Whitelist, siehe
 [src/remote.rs](src/remote.rs)). Abschalten: `"remote_control": {"enabled": false}` in `config.json`.
 
 ## Entwicklung
@@ -134,7 +134,7 @@ default; only private networks and only after pairing; only a SHA-256 of the tok
 ## Remote control (Stream Dock)
 
 Named pipe `\\.\pipe\Playtube.Remote.Playtube`, one JSON message per line, e.g.
-`{"id":1,"cmd":"play_pause","target":"auto"}`. Commands are a fixed whitelist, see
+`{"id":1,"cmd":"play_pause","target":"auto"}`. Commands are a fixed whitelist (including `list_playlists`, `play_playlist`, `queue`, `play_queue_item`), see
 [src/remote.rs](src/remote.rs). Disable with `"remote_control": {"enabled": false}` in `config.json`.
 
 ## Development

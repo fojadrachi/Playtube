@@ -6,6 +6,8 @@
 //!   -> {"id": 2, "cmd": "status"}                           <- {"id": 2, "ok": true, "state": {...}}
 //!   -> {"id": 4, "cmd": "list_playlists"}                   <- {"id": 4, "ok": true, "playlists": [...]}
 //!   -> {"id": 5, "cmd": "play_playlist", "playlist": "PL..."}
+//!   -> {"id": 6, "cmd": "queue", "target": "auto"}          <- {"id": 6, "ok": true, "queue": [{"title", "subtitle", "thumbnail", "current"}]}
+//!   -> {"id": 7, "cmd": "play_queue_item", "target": "music", "value": 3}
 //! `cmd` kommt aus einer festen Whitelist; beliebiges JavaScript oder URLs lassen sich nicht senden.
 
 use crate::scripts::MEDIA_COMMANDS;
@@ -19,9 +21,12 @@ pub const MAX_LINE_BYTES: usize = 4096;
 const MAX_CLIENTS: usize = 8;
 
 pub const TAB_NAMES: [&str; 2] = ["youtube", "music"];
-const APP_COMMANDS: &[&str] = &["status", "show", "switch_tab", "list_playlists", "play_playlist"];
+const APP_COMMANDS: &[&str] =
+    &["status", "show", "switch_tab", "list_playlists", "play_playlist", "queue", "play_queue_item"];
 const MAX_PLAYLISTS: usize = 100;
 const MAX_PLAYLIST_TITLE: usize = 100;
+const MAX_QUEUE: usize = 200;
+const MAX_QUEUE_TEXT: usize = 150;
 
 /// Nur diese Felder des Wiedergabestands gehen nach außen.
 const STATE_FIELDS: &[&str] = &[
@@ -47,6 +52,8 @@ pub enum Action {
     Media { target: String, command: String, value: f64 },
     ListPlaylists,
     PlayPlaylist(String),
+    Queue(String),
+    PlayQueueItem { target: String, index: u32 },
 }
 
 pub type Reply = Box<dyn FnOnce(Value) + Send>;
@@ -86,6 +93,7 @@ pub fn parse_request(line: &str) -> Result<Request, String> {
         "seek" => Some((-3600.0, 3600.0)),
         "volume_change" => Some((-100.0, 100.0)),
         "set_volume" => Some((0.0, 100.0)),
+        "play_queue_item" => Some((0.0, (MAX_QUEUE - 1) as f64)),
         _ => None,
     };
     let value = match range {
@@ -95,6 +103,9 @@ pub fn parse_request(line: &str) -> Result<Request, String> {
             let raw = raw.filter(|v| v.is_finite()).ok_or(format!("{command} braucht einen Zahlenwert"))?;
             if !(low..=high).contains(&raw) {
                 return Err(format!("{command}: Wert muss zwischen {low} und {high} liegen"));
+            }
+            if command == "play_queue_item" && raw.fract() != 0.0 {
+                return Err("play_queue_item braucht eine ganze Zahl".into());
             }
             raw
         }
@@ -109,8 +120,42 @@ pub fn action_for(request: &Request) -> Action {
         "switch_tab" => Action::SwitchTab(request.target.clone()),
         "list_playlists" => Action::ListPlaylists,
         "play_playlist" => Action::PlayPlaylist(request.playlist.clone().unwrap_or_default()),
+        "queue" => Action::Queue(request.target.clone()),
+        "play_queue_item" => Action::PlayQueueItem { target: request.target.clone(), index: request.value as u32 },
         _ => Action::Media { target: request.target.clone(), command: request.command.clone(), value: request.value },
     }
+}
+
+fn clean_text(value: Option<&Value>) -> String {
+    value
+        .and_then(Value::as_str)
+        .map(|t| t.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(MAX_QUEUE_TEXT).collect())
+        .unwrap_or_default()
+}
+
+/// Bereinigt die von der Seite gelieferte Wiedergabeliste (fremde Daten!): nur Text, nur
+/// https-Bilder (in großer Fassung), höchstens 200 Einträge. Die Reihenfolge bleibt, damit
+/// `play_queue_item` mit demselben Index den richtigen Titel trifft.
+pub fn sanitize_queue(raw: &Value) -> Vec<Value> {
+    raw.as_array()
+        .into_iter()
+        .flatten()
+        .take(MAX_QUEUE)
+        .map(|item| {
+            let thumbnail = item
+                .get("thumbnail")
+                .and_then(Value::as_str)
+                .filter(|t| t.starts_with("https://") && t.len() < 2000)
+                .map(crate::discord::upsize_thumbnail)
+                .unwrap_or_default();
+            json!({
+                "title": clean_text(item.get("title")),
+                "subtitle": clean_text(item.get("subtitle")),
+                "thumbnail": thumbnail,
+                "current": item.get("current").and_then(Value::as_bool).unwrap_or(false),
+            })
+        })
+        .collect()
 }
 
 /// Bereinigt die von der Seite gelieferte Playlist-Liste (fremde Daten!).
@@ -213,6 +258,10 @@ pub async fn process_line(line: &str, dispatch: &Dispatch) -> Vec<u8> {
         ("list_playlists", Ok(Ok(raw))) => {
             map.insert("ok".into(), Value::Bool(true));
             map.insert("playlists".into(), Value::Array(sanitize_playlists(&raw)));
+        }
+        ("queue", Ok(Ok(raw))) => {
+            map.insert("ok".into(), Value::Bool(true));
+            map.insert("queue".into(), Value::Array(sanitize_queue(&raw)));
         }
         _ => {
             map.insert("ok".into(), Value::Bool(true));
@@ -321,6 +370,35 @@ mod tests {
         ] {
             assert!(parse_request(line).is_err(), "{line}");
         }
+    }
+
+    #[test]
+    fn parses_queue_commands() {
+        let r = parse_request(r#"{"cmd": "play_queue_item", "target": "music", "value": 3}"#).unwrap();
+        assert_eq!(action_for(&r), Action::PlayQueueItem { target: "music".into(), index: 3 });
+        assert_eq!(action_for(&parse_request(r#"{"cmd": "queue"}"#).unwrap()), Action::Queue("auto".into()));
+        for bad in [r#"{"cmd": "play_queue_item"}"#, r#"{"cmd": "play_queue_item", "value": -1}"#,
+                    r#"{"cmd": "play_queue_item", "value": 1.5}"#, r#"{"cmd": "play_queue_item", "value": 5000}"#] {
+            assert!(parse_request(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn sanitizes_queue() {
+        let raw = json!([
+            {"title": "  Song\n A ", "subtitle": "Artist", "thumbnail": "https://lh3.googleusercontent.com/x=w60-h60-l90-rj", "current": true},
+            {"title": "B", "thumbnail": "javascript:alert(1)", "current": "ja"},
+            "kein Objekt"
+        ]);
+        let queue = sanitize_queue(&raw);
+        assert_eq!(queue.len(), 3);
+        assert_eq!(queue[0], json!({"title": "Song A", "subtitle": "Artist",
+            "thumbnail": "https://lh3.googleusercontent.com/x=w544-h544-l90-rj", "current": true}));
+        assert_eq!(queue[1]["thumbnail"], "");
+        assert_eq!(queue[1]["current"], false);
+        assert_eq!(queue[2]["title"], "");
+        let many: Vec<Value> = (0..500).map(|i| json!({"title": format!("T{i}")})).collect();
+        assert_eq!(sanitize_queue(&Value::Array(many)).len(), 200);
     }
 
     #[test]
