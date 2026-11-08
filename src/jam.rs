@@ -308,6 +308,24 @@ pub fn decide(want: Option<&Target>, local: &Local, tolerance: f64) -> Vec<Step>
     steps
 }
 
+/// Hat man im YouTube-Music-Tab selbst einen anderen Song gestartet? Wie bei Spotify Jam kommt er
+/// dann in den Jam (und der Tab spielt danach wieder den Jam-Song). `baseline` ist der Song, der
+/// schon beim Beitreten lief - der zählt nicht als Wunsch. Am Titelende springt YouTube Music von
+/// selbst weiter (Autoplay) - das ist auch kein Wunsch.
+pub fn user_pick(state: &JamState, want: Option<&Target>, local: &Local, baseline: Option<&str>) -> Option<String> {
+    let id = local.video_id.as_deref()?;
+    if local.paused || baseline == Some(id) {
+        return None;
+    }
+    if let Some(w) = want {
+        if w.video_id == id || w.pos < 0.0 || w.dur.is_some_and(|d| w.pos > d - 3.0) {
+            return None;
+        }
+    }
+    let known = state.current.iter().chain(&state.queue).chain(&state.history).any(|i| i.video_id == id);
+    (!known && valid_video_id(id)).then(|| id.to_string())
+}
+
 /// Hat der Player den Titel zu Ende gespielt? (für die Meldung `ended`)
 pub fn reached_end(local: &Local, duration: f64, ended: bool) -> bool {
     ended || (duration > 0.0 && local.pos >= duration - 0.6)
@@ -760,6 +778,27 @@ mod tests {
         assert!(decide(Some(&want(198.5, false)), &local(Some("zzzzzzzzzzz"), 1.0, true), TOLERANCE_S).is_empty());
         // Lokal schon fertig, Server knapp dahinter: nicht zurückspulen.
         assert!(decide(Some(&want(198.0, false)), &local(Some("aaaaaaaaaaa"), 199.9, false), TOLERANCE_S).is_empty());
+    }
+
+    #[test]
+    fn songs_picked_in_youtube_music_go_to_the_jam() {
+        let mut state = JamState::default();
+        state.current = Some(Item { id: "i1".into(), video_id: "aaaaaaaaaaa".into(), dur: Some(200.0), ..Default::default() });
+        state.history = vec![Item { id: "i0".into(), video_id: "hhhhhhhhhhh".into(), ..Default::default() }];
+        let w = want(30.0, false);
+        // Neuer Song angetippt
+        assert_eq!(user_pick(&state, Some(&w), &local(Some("bbbbbbbbbbb"), 1.0, false), None).as_deref(), Some("bbbbbbbbbbb"));
+        // Jam-Song selbst, schon bekannter Song, pausiert, Song vom Beitreten: kein Wunsch
+        assert_eq!(user_pick(&state, Some(&w), &local(Some("aaaaaaaaaaa"), 30.0, false), None), None);
+        assert_eq!(user_pick(&state, Some(&w), &local(Some("hhhhhhhhhhh"), 1.0, false), None), None);
+        assert_eq!(user_pick(&state, Some(&w), &local(Some("bbbbbbbbbbb"), 1.0, true), None), None);
+        assert_eq!(user_pick(&state, Some(&w), &local(Some("bbbbbbbbbbb"), 1.0, false), Some("bbbbbbbbbbb")), None);
+        // Autoplay am Titelende und Start-Vorlauf: kein Wunsch
+        assert_eq!(user_pick(&state, Some(&want(198.5, false)), &local(Some("zzzzzzzzzzz"), 1.0, false), None), None);
+        assert_eq!(user_pick(&state, Some(&want(-1.0, false)), &local(Some("zzzzzzzzzzz"), 1.0, false), None), None);
+        // Läuft im Jam noch nichts, wird der Song einfach der erste
+        let empty = JamState::default();
+        assert_eq!(user_pick(&empty, None, &local(Some("bbbbbbbbbbb"), 1.0, false), None).as_deref(), Some("bbbbbbbbbbb"));
     }
 
     #[test]

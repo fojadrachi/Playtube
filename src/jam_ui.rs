@@ -29,6 +29,11 @@ pub struct JamSession {
     stuck_since: Option<(String, Instant)>,
     diverge: u32,
     last_duration: f64,
+    /// Song, der beim Beitreten im YouTube-Music-Tab lief (zählt nicht als Wunsch) - beim
+    /// Starten eines eigenen Jams bleibt das leer, dann wird der laufende Song der erste.
+    baseline: Option<Option<String>>,
+    /// Schon an den Jam geschickte Wünsche (bis der Server sie bestätigt).
+    picked: HashSet<String>,
 }
 
 fn status_text(key: &str) -> String {
@@ -199,7 +204,7 @@ impl App {
             on_ui(move |app| {
                 app.ui.set_jam_busy(false);
                 match result {
-                    Ok(created) => app.jam_connect(&created.code, Some(created.token)),
+                    Ok(created) => app.jam_connect(&created.code, Some(created.token), true),
                     Err(e) => {
                         log::line(&format!("jam: Anlegen fehlgeschlagen: {e:#}"));
                         app.jam_set_status(status_text("jam.status.failed"));
@@ -240,7 +245,7 @@ impl App {
                             let config = app.config.borrow();
                             (config.jam.last_code == code && !config.jam.last_token.is_empty()).then(|| config.jam.last_token.clone())
                         };
-                        app.jam_connect(&code, token);
+                        app.jam_connect(&code, token, false);
                     }
                     Ok(false) => app.jam_set_status(status_text("jam.status.not_found")),
                     Err(e) => {
@@ -260,7 +265,7 @@ impl App {
         self.jam_join_code(code);
     }
 
-    fn jam_connect(&self, code: &str, token: Option<String>) {
+    fn jam_connect(&self, code: &str, token: Option<String>, host: bool) {
         let name = self.ui.get_jam_name().trim().to_string();
         {
             let mut config = self.config.borrow_mut();
@@ -284,6 +289,8 @@ impl App {
             stuck_since: None,
             diverge: 0,
             last_duration: 0.0,
+            baseline: if host { Some(None) } else { None },
+            picked: HashSet::new(),
         });
         let link = jam::invite_url(&server, code);
         self.ui.set_jam_code(jam::pretty_code(code).into());
@@ -598,6 +605,9 @@ impl App {
             return;
         }
         self.tabs[JAM_TAB].eval_with(scripts::JAM_PROBE, |probe| {
+            if std::env::var_os("PLAYTUBE_JAM_DEBUG").is_some() {
+                log::line(&format!("jam-debug: {probe:?}"));
+            }
             if let Some(probe) = probe.filter(Value::is_object) {
                 on_ui(move |app| app.jam_sync(probe));
             }
@@ -610,6 +620,7 @@ impl App {
         let mut scripts_to_run: Vec<String> = Vec::new();
         let mut load: Option<String> = None;
         let mut rerender = false;
+        let mut added: Option<String> = None;
         {
             let mut borrowed = self.jam.borrow_mut();
             let Some(session) = borrowed.as_mut() else { return };
@@ -624,6 +635,22 @@ impl App {
             let ad = probe["ad"].as_bool().unwrap_or(false);
             let page_error = probe["error"].as_bool().unwrap_or(false);
             let matches = want.as_ref().is_some_and(|w| local.video_id.as_deref() == Some(w.video_id.as_str()));
+            // Im YouTube-Music-Tab selbst einen Song gestartet: ab in den Jam (wie bei Spotify Jam).
+            if session.baseline.is_none() {
+                session.baseline = Some(local.video_id.clone());
+            }
+            let baseline = session.baseline.clone().flatten();
+            if !probe["ad"].as_bool().unwrap_or(false) {
+                if let Some(id) = jam::user_pick(state, want.as_ref(), &local, baseline.as_deref()) {
+                    if session.picked.insert(id.clone()) {
+                        let title = probe["title"].as_str().unwrap_or("").to_string();
+                        outgoing.push(json!({
+                            "t": "add", "videoId": id, "title": title, "artist": probe["artist"].as_str().unwrap_or(""),
+                        }));
+                        added = Some(if title.is_empty() { id } else { title });
+                    }
+                }
+            }
             if matches {
                 session.pending_load = None;
                 if duration > 0.0 {
@@ -635,7 +662,7 @@ impl App {
                 let Some(w) = want.as_ref() else {
                     for step in jam::decide(None, &local, jam::TOLERANCE_S) {
                         if step == Step::Pause {
-                            scripts_to_run.extend(scripts::control("pause", 0.0));
+                            scripts_to_run.extend(Some(scripts::jam_play(false)));
                         }
                     }
                     break 'sync;
@@ -643,7 +670,7 @@ impl App {
                 // Hier nicht abspielbar: still bleiben, die anderen hören weiter.
                 if session.unplayable.contains(&w.item_id) {
                     if !local.paused {
-                        scripts_to_run.extend(scripts::control("pause", 0.0));
+                        scripts_to_run.extend(Some(scripts::jam_play(false)));
                     }
                     break 'sync;
                 }
@@ -689,7 +716,7 @@ impl App {
                                 log::line(&format!("jam: Titel {} spielt hier nicht an, Player: {probe}", w.video_id));
                                 session.unplayable.insert(w.item_id.clone());
                                 outgoing.push(json!({ "t": "unplayable", "itemId": w.item_id }));
-                                scripts_to_run.extend(scripts::control("pause", 0.0));
+                                scripts_to_run.extend(Some(scripts::jam_play(false)));
                                 rerender = true;
                                 break 'sync;
                             }
@@ -722,11 +749,11 @@ impl App {
                         }
                         Step::Play => {
                             session.expect_until = now + Duration::from_secs(3);
-                            scripts_to_run.extend(scripts::control("play", 0.0));
+                            scripts_to_run.extend(Some(scripts::jam_play(true)));
                         }
                         Step::Pause => {
                             session.expect_until = now + Duration::from_secs(3);
-                            scripts_to_run.extend(scripts::control("pause", 0.0));
+                            scripts_to_run.extend(Some(scripts::jam_play(false)));
                         }
                     }
                 }
@@ -743,6 +770,9 @@ impl App {
         }
         if rerender {
             self.jam_render();
+        }
+        if let Some(title) = added {
+            self.jam_set_status(trf("jam.added", &[("title", &title)]));
         }
     }
 }

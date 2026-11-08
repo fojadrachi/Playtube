@@ -69,8 +69,19 @@ pub const JAM_PROBE: &str = include_str!("js/jam_probe.js");
 /// Playtube Jam: an Position `seconds` springen (nur endliche Zahlen).
 pub fn jam_seek(seconds: f64) -> Option<String> {
     seconds.is_finite().then(|| {
-        format!("(function() {{ var v = document.querySelector('video'); if (v) {{ v.currentTime = {:?}; }} }})();", seconds.max(0.0))
+        format!(
+            "(function() {{ var p = document.getElementById('movie_player'); var s = {:?};              if (p && typeof p.seekTo === 'function') {{ p.seekTo(s, true); return; }}              var v = p && p.querySelector('video') || document.querySelector('video'); if (v) {{ v.currentTime = s; }} }})();",
+            seconds.max(0.0)
+        )
     })
+}
+
+/// Playtube Jam: abspielen bzw. pausieren über die Player-API (es kann mehrere <video> geben).
+pub fn jam_play(play: bool) -> String {
+    let (method, prop) = if play { ("playVideo", "play") } else { ("pauseVideo", "pause") };
+    format!(
+        "(function() {{ var p = document.getElementById('movie_player');          if (p && typeof p.{method} === 'function') {{ p.{method}(); return; }}          var v = p && p.querySelector('video') || document.querySelector('video'); if (v) {{ v.{prop}(); }} }})();"
+    )
 }
 
 /// Spielt Eintrag Nr. `index` der Wiedergabeliste ab (Reihenfolge wie [`QUEUE`]).
@@ -130,8 +141,10 @@ mod tests {
 
     #[test]
     fn jam_seek_takes_only_numbers() {
-        assert!(jam_seek(12.5).unwrap().contains("v.currentTime = 12.5;"));
-        assert!(jam_seek(-3.0).unwrap().contains("v.currentTime = 0.0;"));
+        assert!(jam_seek(12.5).unwrap().contains("var s = 12.5;"));
+        assert!(jam_seek(-3.0).unwrap().contains("var s = 0.0;"));
+        assert!(jam_play(true).contains("p.playVideo()"));
+        assert!(jam_play(false).contains("p.pauseVideo()"));
         assert!(jam_seek(f64::NAN).is_none());
     }
 
