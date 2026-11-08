@@ -315,18 +315,114 @@ pub fn reached_end(local: &Local, duration: f64, ended: bool) -> bool {
 
 // ---------------------------------------------------------------------------- Netzwerk
 
-fn http_client() -> reqwest::Client {
-    reqwest::Client::builder()
+/// Host und Port aus der Server-Adresse (`https://jam.fojadrachi.de` -> ("jam.fojadrachi.de", 443)).
+pub fn host_port(server: &str) -> Option<(String, u16)> {
+    let (default_port, rest) = if let Some(rest) = server.strip_prefix("https://") {
+        (443, rest)
+    } else if let Some(rest) = server.strip_prefix("http://") {
+        (80, rest)
+    } else if let Some(rest) = server.strip_prefix("wss://") {
+        (443, rest)
+    } else if let Some(rest) = server.strip_prefix("ws://") {
+        (80, rest)
+    } else {
+        (443, server)
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    if authority.is_empty() || authority.starts_with('[') {
+        return None;
+    }
+    let (host, port) = match authority.rsplit_once(':') {
+        Some((host, port)) => (host, port.parse().ok()?),
+        None => (authority, default_port),
+    };
+    Some((host.to_ascii_lowercase(), port))
+}
+
+/// Antwort von DNS-over-HTTPS (JSON-Format von Cloudflare/Google) -> erste IPv4-Adresse.
+pub fn parse_doh_answer(body: &Value) -> Option<std::net::IpAddr> {
+    body["Answer"]
+        .as_array()?
+        .iter()
+        .filter(|a| a["type"].as_u64() == Some(1))
+        .find_map(|a| a["data"].as_str()?.parse::<std::net::Ipv4Addr>().ok())
+        .map(std::net::IpAddr::V4)
+}
+
+/// Adresse über DNS-over-HTTPS (Cloudflare, sonst Google) - für Router, die einen neuen
+/// Eintrag noch nicht kennen und "gibt es nicht" zwischenspeichern. Die Abfrage geht direkt an
+/// eine IP-Adresse, braucht also selbst kein DNS.
+async fn resolve_doh(host: &str) -> Option<std::net::IpAddr> {
+    let client = reqwest::Client::builder().timeout(Duration::from_secs(5)).build().ok()?;
+    for base in ["https://1.1.1.1/dns-query", "https://1.0.0.1/dns-query", "https://8.8.8.8/resolve"] {
+        let response = client
+            .get(base)
+            .query(&[("name", host), ("type", "A")])
+            .header("accept", "application/dns-json")
+            .send()
+            .await;
+        if let Ok(response) = response {
+            if let Ok(body) = response.json::<Value>().await {
+                if let Some(ip) = parse_doh_answer(&body) {
+                    return Some(ip);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Feste Adresse für den Jam-Server, falls das normale DNS ihn nicht findet; `None` = normales
+/// DNS funktioniert (oder auch DoH kennt ihn nicht). Ergebnis wird für die Laufzeit gemerkt.
+async fn dns_override(server: &str) -> Option<std::net::SocketAddr> {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static CACHE: OnceLock<Mutex<HashMap<String, std::net::SocketAddr>>> = OnceLock::new();
+    let (host, port) = host_port(server)?;
+    if host.parse::<std::net::IpAddr>().is_ok() {
+        return None;
+    }
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(addr) = cache.lock().ok()?.get(&host).copied() {
+        return Some(addr);
+    }
+    if tokio::net::lookup_host((host.as_str(), port)).await.is_ok_and(|mut a| a.next().is_some()) {
+        return None;
+    }
+    let ip = resolve_doh(&host).await?;
+    let addr = std::net::SocketAddr::new(ip, port);
+    crate::log::line(&format!("jam: {host} per normalem DNS nicht gefunden, nutze {ip} (DNS-over-HTTPS)"));
+    cache.lock().ok()?.insert(host, addr);
+    Some(addr)
+}
+
+async fn http_client(server: &str) -> reqwest::Client {
+    let mut builder = reqwest::Client::builder()
         .user_agent(format!("Playtube/{}", crate::config::VERSION))
-        .timeout(Duration::from_secs(10))
-        .build()
-        .unwrap_or_default()
+        .timeout(Duration::from_secs(10));
+    if let (Some(addr), Some((host, _))) = (dns_override(server).await, host_port(server)) {
+        builder = builder.resolve(&host, addr);
+    }
+    builder.build().unwrap_or_default()
+}
+
+type Socket = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
+/// WebSocket öffnen - bei DNS-Problemen über die per DoH gefundene Adresse.
+async fn connect_ws(url: &str) -> Result<Socket, tokio_tungstenite::tungstenite::Error> {
+    if let Some(addr) = dns_override(url).await {
+        let stream = tokio::net::TcpStream::connect(addr).await?;
+        let (socket, _) = tokio_tungstenite::client_async_tls(url, stream).await?;
+        return Ok(socket);
+    }
+    let (socket, _) = tokio_tungstenite::connect_async(url).await?;
+    Ok(socket)
 }
 
 /// Neuen Jam anlegen (man ist dann Host).
 pub async fn create(server: &str, name: &str) -> anyhow::Result<Created> {
     let url = format!("{}/api/jam", server.trim_end_matches('/'));
-    let res = http_client().post(url).json(&json!({ "name": name, "client": "pc" })).send().await?;
+    let res = http_client(server).await.post(url).json(&json!({ "name": name, "client": "pc" })).send().await?;
     anyhow::ensure!(res.status().is_success(), "HTTP {}", res.status());
     Ok(res.json().await?)
 }
@@ -334,7 +430,7 @@ pub async fn create(server: &str, name: &str) -> anyhow::Result<Created> {
 /// Gibt es den Jam? (`false` = unbekannt oder abgelaufen)
 pub async fn exists(server: &str, code: &str) -> anyhow::Result<bool> {
     let url = format!("{}/api/jam/{code}", server.trim_end_matches('/'));
-    let res = http_client().get(url).send().await?;
+    let res = http_client(server).await.get(url).send().await?;
     if res.status() == reqwest::StatusCode::NOT_FOUND {
         return Ok(false);
     }
@@ -348,7 +444,7 @@ pub async fn search(server: &str, query: &str) -> anyhow::Result<Vec<SearchResul
         results: Vec<SearchResult>,
     }
     let url = format!("{}/api/search", server.trim_end_matches('/'));
-    let res = http_client().get(url).query(&[("q", query)]).send().await?;
+    let res = http_client(server).await.get(url).query(&[("q", query)]).send().await?;
     anyhow::ensure!(res.status().is_success(), "HTTP {}", res.status());
     Ok(res.json::<Results>().await?.results)
 }
@@ -418,8 +514,8 @@ async fn run(
 ) {
     let mut delay = Duration::from_secs(1);
     loop {
-        match tokio_tungstenite::connect_async(url.as_str()).await {
-            Ok((stream, _)) => {
+        match connect_ws(&url).await {
+            Ok(stream) => {
                 delay = Duration::from_secs(1);
                 let (mut write, mut read) = stream.split();
                 let hello = json!({ "t": "hello", "name": name, "client": "pc", "token": token });
@@ -552,6 +648,41 @@ mod tests {
         assert_eq!(invite_url("https://jam.fojadrachi.de/", "ABC234"), "https://jam.fojadrachi.de/ABC234");
         assert_eq!(ws_base("https://jam.fojadrachi.de"), "wss://jam.fojadrachi.de");
         assert_eq!(ws_base("http://127.0.0.1:8787/"), "ws://127.0.0.1:8787");
+    }
+
+    #[test]
+    fn splits_host_and_port() {
+        assert_eq!(host_port("https://jam.fojadrachi.de"), Some(("jam.fojadrachi.de".into(), 443)));
+        assert_eq!(host_port("wss://Jam.Fojadrachi.de/api/jam/ABC234/ws"), Some(("jam.fojadrachi.de".into(), 443)));
+        assert_eq!(host_port("http://127.0.0.1:8787/"), Some(("127.0.0.1".into(), 8787)));
+        assert_eq!(host_port("ws://localhost:8787/x"), Some(("localhost".into(), 8787)));
+        assert_eq!(host_port("https://"), None);
+    }
+
+    #[test]
+    fn reads_dns_over_https_answers() {
+        let body = json!({"Status": 0, "Answer": [
+            {"name": "jam.fojadrachi.de", "type": 5, "data": "x.example."},
+            {"name": "jam.fojadrachi.de", "type": 1, "data": "188.114.96.0"}
+        ]});
+        assert_eq!(parse_doh_answer(&body), Some("188.114.96.0".parse().unwrap()));
+        assert_eq!(parse_doh_answer(&json!({"Status": 3})), None);
+        assert_eq!(parse_doh_answer(&json!({"Answer": [{"type": 1, "data": "kaputt"}]})), None);
+    }
+
+    /// Echter Netzwerktest des Ausweichwegs (nicht in der normalen Testrunde):
+    /// `cargo test doh_fallback -- --ignored`
+    #[test]
+    #[ignore]
+    fn doh_fallback_reaches_the_jam_server() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            let ip = resolve_doh("jam.fojadrachi.de").await.expect("DoH liefert keine Adresse");
+            let stream = tokio::net::TcpStream::connect((ip, 443)).await.unwrap();
+            let (mut socket, _) = tokio_tungstenite::client_async_tls("wss://jam.fojadrachi.de/api/jam/ZZZZZZ/ws", stream).await.unwrap();
+            let first = socket.next().await.unwrap().unwrap();
+            assert!(first.to_string().contains("not_found"), "{first}");
+        });
     }
 
     #[test]
