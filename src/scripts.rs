@@ -63,6 +63,16 @@ pub fn control(command: &str, value: f64) -> Option<String> {
     Some(format!("(function() {{{CONTROL_PRELUDE}{body}\n}})();"))
 }
 
+/// Playtube Jam: Stand des Players (Video-ID, Position, Pause, Werbung, Fehler).
+pub const JAM_PROBE: &str = include_str!("js/jam_probe.js");
+
+/// Playtube Jam: an Position `seconds` springen (nur endliche Zahlen).
+pub fn jam_seek(seconds: f64) -> Option<String> {
+    seconds.is_finite().then(|| {
+        format!("(function() {{ var v = document.querySelector('video'); if (v) {{ v.currentTime = {:?}; }} }})();", seconds.max(0.0))
+    })
+}
+
 /// Spielt Eintrag Nr. `index` der Wiedergabeliste ab (Reihenfolge wie [`QUEUE`]).
 pub fn play_queue_item(index: u32) -> String {
     PLAY_QUEUE_ITEM.replace("__INDEX__", &index.to_string())
@@ -116,6 +126,13 @@ mod tests {
         assert!(control("alert", 0.0).is_none());
         assert!(control("seek", f64::INFINITY).is_none());
         assert!(control("seek", f64::NAN).is_none());
+    }
+
+    #[test]
+    fn jam_seek_takes_only_numbers() {
+        assert!(jam_seek(12.5).unwrap().contains("v.currentTime = 12.5;"));
+        assert!(jam_seek(-3.0).unwrap().contains("v.currentTime = 0.0;"));
+        assert!(jam_seek(f64::NAN).is_none());
     }
 
     #[test]

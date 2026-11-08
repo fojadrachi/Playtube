@@ -2,7 +2,55 @@
 // sind WebView2-Kindfenster (src/browser.rs), die Rust über den Inhaltsbereich legt
 // (content-top bis Fensterende).
 
-import { Button, LineEdit, CheckBox, ComboBox, SpinBox, ScrollView, ProgressIndicator, GroupBox } from "std-widgets.slint";
+import { Button, LineEdit, CheckBox, ComboBox, SpinBox, ScrollView, ProgressIndicator, GroupBox, Slider } from "std-widgets.slint";
+
+// Playtube Jam (src/jam.rs)
+export struct JamTexts {
+    tab: string,
+    title: string,
+    intro: string,
+    name: string,
+    start: string,
+    join: string,
+    code-placeholder: string,
+    invite: string,
+    copy: string,
+    all-control: string,
+    end: string,
+    leave: string,
+    members: string,
+    queue: string,
+    queue-empty: string,
+    add: string,
+    add-placeholder: string,
+    add-current: string,
+    results: string,
+    nothing: string,
+    hint: string,
+    kick: string,
+    play-now: string,
+    remove: string,
+    add-next: string,
+    cant-play-here: string,
+}
+
+export struct JamMember {
+    id: string,
+    name: string,
+    initial: string,
+    info: string,
+    host: bool,
+    online: bool,
+    can-kick: bool,
+}
+
+export struct JamItem {
+    id: string,
+    title: string,
+    subtitle: string,
+    can-jump: bool,
+    can-remove: bool,
+}
 
 export struct Texts {
     tab-settings: string,
@@ -97,6 +145,43 @@ component FieldLabel inherits Text {
     color: #e0e0e6;
 }
 
+// Runder Knopf mit Symbol aus "Segoe MDL2 Assets" (Jam-Steuerung, Listen).
+component IconButton inherits Rectangle {
+    in property <string> icon;
+    in property <bool> enabled: true;
+    in property <bool> primary: false;
+    in property <length> size: 36px;
+    in property <string> tooltip;
+    callback clicked();
+    width: root.size;
+    height: root.size;
+    border-radius: root.size / 2;
+    background: root.primary ? (root.enabled ? @linear-gradient(90deg, #7c3aed 0%, #ec4899 100%) : #3a3a44)
+        : (touch.has-hover && root.enabled ? #2a2a33 : transparent);
+    Text {
+        text: root.icon;
+        color: root.enabled ? #f2f2f6 : #5a5a64;
+        font-family: "Segoe MDL2 Assets";
+        font-size: root.size * 0.4;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea { enabled: root.enabled; clicked => { root.clicked(); } }
+}
+
+component Card inherits Rectangle {
+    background: #17171d;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: #2a2a34;
+}
+
+component CardTitle inherits Text {
+    font-size: 15px;
+    font-weight: 600;
+    color: #ffffff;
+}
+
 export component AppWindow inherits Window {
     in property <string> window-title: "Playtube";
     title: root.window-title;
@@ -155,6 +240,51 @@ export component AppWindow inherits Window {
     callback pair-phone();
     callback forget-phones();
 
+    // Jam
+    in property <JamTexts> jt;
+    in property <bool> jam-active;
+    in property <bool> jam-busy;
+    in-out property <string> jam-name;
+    in-out property <string> jam-code-input;
+    in property <string> jam-status;
+    in property <string> jam-code;
+    in property <string> jam-link;
+    in property <image> jam-qr;
+    in property <bool> jam-host;
+    in property <bool> jam-can-control;
+    in-out property <bool> jam-all-control;
+    in property <string> jam-now-title;
+    in property <string> jam-now-artist;
+    in property <string> jam-time;
+    in property <string> jam-duration;
+    in property <float> jam-progress;
+    in property <bool> jam-has-current;
+    in property <bool> jam-paused: true;
+    in property <bool> jam-cant-play;
+    in property <[JamMember]> jam-members;
+    in property <[JamItem]> jam-queue;
+    in property <[JamItem]> jam-results;
+    in property <string> jam-add-placeholder;
+    in property <string> jam-add-label;
+    in-out property <string> jam-add-input;
+
+    callback jam-start();
+    callback jam-join();
+    callback jam-leave();
+    callback jam-end();
+    callback jam-copy-link();
+    callback jam-play-pause();
+    callback jam-next();
+    callback jam-previous();
+    callback jam-seek(float);
+    callback jam-add();
+    callback jam-add-current();
+    callback jam-add-result(int, bool);
+    callback jam-remove(string);
+    callback jam-jump(string);
+    callback jam-kick(string);
+    callback jam-set-all-control(bool);
+
     changed width => { root.geometry-changed(); }
     changed height => { root.geometry-changed(); }
     changed content-top => { root.geometry-changed(); }
@@ -180,6 +310,11 @@ export component AppWindow inherits Window {
                 TabButton { text: "YouTube"; active: root.current-tab == 0; clicked => { root.tab-selected(0); } }
                 TabButton { text: "YouTube Music"; active: root.current-tab == 1; clicked => { root.tab-selected(1); } }
                 TabButton { text: root.t.tab-settings; active: root.current-tab == 2; clicked => { root.tab-selected(2); } }
+                TabButton {
+                    text: root.jam-active ? "● " + root.jt.tab : root.jt.tab;
+                    active: root.current-tab == 3;
+                    clicked => { root.tab-selected(3); }
+                }
                 Rectangle { horizontal-stretch: 1; }
             }
         }
@@ -290,6 +425,225 @@ export component AppWindow inherits Window {
                         Hint { text: root.saved-text; vertical-alignment: center; }
                     }
                     Hint { text: "github.com/fojadrachi/Playtube"; }
+                }
+            }
+
+            // Playtube Jam
+            if root.current-tab == 3: ScrollView {
+                VerticalLayout {
+                    padding: 24px;
+                    padding-left: 32px;
+                    padding-right: 32px;
+                    spacing: 16px;
+                    alignment: start;
+
+                    VerticalLayout {
+                        spacing: 2px;
+                        Text { text: root.jt.title; font-size: 22px; font-weight: 600; color: #ffffff; }
+                        Hint { text: root.jt.intro; }
+                    }
+
+                    // Noch in keinem Jam: starten oder beitreten
+                    if !root.jam-active: Card {
+                        VerticalLayout {
+                            padding: 16px;
+                            spacing: 10px;
+                            Row { FieldLabel { text: root.jt.name; } LineEdit { text <=> root.jam-name; min-width: 260px; } }
+                            Row {
+                                Button { text: root.jt.start; primary: true; enabled: !root.jam-busy; clicked => { root.jam-start(); } }
+                            }
+                            Row {
+                                LineEdit {
+                                    text <=> root.jam-code-input;
+                                    placeholder-text: root.jt.code-placeholder;
+                                    min-width: 260px;
+                                    accepted(text) => { root.jam-join(); }
+                                }
+                                Button { text: root.jt.join; enabled: !root.jam-busy; clicked => { root.jam-join(); } }
+                            }
+                            Hint { text: root.jam-status; }
+                        }
+                    }
+
+                    if root.jam-active: HorizontalLayout {
+                        spacing: 16px;
+
+                        // Links: Wiedergabe, Hinzufügen, Warteschlange
+                        VerticalLayout {
+                            horizontal-stretch: 2;
+                            spacing: 16px;
+                            alignment: start;
+
+                            Card {
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 8px;
+                                    Text {
+                                        text: root.jam-has-current ? root.jam-now-title : root.jt.nothing;
+                                        font-size: 18px;
+                                        font-weight: 600;
+                                        color: #ffffff;
+                                        overflow: elide;
+                                    }
+                                    if root.jam-has-current: Hint { text: root.jam-now-artist; wrap: no-wrap; overflow: elide; }
+                                    if root.jam-cant-play: Text { text: root.jt.cant-play-here; color: #fca5a5; font-size: 12px; wrap: word-wrap; }
+                                    HorizontalLayout {
+                                        spacing: 10px;
+                                        Hint { text: root.jam-time; wrap: no-wrap; vertical-alignment: center; }
+                                        Slider {
+                                            minimum: 0;
+                                            maximum: 1;
+                                            value: root.jam-progress;
+                                            enabled: root.jam-can-control && root.jam-has-current;
+                                            released(value) => { root.jam-seek(value); }
+                                        }
+                                        Hint { text: root.jam-duration; wrap: no-wrap; vertical-alignment: center; }
+                                    }
+                                    HorizontalLayout {
+                                        alignment: center;
+                                        spacing: 14px;
+                                        IconButton {
+                                            icon: "\u{E892}";
+                                            y: (parent.height - self.height) / 2;
+                                            enabled: root.jam-can-control && root.jam-has-current;
+                                            clicked => { root.jam-previous(); }
+                                        }
+                                        IconButton {
+                                            icon: root.jam-paused ? "\u{E768}" : "\u{E769}";
+                                            size: 48px;
+                                            primary: true;
+                                            enabled: root.jam-can-control && root.jam-has-current;
+                                            clicked => { root.jam-play-pause(); }
+                                        }
+                                        IconButton {
+                                            icon: "\u{E893}";
+                                            y: (parent.height - self.height) / 2;
+                                            enabled: root.jam-can-control;
+                                            clicked => { root.jam-next(); }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Card {
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 8px;
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        LineEdit {
+                                            text <=> root.jam-add-input;
+                                            placeholder-text: root.jam-add-placeholder;
+                                            accepted(text) => { root.jam-add(); }
+                                        }
+                                        Button { text: root.jam-add-label; primary: true; clicked => { root.jam-add(); } }
+                                    }
+                                    Row { Button { text: root.jt.add-current; clicked => { root.jam-add-current(); } } }
+                                    if root.jam-status != "": Hint { text: root.jam-status; }
+                                    if root.jam-results.length > 0: CardTitle { text: root.jt.results; }
+                                    for result[index] in root.jam-results: HorizontalLayout {
+                                        spacing: 6px;
+                                        VerticalLayout {
+                                            horizontal-stretch: 1;
+                                            Text { text: result.title; color: #f2f2f6; overflow: elide; }
+                                            Hint { text: result.subtitle; wrap: no-wrap; overflow: elide; }
+                                        }
+                                        IconButton { icon: "\u{E70E}"; size: 30px; clicked => { root.jam-add-result(index, true); } }
+                                        IconButton { icon: "\u{E710}"; size: 30px; clicked => { root.jam-add-result(index, false); } }
+                                    }
+                                    Rectangle { height: 4px; }
+                                    CardTitle { text: root.jt.queue; }
+                                    if root.jam-queue.length == 0: Hint { text: root.jt.queue-empty; }
+                                    for item in root.jam-queue: HorizontalLayout {
+                                        spacing: 6px;
+                                        VerticalLayout {
+                                            horizontal-stretch: 1;
+                                            Text { text: item.title; color: #f2f2f6; overflow: elide; }
+                                            Hint { text: item.subtitle; wrap: no-wrap; overflow: elide; }
+                                        }
+                                        if item.can-jump: IconButton { icon: "\u{E768}"; size: 30px; clicked => { root.jam-jump(item.id); } }
+                                        if item.can-remove: IconButton { icon: "\u{E711}"; size: 30px; clicked => { root.jam-remove(item.id); } }
+                                    }
+                                }
+                            }
+                            Hint { text: root.jt.hint; }
+                        }
+
+                        // Rechts: Einladen, Einstellungen, Teilnehmer
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            min-width: 260px;
+                            spacing: 16px;
+                            alignment: start;
+
+                            Card {
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 10px;
+                                    CardTitle { text: root.jt.invite; }
+                                    HorizontalLayout {
+                                        spacing: 12px;
+                                        alignment: start;
+                                        Rectangle {
+                                            width: 132px;
+                                            height: 132px;
+                                            background: #ffffff;
+                                            border-radius: 8px;
+                                            Image { source: root.jam-qr; width: 120px; height: 120px; image-rendering: pixelated; }
+                                        }
+                                        VerticalLayout {
+                                            spacing: 8px;
+                                            alignment: center;
+                                            Text { text: root.jam-code; font-size: 24px; font-weight: 700; color: #ffffff; letter-spacing: 2px; }
+                                            Button { text: root.jt.copy; clicked => { root.jam-copy-link(); } }
+                                        }
+                                    }
+                                    Hint { text: root.jam-link; }
+                                }
+                            }
+
+                            Card {
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 10px;
+                                    if root.jam-host: CheckBox {
+                                        text: root.jt.all-control;
+                                        checked: root.jam-all-control;
+                                        toggled => { root.jam-set-all-control(self.checked); }
+                                    }
+                                    Row {
+                                        if root.jam-host: Button { text: root.jt.end; clicked => { root.jam-end(); } }
+                                        Button { text: root.jt.leave; clicked => { root.jam-leave(); } }
+                                    }
+                                }
+                            }
+
+                            Card {
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 8px;
+                                    CardTitle { text: root.jt.members; }
+                                    for member in root.jam-members: HorizontalLayout {
+                                        spacing: 8px;
+                                        Rectangle {
+                                            width: 30px;
+                                            height: 30px;
+                                            y: (parent.height - self.height) / 2;
+                                            border-radius: 15px;
+                                            background: member.online ? @linear-gradient(135deg, #7c3aed 0%, #ec4899 100%) : #3a3a44;
+                                            Text { text: member.initial; color: #ffffff; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                                        }
+                                        VerticalLayout {
+                                            horizontal-stretch: 1;
+                                            Text { text: member.name; color: member.online ? #f2f2f6 : #8a8a94; overflow: elide; font-weight: member.host ? 600 : 400; }
+                                            Hint { text: member.info; wrap: no-wrap; overflow: elide; }
+                                        }
+                                        if member.can-kick: IconButton { icon: "\u{E711}"; size: 28px; tooltip: root.jt.kick; clicked => { root.jam-kick(member.id); } }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

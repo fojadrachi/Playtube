@@ -80,6 +80,25 @@ impl Default for LanRemote {
     }
 }
 
+/// Playtube Jam: gemeinsam hören über den Jam-Server (siehe src/jam.rs).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Jam {
+    /// Anzeigename im Jam (leer = Windows-Benutzername)
+    pub name: String,
+    pub server: String,
+    /// Zuletzt besuchter Jam: mit dem Token geht es nach einem Neustart als derselbe
+    /// Teilnehmer (bzw. Host) weiter.
+    pub last_code: String,
+    pub last_token: String,
+}
+
+impl Default for Jam {
+    fn default() -> Self {
+        Self { name: String::new(), server: crate::jam::DEFAULT_SERVER.into(), last_code: String::new(), last_token: String::new() }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WindowSize {
@@ -102,6 +121,7 @@ pub struct Config {
     pub audio: Audio,
     pub remote_control: RemoteControl,
     pub lan_remote: LanRemote,
+    pub jam: Jam,
     /// "youtube" oder "music"
     pub start_tab: String,
     /// "de", "en" oder leer (= Windows-Sprache)
@@ -120,6 +140,7 @@ impl Default for Config {
             audio: Audio::default(),
             remote_control: RemoteControl::default(),
             lan_remote: LanRemote::default(),
+            jam: Jam::default(),
             start_tab: "youtube".into(),
             language: String::new(),
             home_youtube: "https://www.youtube.com/".into(),
@@ -156,6 +177,9 @@ pub fn load() -> Config {
         Some(mut config) => {
             config.discord.update_interval_seconds = config.discord.update_interval_seconds.clamp(15, 120);
             config.updates.check_interval_hours = config.updates.check_interval_hours.clamp(1, 168);
+            if config.jam.server.trim().is_empty() {
+                config.jam.server = crate::jam::DEFAULT_SERVER.into();
+            }
             if config.lan_remote.port == 0 {
                 config.lan_remote.port = crate::lan::DEFAULT_PORT;
             }

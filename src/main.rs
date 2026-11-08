@@ -12,6 +12,8 @@ mod config;
 mod discord;
 mod i18n;
 mod instance;
+mod jam;
+mod jam_ui;
 mod lan;
 mod log;
 mod remote;
@@ -84,6 +86,9 @@ struct App {
     update_timer: slint::Timer,
     code_timer: slint::Timer,
     saved_timer: slint::Timer,
+    jam: RefCell<Option<jam_ui::JamSession>>,
+    jam_timer: slint::Timer,
+    jam_results: RefCell<Vec<jam::SearchResult>>,
 }
 
 struct Events;
@@ -184,6 +189,8 @@ impl App {
     }
 
     fn quit(&self) {
+        self.jam_timer.stop();
+        self.jam.borrow_mut().take();
         self.lan.borrow_mut().take();
         self.discord.borrow_mut().take();
         self.tray.borrow_mut().take();
@@ -259,6 +266,10 @@ impl App {
     }
 
     fn media_command(&self, tab: usize, command: &str, value: f64) {
+        // Im Jam gehen Play/Pause/Weiter/Zurück/Spulen an den Jam statt an den Player.
+        if self.jam_intercept(tab, command, value) {
+            return;
+        }
         if let Some(js) = scripts::control(command, value) {
             self.tabs[tab].eval(&js);
         }
@@ -705,6 +716,7 @@ fn apply_texts(ui: &AppWindow) {
         phone_pair: tr("phone.pair").into(),
         phone_forget: tr("phone.forget").into(),
     });
+    jam_ui::apply_jam_texts(ui);
 }
 
 fn show_error(message: &str) {
@@ -756,10 +768,13 @@ fn build_app(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config) -
         update_timer: slint::Timer::default(),
         code_timer: slint::Timer::default(),
         saved_timer: slint::Timer::default(),
+        jam: RefCell::new(None),
+        jam_timer: slint::Timer::default(),
+        jam_results: RefCell::new(Vec::new()),
     }))
 }
 
-fn start(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config) {
+fn start(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config, jam_code: Option<String>) {
     let start_tab = if config.start_tab == "music" { 1 } else { 0 };
     let remote_enabled = config.remote_control.enabled;
     let updates_enabled = config.updates.enabled;
@@ -782,9 +797,19 @@ fn start(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config) {
     app.apply_lan();
     app.build_tray();
     app.setup_update_timer();
+    app.jam_init_ui();
 
-    // Ein zweiter Start holt dieses Fenster nach vorn.
-    instance::listen(app.runtime.handle(), || on_ui(|app| app.show_window()));
+    // Ein zweiter Start holt dieses Fenster nach vorn (bzw. tritt einem Jam bei).
+    instance::listen(app.runtime.handle(), |jam_code| {
+        on_ui(move |app| match jam_code {
+            Some(code) => app.jam_open_code(code),
+            None => app.show_window(),
+        })
+    });
+    // Gestartet über eine Einladung (playtube://jam/<code>).
+    if let Some(code) = jam_code {
+        app.jam_open_code(code);
+    }
     // Stream-Dock-Plugin: eigener Pipe-Name pro Datenordner.
     if remote_enabled {
         let folder = config::data_dir().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
@@ -807,7 +832,9 @@ fn start(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config) {
 fn main() {
     std::panic::set_hook(Box::new(|info| log::line(&format!("PANIC: {info}"))));
 
-    if instance::notify_running() {
+    let args: Vec<String> = std::env::args().collect();
+    let jam_code = jam::code_from_args(&args);
+    if instance::notify_running(jam_code.as_deref()) {
         return;
     }
     let config = config::load();
@@ -846,6 +873,7 @@ fn main() {
     ui.on_install_update(|| with_app(|app| app.install_update()));
     ui.on_pair_phone(|| with_app(|app| app.pair_phone()));
     ui.on_forget_phones(|| with_app(|app| app.pairing.forget_all()));
+    jam_ui::wire(&ui);
 
     // Schließen versteckt nur das Fenster (Musik läuft weiter); Beenden über das Tray-Icon.
     ui.window().on_close_requested(|| slint::CloseRequestResponse::HideWindow);
@@ -857,7 +885,7 @@ fn main() {
     // Die WebViews brauchen das native Fenster. Slint legt es erst an, wenn die Ereignisschleife
     // läuft - deshalb kurz warten, bis es ein gültiges Handle gibt.
     let ui_handle = ui.as_weak();
-    let pending = RefCell::new(Some((runtime, config)));
+    let pending = RefCell::new(Some((runtime, config, jam_code)));
     let waiting = slint::Timer::default();
     let attempts = Cell::new(0);
     waiting.start(slint::TimerMode::Repeated, Duration::from_millis(30), move || {
@@ -871,8 +899,8 @@ fn main() {
         if !ready && attempts.get() < 200 {
             return;
         }
-        if let Some((runtime, config)) = pending.borrow_mut().take() {
-            start(&ui, runtime, config);
+        if let Some((runtime, config, jam_code)) = pending.borrow_mut().take() {
+            start(&ui, runtime, config, jam_code);
         }
     });
 

@@ -13,6 +13,7 @@ Eigenständige Desktop-App für YouTube & YouTube Music unter Windows. Seit Vers
 - **Discord Rich Presence** – Titel, Kanal/Interpret, Fortschritt und Link-Button im Discord-Profil.
 - **Audioausgabe pro Tab** – YouTube und YouTube Music auf verschiedene Geräte (z. B. Sonar-Kanäle).
 - **Steuerung vom Handy** – mit Playtube für Android im selben WLAN, wie Spotify Connect.
+- **Playtube Jam** – gemeinsam hören wie bei Spotify Jam: Freunde per Link/QR einladen, jeder hört synchron auf dem eigenen Gerät.
 - **Fernsteuerung** – lokal per Named Pipe, z. B. über das Stream-Dock-Plugin.
 - **System-Tray** – Schließen versteckt nur das Fenster, Play/Pause/Skip und Beenden im Tray-Menü.
 - **Sprache** – Deutsch oder Englisch (US), im Einstellungen-Tab umschaltbar.
@@ -44,6 +45,21 @@ Setup still (`/SILENT`) und beendet sich; das Setup startet Playtube danach neu.
 Technik ([src/lan.rs](src/lan.rs)): TCP-Port 47811, Suche per UDP-Broadcast an Port 47812, dasselbe
 Zeilenprotokoll wie die Stream-Dock-Steuerung, davor `pair`/`hello` mit Token. Standardmäßig aus;
 nur Geräte aus privaten Netzen und nur nach Kopplung; gespeichert wird nur ein SHA-256 des Tokens.
+
+## Playtube Jam
+
+Tab **Jam**: Namen eingeben, **Jam starten** oder einen Code/Einladungslink eingeben und
+**Beitreten**. Einladen per Link (kopieren) oder QR-Code; Freunde machen mit Playtube am PC,
+Playtube für Android oder im Browser mit. Gespielt wird im YouTube-Music-Tab, den Playtube mit dem
+Jam synchron hält (Position, Pause, Titelwechsel). Host bzw. alle mit Steuerrecht steuern auch über
+den Tab selbst, das Tray, das Stream Dock und das Handy. Songs kommen per Link/Video-ID, als Video
+aus dem YouTube-Tab oder – falls am Server freigeschaltet – über die Suche. Einladungslinks
+`playtube://jam/<CODE>` öffnen Playtube direkt (das Setup registriert das Protokoll).
+
+Technik: [src/jam.rs](src/jam.rs) (Protokoll, Sync-Logik mit Tests, WebSocket über
+tokio-tungstenite/rustls) und [src/jam_ui.rs](src/jam_ui.rs); der Dienst selbst liegt im eigenen
+Projekt `playtube-jam` (Cloudflare Worker). Server änderbar über `"jam": {"server": "…"}` in der
+`config.json` (Standard `https://jam.fojadrachi.de`).
 
 ## Fernsteuerung (Stream Dock)
 
@@ -100,6 +116,7 @@ A standalone desktop app for YouTube & YouTube Music on Windows. Since version 2
 - **Discord Rich Presence** – title, channel/artist, progress and a link button in your profile.
 - **Audio output per tab** – send YouTube and YouTube Music to different devices.
 - **Control from your phone** – with Playtube for Android on the same Wi-Fi, like Spotify Connect.
+- **Playtube Jam** – listen together like Spotify Jam: invite friends via link/QR, everyone listens in sync on their own device.
 - **Remote control** – local named pipe, e.g. for the Stream Dock plugin.
 - **System tray** – closing only hides the window; play/pause/skip and quit in the tray menu.
 - **Language** – German or English (US), switchable in the Settings tab.
@@ -130,6 +147,15 @@ GitHub, runs the setup silently and quits; the setup restarts Playtube afterward
 Implementation ([src/lan.rs](src/lan.rs)): TCP port 47811, discovery via UDP broadcast to port 47812,
 the same line protocol as the Stream Dock control, preceded by `pair`/`hello` with a token. Off by
 default; only private networks and only after pairing; only a SHA-256 of the token is stored.
+
+## Playtube Jam
+
+**Jam** tab: enter your name, **Start jam** or enter a code/invite link and **Join**. Invite via
+link (copy) or QR code; friends join with Playtube for PC, Playtube for Android or in the browser.
+Playback happens in the YouTube Music tab, which Playtube keeps in sync with the jam. With control
+rights, the tab itself, the tray, the Stream Dock and the phone control the jam. `playtube://jam/<CODE>`
+links open Playtube directly. Code: [src/jam.rs](src/jam.rs), [src/jam_ui.rs](src/jam_ui.rs); the
+service lives in the separate `playtube-jam` project.
 
 ## Remote control (Stream Dock)
 

@@ -69,6 +69,13 @@ Type: files; Name: "{app}\PlaytubeHelper.exe"
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Flags: ignoreversion
 
+[Registry]
+; Eigenes URL-Protokoll für Jam-Einladungen: playtube://jam/<CODE> öffnet Playtube und tritt bei.
+Root: HKCU; Subkey: "Software\Classes\playtube"; ValueType: string; ValueName: ""; ValueData: "URL:Playtube"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\playtube"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\playtube\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"",0"
+Root: HKCU; Subkey: "Software\Classes\playtube\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExeName}"" ""%1"""
+
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
