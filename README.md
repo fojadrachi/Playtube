@@ -9,6 +9,7 @@ Eigenständige Desktop-App für YouTube & YouTube Music unter Windows. Seit Vers
 (WebView2)** – damit laufen auch selbst hochgeladene Songs in YouTube Music.
 
 - **Zwei Tabs** – YouTube und YouTube Music parallel, Musik spielt im Hintergrund weiter.
+- **Playtube-Ansicht** – YouTube Music mit eigener Oberfläche im Spotify-Stil (Startseite, Suche, Bibliothek, Player-Leiste, Warteschlange); Premium bleibt erhalten.
 - **Login** – eigenes, dauerhaftes Profil (`%APPDATA%\Playtube`), einmal bei Google anmelden.
 - **Discord Rich Presence** – Titel, Kanal/Interpret, Fortschritt und Link-Button im Discord-Profil.
 - **Audioausgabe pro Tab** – YouTube und YouTube Music auf verschiedene Geräte (z. B. Sonar-Kanäle).
@@ -45,6 +46,18 @@ Setup still (`/SILENT`) und beendet sich; das Setup startet Playtube danach neu.
 Technik ([src/lan.rs](src/lan.rs)): TCP-Port 47811, Suche per UDP-Broadcast an Port 47812, dasselbe
 Zeilenprotokoll wie die Stream-Dock-Steuerung, davor `pair`/`hello` mit Token. Standardmäßig aus;
 nur Geräte aus privaten Netzen und nur nach Kopplung; gespeichert wird nur ein SHA-256 des Tokens.
+
+## Playtube-Ansicht (YouTube Music im Spotify-Stil)
+
+Im Tab YouTube Music zeigt Playtube standardmäßig eine eigene Oberfläche: Seitenleiste (Startseite,
+Suchen, Bibliothek mit Lieblingssongs und Playlists), Regale mit Karten, Album-/Playlist-Seiten mit
+Songliste, Player-Leiste und Warteschlange. Die Daten kommen über dieselbe Schnittstelle, die
+music.youtube.com selbst nutzt (InnerTube, [src/ytm.rs](src/ytm.rs)), mit dem Login des Tabs
+(Cookies der WebView, `SAPISIDHASH`). Abgespielt wird weiterhin im echten YouTube-Music-Player
+– er liegt dabei außerhalb des sichtbaren Bereichs –, deshalb bleiben Premium, eigene Uploads und
+Verlauf erhalten. Oberfläche: [ui/music.slint](ui/music.slint), Anbindung: [src/music.rs](src/music.rs).
+Umschalten über „Original YouTube Music“ bzw. „Playtube-Ansicht“ (gespeichert als `music_view` in der
+`config.json`). Angemeldet wird man in der Original-Ansicht.
 
 ## Playtube Jam
 
@@ -116,6 +129,7 @@ A standalone desktop app for YouTube & YouTube Music on Windows. Since version 2
 - **Discord Rich Presence** – title, channel/artist, progress and a link button in your profile.
 - **Audio output per tab** – send YouTube and YouTube Music to different devices.
 - **Control from your phone** – with Playtube for Android on the same Wi-Fi, like Spotify Connect.
+- **Playtube view** – YouTube Music with its own Spotify-like interface (home, search, library, player bar, queue); Premium is kept.
 - **Playtube Jam** – listen together like Spotify Jam: invite friends via link/QR, everyone listens in sync on their own device.
 - **Remote control** – local named pipe, e.g. for the Stream Dock plugin.
 - **System tray** – closing only hides the window; play/pause/skip and quit in the tray menu.

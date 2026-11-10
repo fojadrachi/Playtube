@@ -1,26 +1,31 @@
-## Playtube 2.3.0
+## Playtube 2.4.0
 
-- **Jam mit YouTube Music:** Während eines Jams kannst du im YouTube-Music-Tab normal weiterstöbern (Suche,
-  Bibliothek, Playlists), ohne dass der Jam-Song neu lädt. Tippst du dort einen Song an, kommt er wie bei
-  Spotify Jam in die gemeinsame Warteschlange. Videos aus dem YouTube-Tab fügst du weiter per Knopf hinzu.
-- **Zuverlässigeres Synchronisieren:** Der Jam liest Position und Status direkt vom Player (YouTube Music hat
-  teils mehrere Video-Elemente) und steuert ihn über die Player-API.
-- **Jam verbindet auch hinter zickigen Routern:** Findet Windows `jam.fojadrachi.de` nicht (manche Router merken
-  sich bei neuen Adressen eine Zeit lang „gibt es nicht“), fragt Playtube die Adresse verschlüsselt bei
-  Cloudflare-DNS nach und verbindet trotzdem.
+- **Neue Playtube-Ansicht für YouTube Music im Stil von Spotify:** Seitenleiste mit Startseite, Suche und
+  Bibliothek (deine Playlists und Lieblingssongs), Regale mit großen Covern, Album- und Playlist-Seiten mit
+  Farbverlauf und Songliste, Player-Leiste unten (Cover, Gefällt mir, Zufall/Zurück/Play/Weiter/Wiederholen,
+  Fortschritt, Lautstärke) und Warteschlange rechts – in Playtube-Lila/Pink.
+- **Premium bleibt erhalten:** Abgespielt wird weiterhin im echten YouTube-Music-Player mit deinem Login – keine
+  Werbung, volle Qualität, eigene Uploads, dein Verlauf und deine Empfehlungen.
+- Umschalten jederzeit: „Original YouTube Music“ unten rechts, zurück über „Playtube-Ansicht“ oben.
+- Zurück/Vor/Neu laden/Start und die Adresszeile (als Suche) bedienen in der neuen Ansicht deren Seiten.
+- Behoben: Status und Zeit des laufenden Titels wurden bei YouTube Music teils falsch gelesen (betraf auch
+  Discord, Handy-Steuerung und Stream Dock).
 
-**Installieren:** `Playtube-Setup-2.3.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
+**Installieren:** `Playtube-Setup-2.4.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
 aktualisiert sich auch von selbst.
 
 ---
 
-## Playtube 2.3.0
+## Playtube 2.4.0
 
-- **Jam with YouTube Music:** during a jam you can keep browsing the YouTube Music tab (search, library,
-  playlists) without the jam song reloading. Tap a song there and it joins the shared queue, like Spotify Jam.
-- **More reliable sync:** the jam reads position and state straight from the player and controls it via the
-  player API.
-- **Jam connects behind stubborn routers too:** if Windows can't resolve `jam.fojadrachi.de`, Playtube looks it
-  up via encrypted Cloudflare DNS and connects anyway.
+- **New Playtube view for YouTube Music in a Spotify-like style:** sidebar with Home, Search and Library (your
+  playlists and liked songs), shelves with big covers, album and playlist pages with gradient header and track
+  list, a player bar (cover, like, shuffle/previous/play/next/repeat, progress, volume) and a queue panel – in
+  Playtube purple/pink.
+- **Premium stays:** playback still runs in the real YouTube Music player with your account – no ads, full
+  quality, your uploads, history and recommendations.
+- Switch anytime: "Original YouTube Music" at the bottom right, back via "Playtube view" at the top.
+- Fixed: the state and time of the current track were sometimes read wrongly on YouTube Music (also affected
+  Discord, phone control and Stream Dock).
 
-**Install:** run `Playtube-Setup-2.3.0.exe` – it replaces any older Playtube. Playtube also updates itself.
+**Install:** run `Playtube-Setup-2.4.0.exe` – it replaces any older Playtube. Playtube also updates itself.

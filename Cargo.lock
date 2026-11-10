@@ -2881,6 +2881,7 @@ checksum = "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104"
 dependencies = [
  "bytemuck",
  "byteorder-lite",
+ "image-webp",
  "moxcms",
  "num-traits",
  "png",
@@ -4302,18 +4303,20 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
 name = "playtube"
-version = "2.3.0"
+version = "2.4.0"
 dependencies = [
  "anyhow",
  "discord-rich-presence",
  "futures-util",
  "hex",
+ "image",
  "open",
  "qrcode",
  "rand 0.10.3",
  "reqwest",
  "serde",
  "serde_json",
+ "sha1",
  "sha2 0.11.1",
  "slint",
  "slint-build",

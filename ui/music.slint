@@ -1,0 +1,554 @@
+// Eigene Oberfläche für YouTube Music im Stil von Spotify (Seitenleiste, Regale, Player-Leiste,
+// Warteschlange) - in Playtube-Farben. Daten und Bilder liefert src/music.rs über das Global
+// `Music`; abgespielt wird im (versteckten) echten YouTube-Music-Player.
+
+import { ScrollView, LineEdit, Slider } from "std-widgets.slint";
+
+export struct MusicCard {
+    id: int,
+    title: string,
+    subtitle: string,
+    duration: string,
+    image: image,
+    has-image: bool,
+    round: bool,
+    playing: bool,
+}
+
+export struct MusicShelf {
+    title: string,
+    rows: bool,
+    cards: [MusicCard],
+}
+
+export struct MusicTexts {
+    home: string,
+    search: string,
+    library: string,
+    your-playlists: string,
+    liked: string,
+    play: string,
+    queue: string,
+    queue-empty: string,
+    original: string,
+    loading: string,
+    login-hint: string,
+    nothing: string,
+    top-result: string,
+    results: string,
+    search-placeholder: string,
+}
+
+export global Music {
+    in property <MusicTexts> t;
+    // 0 Start, 1 Suche, 2 Bibliothek, 3 andere Seite
+    in property <int> section: 0;
+    in property <bool> loading;
+    in property <string> error;
+    in property <bool> logged-in: true;
+
+    // Seite
+    in property <bool> has-header;
+    in property <string> page-title;
+    in property <string> page-subtitle;
+    in property <string> page-description;
+    in property <image> page-image;
+    in property <bool> page-has-image;
+    in property <bool> page-round;
+    in property <bool> page-can-play;
+    in property <[MusicShelf]> shelves;
+    in-out property <length> scroll-y;
+
+    // Seitenleiste
+    in property <[MusicCard]> sidebar;
+
+    // Player-Leiste
+    in property <bool> has-track;
+    in property <string> now-title;
+    in property <string> now-artist;
+    in property <image> now-image;
+    in property <bool> now-has-image;
+    in property <bool> playing;
+    in property <string> position-text;
+    in property <string> duration-text;
+    in property <float> progress;
+    in property <float> volume: 100;
+    in property <string> like-status;
+    in property <string> repeat-mode;
+
+    // Warteschlange
+    in-out property <bool> queue-open;
+    in property <[MusicCard]> queue;
+
+    callback open-home();
+    callback open-library();
+    callback search(string);
+    callback open-card(int);
+    callback play-card(int);
+    callback open-sidebar(int);
+    callback play-page();
+    callback media(string);
+    callback seek(float);
+    callback set-volume(float);
+    callback toggle-queue();
+    callback play-queue(int);
+    callback show-original();
+}
+
+component Icon inherits Text {
+    font-family: "Segoe MDL2 Assets";
+    horizontal-alignment: center;
+    vertical-alignment: center;
+}
+
+component IconButton inherits Rectangle {
+    in property <string> icon;
+    in property <length> size: 32px;
+    in property <bool> active;
+    in property <bool> primary;
+    in property <bool> enabled: true;
+    callback clicked();
+    width: root.size;
+    height: root.size;
+    border-radius: root.size / 2;
+    background: root.primary ? @linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)
+        : (touch.has-hover && root.enabled ? #2a2a33 : transparent);
+    Icon {
+        text: root.icon;
+        font-size: root.size * (root.primary ? 0.42 : 0.45);
+        color: !root.enabled ? #55555f : root.active ? #ec4899 : root.primary ? #ffffff : (touch.has-hover ? #ffffff : #b3b3bb);
+    }
+    touch := TouchArea { enabled: root.enabled; clicked => { root.clicked(); } }
+}
+
+component Cover inherits Rectangle {
+    in property <image> source;
+    in property <bool> has-image;
+    in property <bool> round;
+    border-radius: root.round ? self.width / 2 : 6px;
+    clip: true;
+    background: #2a2a33;
+    if root.has-image: Image { source: root.source; width: 100%; height: 100%; image-fit: cover; }
+    if !root.has-image: Icon { text: "\u{E8D6}"; color: #6b6b75; font-size: root.width * 0.35; }
+}
+
+component NavItem inherits Rectangle {
+    in property <string> icon;
+    in property <string> text;
+    in property <bool> active;
+    callback clicked();
+    height: 40px;
+    HorizontalLayout {
+        spacing: 16px;
+        padding-left: 12px;
+        Icon { text: root.icon; font-size: 20px; width: 24px; color: root.active ? #ffffff : (touch.has-hover ? #ffffff : #b3b3bb); }
+        Text {
+            text: root.text;
+            vertical-alignment: center;
+            font-size: 15px;
+            font-weight: 700;
+            color: root.active ? #ffffff : (touch.has-hover ? #ffffff : #b3b3bb);
+        }
+    }
+    touch := TouchArea { clicked => { root.clicked(); } }
+}
+
+component SideRow inherits Rectangle {
+    in property <MusicCard> card;
+    callback clicked();
+    height: 56px;
+    border-radius: 6px;
+    background: touch.has-hover ? #1f1f26 : transparent;
+    HorizontalLayout {
+        padding: 6px;
+        spacing: 12px;
+        Cover { width: 44px; height: 44px; source: root.card.image; has-image: root.card.has-image; round: root.card.round; }
+        VerticalLayout {
+            alignment: center;
+            Text { text: root.card.title; color: #ffffff; font-size: 14px; overflow: elide; }
+            Text { text: root.card.subtitle; color: #a7a7b0; font-size: 12px; overflow: elide; }
+        }
+    }
+    touch := TouchArea { clicked => { root.clicked(); } }
+}
+
+// Karte im Regal: Bild, Titel, Untertitel; beim Darüberfahren erscheint der Abspielknopf.
+component Card inherits Rectangle {
+    in property <MusicCard> card;
+    callback clicked();
+    callback play();
+    width: 196px;
+    height: 268px;
+    border-radius: 8px;
+    background: touch.has-hover ? #1f1f26 : transparent;
+    touch := TouchArea { clicked => { root.clicked(); } }
+    VerticalLayout {
+        padding: 12px;
+        spacing: 8px;
+        alignment: start;
+        Rectangle {
+            height: 172px;
+            Cover { width: 172px; height: 172px; source: root.card.image; has-image: root.card.has-image; round: root.card.round; }
+            if touch.has-hover: IconButton {
+                x: parent.width - self.width - 8px;
+                y: parent.height - self.height - 8px;
+                icon: "\u{E768}";
+                size: 48px;
+                primary: true;
+                clicked => { root.play(); }
+            }
+        }
+        Text { text: root.card.title; color: #ffffff; font-size: 15px; font-weight: 600; overflow: elide; }
+        Text { text: root.card.subtitle; color: #a7a7b0; font-size: 13px; wrap: word-wrap; max-height: 36px; overflow: elide; }
+    }
+}
+
+// Songzeile: Nummer/Abspielen, Bild, Titel, Interpret, Dauer.
+component Row inherits Rectangle {
+    in property <MusicCard> card;
+    in property <int> number;
+    callback clicked();
+    callback play();
+    height: 56px;
+    border-radius: 6px;
+    background: touch.has-hover ? #24242c : transparent;
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+        double-clicked => { root.play(); }
+    }
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 16px;
+        spacing: 14px;
+        Rectangle {
+            width: 28px;
+            if !touch.has-hover: Text {
+                text: root.card.playing ? "\u{E995}" : root.number;
+                font-family: root.card.playing ? "Segoe MDL2 Assets" : "Segoe UI";
+                color: root.card.playing ? #ec4899 : #a7a7b0;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                width: 100%;
+                height: 100%;
+            }
+            if touch.has-hover: IconButton { icon: "\u{E768}"; size: 28px; y: (parent.height - self.height) / 2; clicked => { root.play(); } }
+        }
+        if root.card.has-image || root.card.subtitle != "": Cover {
+            width: 40px;
+            height: 40px;
+            y: (parent.height - self.height) / 2;
+            source: root.card.image;
+            has-image: root.card.has-image;
+            round: root.card.round;
+        }
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            Text { text: root.card.title; color: root.card.playing ? #ec4899 : #ffffff; font-size: 15px; overflow: elide; }
+            Text { text: root.card.subtitle; color: #a7a7b0; font-size: 13px; overflow: elide; }
+        }
+        Text { text: root.card.duration; color: #a7a7b0; font-size: 13px; vertical-alignment: center; }
+    }
+}
+
+export component MusicView inherits Rectangle {
+    background: #000000;
+
+    HorizontalLayout {
+        padding: 8px;
+        padding-bottom: 0px;
+        spacing: 8px;
+
+        // ------------------------------------------------ Seitenleiste
+        VerticalLayout {
+            width: 280px;
+            spacing: 8px;
+            Rectangle {
+                background: #121216;
+                border-radius: 8px;
+                height: 104px;
+                VerticalLayout {
+                    padding: 12px;
+                    NavItem { icon: "\u{E80F}"; text: Music.t.home; active: Music.section == 0; clicked => { Music.open-home(); } }
+                    NavItem { icon: "\u{E721}"; text: Music.t.search; active: Music.section == 1; clicked => { search-field.focus(); } }
+                }
+            }
+            Rectangle {
+                background: #121216;
+                border-radius: 8px;
+                vertical-stretch: 1;
+                VerticalLayout {
+                    padding: 12px;
+                    spacing: 8px;
+                    NavItem { icon: "\u{E8F1}"; text: Music.t.library; active: Music.section == 2; clicked => { Music.open-library(); } }
+                    ScrollView {
+                        VerticalLayout {
+                            alignment: start;
+                            for card[i] in Music.sidebar: SideRow { card: card; clicked => { Music.open-sidebar(card.id); } }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ------------------------------------------------ Hauptbereich
+        Rectangle {
+            horizontal-stretch: 1;
+            background: #121216;
+            border-radius: 8px;
+            clip: true;
+
+            VerticalLayout {
+                // Suchleiste
+                Rectangle {
+                    height: 64px;
+                    HorizontalLayout {
+                        padding: 12px;
+                        padding-left: 24px;
+                        spacing: 12px;
+                        search-field := LineEdit {
+                            max-width: 420px;
+                            placeholder-text: Music.t.search-placeholder;
+                            accepted(text) => { Music.search(text); }
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                        if Music.loading: Text { text: Music.t.loading; color: #a7a7b0; vertical-alignment: center; }
+                    }
+                }
+
+                ScrollView {
+                    vertical-stretch: 1;
+                    content-y <=> Music.scroll-y;
+                    VerticalLayout {
+                        alignment: start;
+                        spacing: 8px;
+
+                        if !Music.logged-in: Rectangle {
+                            height: 44px;
+                            HorizontalLayout {
+                                padding-left: 24px;
+                                Text { text: Music.t.login-hint; color: #fbcfe8; vertical-alignment: center; }
+                            }
+                        }
+                        if Music.error != "": Rectangle {
+                            height: 44px;
+                            HorizontalLayout {
+                                padding-left: 24px;
+                                Text { text: Music.error; color: #fca5a5; vertical-alignment: center; }
+                            }
+                        }
+
+                        // Seitenkopf (Album, Playlist, Interpret, Bibliothek)
+                        if Music.has-header: Rectangle {
+                            height: 296px;
+                            background: @linear-gradient(180deg, #4c1d95 0%, #121216 100%);
+                            HorizontalLayout {
+                                padding: 24px;
+                                spacing: 24px;
+                                alignment: start;
+                                if Music.page-has-image: Cover {
+                                    width: 232px;
+                                    height: 232px;
+                                    source: Music.page-image;
+                                    has-image: true;
+                                    round: Music.page-round;
+                                    drop-shadow-blur: 24px;
+                                    drop-shadow-color: #00000080;
+                                }
+                                VerticalLayout {
+                                    alignment: end;
+                                    spacing: 10px;
+                                    Text { text: Music.page-title; color: #ffffff; font-size: 48px; font-weight: 800; overflow: elide; }
+                                    Text { text: Music.page-subtitle; color: #e5e5ea; font-size: 14px; overflow: elide; }
+                                    if Music.page-description != "": Text {
+                                        text: Music.page-description;
+                                        color: #b3b3bb;
+                                        font-size: 13px;
+                                        wrap: word-wrap;
+                                        max-height: 54px;
+                                        overflow: elide;
+                                    }
+                                    if Music.page-can-play: HorizontalLayout {
+                                        alignment: start;
+                                        IconButton { icon: "\u{E768}"; size: 56px; primary: true; clicked => { Music.play-page(); } }
+                                    }
+                                }
+                            }
+                        }
+
+                        if !Music.loading && Music.shelves.length == 0 && Music.error == "": Rectangle {
+                            height: 80px;
+                            Text { text: Music.t.nothing; color: #a7a7b0; }
+                        }
+
+                        for shelf in Music.shelves: VerticalLayout {
+                            padding-left: 16px;
+                            padding-right: 16px;
+                            padding-top: 8px;
+                            spacing: 4px;
+                            if shelf.title != "": Text {
+                                text: shelf.title == "\u{2605}" ? Music.t.top-result : shelf.title;
+                                color: #ffffff;
+                                font-size: 22px;
+                                font-weight: 700;
+                                x: 8px;
+                            }
+                            if shelf.rows: VerticalLayout {
+                                for card[i] in shelf.cards: Row {
+                                    card: card;
+                                    number: i + 1;
+                                    clicked => { Music.open-card(card.id); }
+                                    play => { Music.play-card(card.id); }
+                                }
+                            }
+                            if !shelf.rows: Flickable {
+                                height: 272px;
+                                content-width: shelf.cards.length * 200px;
+                                content-height: 272px;
+                                HorizontalLayout {
+                                    spacing: 4px;
+                                    for card in shelf.cards: Card {
+                                        card: card;
+                                        clicked => { Music.open-card(card.id); }
+                                        play => { Music.play-card(card.id); }
+                                    }
+                                }
+                            }
+                        }
+                        Rectangle { height: 24px; }
+                    }
+                }
+            }
+        }
+
+        // ------------------------------------------------ Warteschlange
+        if Music.queue-open: Rectangle {
+            width: 320px;
+            background: #121216;
+            border-radius: 8px;
+            VerticalLayout {
+                padding: 16px;
+                spacing: 8px;
+                Text { text: Music.t.queue; color: #ffffff; font-size: 17px; font-weight: 700; }
+                if Music.queue.length == 0: Text { text: Music.t.queue-empty; color: #a7a7b0; wrap: word-wrap; }
+                ScrollView {
+                    VerticalLayout {
+                        alignment: start;
+                        for card in Music.queue: Rectangle {
+                            height: 56px;
+                            border-radius: 6px;
+                            background: card.playing ? #2a1d3f : (q-touch.has-hover ? #1f1f26 : transparent);
+                            q-touch := TouchArea { clicked => { Music.play-queue(card.id); } }
+                            HorizontalLayout {
+                                padding: 6px;
+                                spacing: 10px;
+                                Cover { width: 44px; height: 44px; source: card.image; has-image: card.has-image; }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Text { text: card.title; color: card.playing ? #ec4899 : #ffffff; font-size: 14px; overflow: elide; }
+                                    Text { text: card.subtitle; color: #a7a7b0; font-size: 12px; overflow: elide; }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Player-Leiste unten (immer sichtbar in der Playtube-Ansicht).
+export component PlayerBar inherits Rectangle {
+    height: 84px;
+    background: #000000;
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 16px;
+
+        // Links: Cover, Titel, Gefällt mir
+        HorizontalLayout {
+            width: 30%;
+            spacing: 12px;
+            alignment: start;
+            if Music.has-track: Cover {
+                width: 56px;
+                height: 56px;
+                y: (parent.height - self.height) / 2;
+                source: Music.now-image;
+                has-image: Music.now-has-image;
+            }
+            if Music.has-track: VerticalLayout {
+                alignment: center;
+                max-width: 260px;
+                Text { text: Music.now-title; color: #ffffff; font-size: 14px; font-weight: 600; overflow: elide; }
+                Text { text: Music.now-artist; color: #a7a7b0; font-size: 12px; overflow: elide; }
+            }
+            if Music.has-track: IconButton {
+                y: (parent.height - self.height) / 2;
+                icon: Music.like-status == "like" ? "\u{EB52}" : "\u{EB51}";
+                active: Music.like-status == "like";
+                clicked => { Music.media("like"); }
+            }
+        }
+
+        // Mitte: Steuerung und Fortschritt
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 4px;
+            HorizontalLayout {
+                alignment: center;
+                spacing: 18px;
+                IconButton { icon: "\u{E8B1}"; y: (parent.height - self.height) / 2; clicked => { Music.media("shuffle"); } }
+                IconButton { icon: "\u{E892}"; y: (parent.height - self.height) / 2; clicked => { Music.media("previous"); } }
+                IconButton { icon: Music.playing ? "\u{E769}" : "\u{E768}"; size: 40px; primary: true; clicked => { Music.media("play_pause"); } }
+                IconButton { icon: "\u{E893}"; y: (parent.height - self.height) / 2; clicked => { Music.media("next"); } }
+                IconButton {
+                    icon: Music.repeat-mode == "ONE" ? "\u{E8ED}" : "\u{E8EE}";
+                    active: Music.repeat-mode == "ALL" || Music.repeat-mode == "ONE";
+                    y: (parent.height - self.height) / 2;
+                    clicked => { Music.media("repeat"); }
+                }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                Text { text: Music.position-text; color: #a7a7b0; font-size: 11px; vertical-alignment: center; min-width: 36px; horizontal-alignment: right; }
+                Slider {
+                    minimum: 0;
+                    maximum: 1;
+                    value: Music.progress;
+                    enabled: Music.has-track;
+                    released(value) => { Music.seek(value); }
+                }
+                Text { text: Music.duration-text; color: #a7a7b0; font-size: 11px; vertical-alignment: center; min-width: 36px; }
+            }
+        }
+
+        // Rechts: Warteschlange, Lautstärke, Original-Ansicht
+        HorizontalLayout {
+            width: 30%;
+            alignment: end;
+            spacing: 8px;
+            IconButton { icon: "\u{E8FD}"; active: Music.queue-open; y: (parent.height - self.height) / 2; clicked => { Music.toggle-queue(); } }
+            IconButton { icon: "\u{E767}"; y: (parent.height - self.height) / 2; clicked => { Music.media("mute_toggle"); } }
+            Slider {
+                width: 120px;
+                minimum: 0;
+                maximum: 100;
+                value: Music.volume;
+                released(value) => { Music.set-volume(value); }
+            }
+            Rectangle {
+                width: original-text.preferred-width + 20px;
+                height: 28px;
+                y: (parent.height - self.height) / 2;
+                border-radius: 14px;
+                border-width: 1px;
+                border-color: o-touch.has-hover ? #ffffff : #55555f;
+                original-text := Text { text: Music.t.original; color: #e5e5ea; font-size: 12px; }
+                o-touch := TouchArea { clicked => { Music.show-original(); } }
+            }
+        }
+    }
+}

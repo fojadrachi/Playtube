@@ -3,6 +3,8 @@
 // (content-top bis Fensterende).
 
 import { Button, LineEdit, CheckBox, ComboBox, SpinBox, ScrollView, ProgressIndicator, GroupBox, Slider } from "std-widgets.slint";
+import { Music, MusicView, PlayerBar, MusicCard, MusicShelf, MusicTexts } from "music.slint";
+export { Music, MusicCard, MusicShelf, MusicTexts }
 
 // Playtube Jam (src/jam.rs)
 export struct JamTexts {
@@ -240,6 +242,11 @@ export component AppWindow inherits Window {
     callback pair-phone();
     callback forget-phones();
 
+    // Playtube-Ansicht für YouTube Music (src/music.rs)
+    in property <bool> music-view;
+    in property <string> music-view-label;
+    callback toggle-music-view();
+
     // Jam
     in property <JamTexts> jt;
     in property <bool> jam-active;
@@ -333,6 +340,13 @@ export component AppWindow inherits Window {
                 NavButton { text: "\u{E72C}"; enabled: root.current-tab < 2; clicked => { root.reload(); } }
                 NavButton { text: "\u{E80F}"; enabled: root.current-tab < 2; clicked => { root.go-home(); } }
                 Rectangle { width: 6px; }
+                if root.current-tab == 1 && !root.music-view: Rectangle {
+                    width: mv-text.preferred-width + 24px;
+                    border-radius: 15px;
+                    background: @linear-gradient(90deg, #7c3aed 0%, #ec4899 100%);
+                    mv-text := Text { text: root.music-view-label; color: #ffffff; font-size: 12px; font-weight: 600; }
+                    TouchArea { clicked => { root.toggle-music-view(); } }
+                }
                 url := LineEdit {
                     enabled: root.current-tab < 2;
                     text <=> root.url-text;
@@ -426,6 +440,12 @@ export component AppWindow inherits Window {
                     }
                     Hint { text: "github.com/fojadrachi/Playtube"; }
                 }
+            }
+
+            // Playtube-Ansicht für YouTube Music
+            if root.current-tab == 1 && root.music-view: VerticalLayout {
+                MusicView { vertical-stretch: 1; }
+                PlayerBar { }
             }
 
             // Playtube Jam

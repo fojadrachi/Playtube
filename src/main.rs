@@ -15,10 +15,12 @@ mod instance;
 mod jam;
 mod jam_ui;
 mod lan;
+mod music;
 mod log;
 mod remote;
 mod scripts;
 mod updater;
+mod ytm;
 
 use browser::{Tab, TabEvents};
 use config::{Config, APP_NAME, VERSION};
@@ -89,6 +91,8 @@ struct App {
     jam: RefCell<Option<jam_ui::JamSession>>,
     jam_timer: slint::Timer,
     jam_results: RefCell<Vec<jam::SearchResult>>,
+    music: RefCell<music::MusicState>,
+    music_timer: slint::Timer,
 }
 
 struct Events;
@@ -97,7 +101,7 @@ impl TabEvents for Events {
     fn url_changed(&self, tab: usize, url: String) {
         with_app(|app| {
             *app.tabs[tab].url.borrow_mut() = url.clone();
-            if app.current.get() == tab {
+            if app.current.get() == tab && !app.music_active() {
                 app.ui.set_url_text(url.into());
             }
         });
@@ -133,8 +137,12 @@ impl App {
         let width = size.width as f64 / scale;
         let height = size.height as f64 / scale;
         let top = self.ui.get_content_top() as f64;
+        let music_view = self.music_active();
         for tab in &self.tabs {
-            tab.set_bounds(0.0, top, width, height - top);
+            // Playtube-Ansicht: YouTube Music bleibt "sichtbar" (sonst startet die Wiedergabe nicht),
+            // liegt aber außerhalb des Fensters - davor ist die eigene Oberfläche.
+            let x = if music_view && tab.index == music::TAB_MUSIC { -(width + 4000.0) } else { 0.0 };
+            tab.set_bounds(x, top, width, height - top);
         }
     }
 
@@ -150,6 +158,8 @@ impl App {
         } else {
             self.ui.set_url_text(SharedString::new());
         }
+        // Playtube-Ansicht: YouTube-Music-WebView verstecken, eigene Oberfläche zeigen.
+        self.music_on_select();
         self.update_presence();
     }
 
@@ -173,6 +183,10 @@ impl App {
     }
 
     fn navigate(&self, text: &str) {
+        if self.music_active() {
+            self.music_search(text);
+            return;
+        }
         let text = text.trim();
         let Some(tab) = self.current_browser() else { return };
         if text.is_empty() {
@@ -189,6 +203,7 @@ impl App {
     }
 
     fn quit(&self) {
+        self.music_timer.stop();
         self.jam_timer.stop();
         self.jam.borrow_mut().take();
         self.lan.borrow_mut().take();
@@ -211,6 +226,9 @@ impl App {
     }
 
     fn on_media(&self, index: usize, info: Value) {
+        if index == music::TAB_MUSIC {
+            self.music_on_media(&info);
+        }
         self.media.borrow_mut()[index] = Some(info);
         let title = self.active_media().and_then(|m| m["title"].as_str().map(str::to_string)).filter(|t| !t.is_empty());
         self.ui.set_window_title(match title {
@@ -717,6 +735,7 @@ fn apply_texts(ui: &AppWindow) {
         phone_forget: tr("phone.forget").into(),
     });
     jam_ui::apply_jam_texts(ui);
+    music::apply_music_texts(ui);
 }
 
 fn show_error(message: &str) {
@@ -771,6 +790,8 @@ fn build_app(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config) -
         jam: RefCell::new(None),
         jam_timer: slint::Timer::default(),
         jam_results: RefCell::new(Vec::new()),
+        music: RefCell::new(music::MusicState::default()),
+        music_timer: slint::Timer::default(),
     }))
 }
 
@@ -863,10 +884,11 @@ fn main() {
 
     ui.on_tab_selected(|index| with_app(|app| app.select_tab(index as usize)));
     ui.on_navigate(|text| with_app(|app| app.navigate(&text)));
-    ui.on_go_back(|| with_app(|app| if let Some(t) = app.current_browser() { t.back() }));
-    ui.on_go_forward(|| with_app(|app| if let Some(t) = app.current_browser() { t.forward() }));
-    ui.on_reload(|| with_app(|app| if let Some(t) = app.current_browser() { t.reload() }));
-    ui.on_go_home(|| with_app(|app| if let Some(t) = app.current_browser() { t.go_home() }));
+    // In der Playtube-Ansicht bedienen Zurück/Vor/Neu laden/Start deren eigene Seiten.
+    ui.on_go_back(|| with_app(|app| if app.music_active() { app.music_back() } else if let Some(t) = app.current_browser() { t.back() }));
+    ui.on_go_forward(|| with_app(|app| if app.music_active() { app.music_forward() } else if let Some(t) = app.current_browser() { t.forward() }));
+    ui.on_reload(|| with_app(|app| if app.music_active() { app.music_reload() } else if let Some(t) = app.current_browser() { t.reload() }));
+    ui.on_go_home(|| with_app(|app| if app.music_active() { app.music_go(music::Target::Home) } else if let Some(t) = app.current_browser() { t.go_home() }));
     ui.on_geometry_changed(|| with_app(|app| app.layout()));
     ui.on_save_settings(|| with_app(|app| app.save_settings()));
     ui.on_check_updates(|| with_app(|app| app.check_updates(true)));
@@ -874,6 +896,7 @@ fn main() {
     ui.on_pair_phone(|| with_app(|app| app.pair_phone()));
     ui.on_forget_phones(|| with_app(|app| app.pairing.forget_all()));
     jam_ui::wire(&ui);
+    music::wire(&ui);
 
     // Schließen versteckt nur das Fenster (Musik läuft weiter); Beenden über das Tray-Icon.
     ui.window().on_close_requested(|| slint::CloseRequestResponse::HideWindow);

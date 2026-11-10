@@ -73,7 +73,16 @@
         return null;
     }
 
-    var video = document.querySelector('video');
+    // Es kann mehrere <video> geben (YouTube Music lädt den nächsten Titel vor): das des Players
+    // nehmen, sonst das erste, das schon Daten hat.
+    var moviePlayer = document.getElementById('movie_player');
+    var video = (moviePlayer && moviePlayer.querySelector('video')) || null;
+    if (!video || !video.readyState) {
+        var allVideos = document.querySelectorAll('video');
+        for (var vi = 0; vi < allVideos.length; vi++) { if (allVideos[vi].readyState > 0) { video = allVideos[vi]; break; } }
+    }
+    if (!video) { video = document.querySelector('video'); }
+    function playerApi(fn) { return moviePlayer && typeof moviePlayer[fn] === 'function'; }
     var isMusic = location.hostname.indexOf('music.youtube.com') !== -1;
     var videoId = videoIdFromUrl(location.href);
     var title = null, subtitle = null, thumbnail = null;
@@ -126,8 +135,22 @@
     }
 
     var timeInfo = isMusic ? musicTimeInfo() : youtubeTimeInfo();
-    var currentTime = timeInfo ? timeInfo.current : (video ? video.currentTime : 0);
-    var duration = timeInfo ? timeInfo.total : ((video && isFinite(video.duration)) ? video.duration : 0);
+    // Zeit: zuerst die Player-API (gehört immer zum laufenden Titel und läuft auch weiter, wenn die
+    // Seite versteckt ist), sonst die sichtbare Anzeige, zuletzt das <video>.
+    var apiTotal = playerApi('getDuration') ? moviePlayer.getDuration() : 0;
+    var useApi = playerApi('getCurrentTime') && isFinite(apiTotal) && apiTotal > 0;
+    var currentTime = useApi ? moviePlayer.getCurrentTime()
+        : (timeInfo ? timeInfo.current : (video ? video.currentTime : 0));
+    var duration = useApi ? apiTotal
+        : (timeInfo ? timeInfo.total : ((video && isFinite(video.duration)) ? video.duration : 0));
+    // Läuft gerade etwas? Player-Status, sonst MediaSession (bei YouTube Music zuverlässig), sonst <video>.
+    var playerState = playerApi('getPlayerState') ? moviePlayer.getPlayerState() : null;
+    var sessionState = navigator.mediaSession ? navigator.mediaSession.playbackState : 'none';
+    var playing;
+    if (playerState === 1 || playerState === 3) { playing = true; }
+    else if (playerState === 2 || playerState === 0) { playing = false; }
+    else if (sessionState === 'playing' || sessionState === 'paused') { playing = sessionState === 'playing'; }
+    else { playing = video ? (!video.paused && !video.ended && video.readyState > 2) : false; }
 
     // Als JSON-Text zurueckgeben; WebView2 kodiert ihn noch einmal, src/scripts.rs
     // (decode_result) packt beides wieder aus.
@@ -137,7 +160,7 @@
         subtitle: subtitle,
         thumbnail: thumbnail,
         url: location.href,
-        playing: video ? (!video.paused && !video.ended && video.readyState > 2) : false,
+        playing: playing,
         currentTime: currentTime,
         duration: duration,
         hasVideo: !!video,
