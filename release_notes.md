@@ -1,4 +1,9 @@
-## Playtube 2.4.0
+## Playtube 2.4.1
+
+- **Keine „Website verlassen?“-Abfrage mehr:** Beim Abspielen aus der Playtube-Ansicht oder im Jam fragte
+  YouTube Music manchmal nach, ob man die Seite verlassen will. Playtube verlässt sie jetzt immer ohne Nachfrage.
+
+Neu in 2.4.0:
 
 - **Neue Playtube-Ansicht für YouTube Music im Stil von Spotify:** Seitenleiste mit Startseite, Suche und
   Bibliothek (deine Playlists und Lieblingssongs), Regale mit großen Covern, Album- und Playlist-Seiten mit
@@ -11,12 +16,17 @@
 - Behoben: Status und Zeit des laufenden Titels wurden bei YouTube Music teils falsch gelesen (betraf auch
   Discord, Handy-Steuerung und Stream Dock).
 
-**Installieren:** `Playtube-Setup-2.4.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
+**Installieren:** `Playtube-Setup-2.4.1.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
 aktualisiert sich auch von selbst.
 
 ---
 
-## Playtube 2.4.0
+## Playtube 2.4.1
+
+- **No more "Leave site?" prompt:** when playing from the Playtube view or in a jam, YouTube Music sometimes asked
+  whether to leave the page. Playtube now always leaves without asking.
+
+New in 2.4.0:
 
 - **New Playtube view for YouTube Music in a Spotify-like style:** sidebar with Home, Search and Library (your
   playlists and liked songs), shelves with big covers, album and playlist pages with gradient header and track
@@ -28,4 +38,4 @@ aktualisiert sich auch von selbst.
 - Fixed: the state and time of the current track were sometimes read wrongly on YouTube Music (also affected
   Discord, phone control and Stream Dock).
 
-**Install:** run `Playtube-Setup-2.4.0.exe` – it replaces any older Playtube. Playtube also updates itself.
+**Install:** run `Playtube-Setup-2.4.1.exe` – it replaces any older Playtube. Playtube also updates itself.

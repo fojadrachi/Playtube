@@ -55,6 +55,8 @@ impl Tab {
             // Musik soll auch bei minimiertem/verstecktem Fenster ungebremst weiterlaufen.
             .with_background_throttling(BackgroundThrottlingPolicy::Disabled)
             .with_initialization_script(scripts::in_document(&scripts::audio_router("")))
+            // Keine "Website verlassen?"-Abfrage, wenn Playtube selbst eine neue Seite lädt.
+            .with_initialization_script(scripts::NO_LEAVE_PROMPT)
             // Links mit target=_blank im selben Tab öffnen statt in einem neuen Fenster.
             .with_new_window_req_handler(move |url, _features| {
                 window_events.open_url(index, url);

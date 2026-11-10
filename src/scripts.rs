@@ -11,6 +11,8 @@ pub const QUEUE: &str = include_str!("js/queue.js");
 const PLAY_QUEUE_ITEM: &str = include_str!("js/play_queue_item.js");
 const CONTROL_PRELUDE: &str = include_str!("js/control_prelude.js");
 const AUDIO_ROUTER: &str = include_str!("js/audio_router.js");
+/// Verhindert die Abfrage "Website verlassen?" (läuft beim Dokumentstart, vor der Seite).
+pub const NO_LEAVE_PROMPT: &str = include_str!("js/no_leave_prompt.js");
 
 pub const MUSIC_PLAYLIST_URL: &str = "https://music.youtube.com/watch?list=";
 
@@ -146,6 +148,12 @@ mod tests {
         assert!(jam_play(true).contains("p.playVideo()"));
         assert!(jam_play(false).contains("p.pauseVideo()"));
         assert!(jam_seek(f64::NAN).is_none());
+    }
+
+    #[test]
+    fn leave_prompt_script_blocks_beforeunload() {
+        assert!(NO_LEAVE_PROMPT.contains("'beforeunload'"));
+        assert!(NO_LEAVE_PROMPT.contains("onbeforeunload"));
     }
 
     #[test]
