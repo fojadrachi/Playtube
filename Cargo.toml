@@ -1,6 +1,6 @@
 [package]
 name = "playtube"
-version = "2.4.1"
+version = "2.5.0"
 edition = "2024"
 description = "Playtube – YouTube und YouTube Music als eigene Desktop-App"
 license = "UNLICENSED"
@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.104"
+base64 = "0.22"
 discord-rich-presence = "1.1.0"
 futures-util = "0.3"
 hex = "0.4.3"

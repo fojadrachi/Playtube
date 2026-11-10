@@ -4303,9 +4303,10 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
 name = "playtube"
-version = "2.4.1"
+version = "2.5.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "discord-rich-presence",
  "futures-util",
  "hex",

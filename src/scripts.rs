@@ -11,6 +11,18 @@ pub const QUEUE: &str = include_str!("js/queue.js");
 const PLAY_QUEUE_ITEM: &str = include_str!("js/play_queue_item.js");
 const CONTROL_PRELUDE: &str = include_str!("js/control_prelude.js");
 const AUDIO_ROUTER: &str = include_str!("js/audio_router.js");
+const AUDIO_TAP: &str = include_str!("js/audio_tap.js");
+
+/// Playtube-Ton: greift den Ton der Seite ab und schickt ihn an Playtube (src/relay.rs).
+pub fn audio_tap(enabled: bool) -> String {
+    AUDIO_TAP.replace("__ENABLED__", if enabled { "true" } else { "false" })
+}
+
+/// Schaltet den Playtube-Ton auf der offenen Seite an/aus.
+pub fn audio_tap_enable(enabled: bool) -> String {
+    format!("(function(){{ if (window.__playtubeTap) {{ window.__playtubeTap.enable({enabled}); }} }})();")
+}
+
 /// Verhindert die Abfrage "Website verlassen?" (läuft beim Dokumentstart, vor der Seite).
 pub const NO_LEAVE_PROMPT: &str = include_str!("js/no_leave_prompt.js");
 
@@ -148,6 +160,14 @@ mod tests {
         assert!(jam_play(true).contains("p.playVideo()"));
         assert!(jam_play(false).contains("p.pauseVideo()"));
         assert!(jam_seek(f64::NAN).is_none());
+    }
+
+    #[test]
+    fn audio_tap_switch_is_a_boolean() {
+        assert!(audio_tap(true).contains("var DEFAULT_ON = true;"));
+        assert!(audio_tap(false).contains("var DEFAULT_ON = false;"));
+        assert!(!audio_tap(true).contains("__ENABLED__"));
+        assert!(audio_tap_enable(false).contains("enable(false)"));
     }
 
     #[test]

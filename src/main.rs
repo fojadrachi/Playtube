@@ -17,6 +17,7 @@ mod jam_ui;
 mod lan;
 mod music;
 mod log;
+mod relay;
 mod remote;
 mod scripts;
 mod updater;
@@ -95,6 +96,8 @@ struct App {
     music_timer: slint::Timer,
     /// Google-Anmeldung läuft (YouTube-Music-Tab zeigt kurz die echte Seite)
     music_login: Cell<bool>,
+    /// Playtube-Ton je Tab (YouTube, YouTube Music)
+    relays: RefCell<[Option<relay::Relay>; 2]>,
 }
 
 struct Events;
@@ -119,11 +122,18 @@ impl TabEvents for Events {
             if app.audio_routing_wanted() {
                 app.tabs[tab].set_device_names_allowed(true);
             }
+            // Playtube-Ton nach jedem Seitenaufbau auf die aktuelle Einstellung bringen.
+            let on = app.config.borrow().audio.via_playtube;
+            app.tabs[tab].eval(&scripts::audio_tap_enable(on));
         });
     }
 
     fn fullscreen_changed(&self, _tab: usize, fullscreen: bool) {
         with_app(|app| app.set_fullscreen(fullscreen));
+    }
+
+    fn ipc(&self, tab: usize, body: String) {
+        with_app(|app| app.on_tab_ipc(tab, &body));
     }
 
     fn open_url(&self, tab: usize, url: String) {
@@ -212,6 +222,7 @@ impl App {
         self.jam_timer.stop();
         self.jam.borrow_mut().take();
         self.lan.borrow_mut().take();
+        *self.relays.borrow_mut() = [None, None];
         self.discord.borrow_mut().take();
         self.tray.borrow_mut().take();
         let _ = slint::quit_event_loop();
@@ -403,6 +414,33 @@ impl App {
         let config = self.config.borrow();
         self.tabs[0].set_audio_output(&config.audio.youtube_output);
         self.tabs[1].set_audio_output(&config.audio.music_output);
+        // Playtube-Ton: an/aus und Ausgabegerät je Tab
+        let on = config.audio.via_playtube;
+        let outputs = [config.audio.youtube_output.clone(), config.audio.music_output.clone()];
+        drop(config);
+        let mut relays = self.relays.borrow_mut();
+        for (index, tab) in self.tabs.iter().enumerate() {
+            tab.eval(&scripts::audio_tap_enable(on));
+            if !on {
+                relays[index] = None;
+            } else if let Some(relay) = &relays[index] {
+                relay.set_device(&outputs[index]);
+            }
+        }
+    }
+
+    /// Ton aus der Seite (js/audio_tap.js) über Playtube.exe ausgeben.
+    fn on_tab_ipc(&self, tab: usize, body: &str) {
+        if tab > 1 || !self.config.borrow().audio.via_playtube {
+            return;
+        }
+        let Some((rate, samples)) = relay::parse_message(body) else { return };
+        let mut relays = self.relays.borrow_mut();
+        let relay = relays[tab].get_or_insert_with(|| {
+            let config = self.config.borrow();
+            relay::Relay::start(if tab == 0 { &config.audio.youtube_output } else { &config.audio.music_output })
+        });
+        relay.push(rate, &samples);
     }
 
     /// Füllt die Geräteauswahl: "Systemstandard", alle Geräte, ein gespeichertes aber gerade
@@ -582,6 +620,7 @@ impl App {
         ui.set_updates_enabled(config.updates.enabled);
         ui.set_check_interval(config.updates.check_interval_hours as i32);
         ui.set_phone_enabled(config.lan_remote.enabled);
+        ui.set_audio_via_playtube(config.audio.via_playtube);
         ui.set_start_tab_index(if config.start_tab == "music" { 1 } else { 0 });
         ui.set_music_view_index(if config.music_view { 0 } else { 1 });
         let language = i18n::current();
@@ -605,6 +644,7 @@ impl App {
             config.audio.youtube_output = values.get(ui.get_youtube_output() as usize).cloned().unwrap_or_default();
             config.audio.music_output = values.get(ui.get_music_output() as usize).cloned().unwrap_or_default();
             config.lan_remote.enabled = ui.get_phone_enabled();
+            config.audio.via_playtube = ui.get_audio_via_playtube();
             config.start_tab = if ui.get_start_tab_index() == 1 { "music" } else { "youtube" }.into();
             config.music_view = ui.get_music_view_index() == 0;
             config.language = i18n::LANGUAGES.get(ui.get_language_index() as usize).map(|(c, _)| c.to_string()).unwrap_or_default();
@@ -741,6 +781,8 @@ fn apply_texts(ui: &AppWindow) {
         updates_check_now: tr("updates.check_now").into(),
         updates_install: tr("updates.install").into(),
         audio_hint: tr("audio.hint").into(),
+        audio_via_playtube: tr("audio.via_playtube").into(),
+        audio_via_playtube_hint: tr("audio.via_playtube_hint").into(),
         phone_enabled: tr("phone.enabled").into(),
         phone_hint: trf("phone.hint", &app).into(),
         phone_pair: tr("phone.pair").into(),
@@ -768,7 +810,7 @@ fn build_app(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config) -
     };
     let mut tabs = Vec::new();
     for (index, home) in [config.home_youtube.clone(), config.home_music.clone()].iter().enumerate() {
-        let tab = Tab::new(&handle, &mut context, index, home, events.clone(), bounds)
+        let tab = Tab::new(&handle, &mut context, index, home, events.clone(), bounds, config.audio.via_playtube)
             .map_err(|e| format!("{}\n\n({e})", tr("error.webview")))?;
         tabs.push(tab);
     }
@@ -805,6 +847,7 @@ fn build_app(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config) -
         music: RefCell::new(music::MusicState::default()),
         music_timer: slint::Timer::default(),
         music_login: Cell::new(false),
+        relays: RefCell::new([None, None]),
     }))
 }
 

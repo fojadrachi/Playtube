@@ -25,6 +25,8 @@ pub trait TabEvents: 'static {
     fn fullscreen_changed(&self, tab: usize, fullscreen: bool);
     /// Ein Link wollte ein neues Fenster öffnen - stattdessen im selben Tab laden.
     fn open_url(&self, tab: usize, url: String);
+    /// Nachricht unserer Skripte in der Seite (window.ipc.postMessage), z. B. Ton für Playtube.
+    fn ipc(&self, tab: usize, body: String);
 }
 
 pub struct Tab {
@@ -44,9 +46,11 @@ impl Tab {
         home: &str,
         events: Rc<dyn TabEvents>,
         bounds: Rect,
+        audio_tap: bool,
     ) -> wry::Result<Rc<Self>> {
         let page_events = events.clone();
         let window_events = events.clone();
+        let ipc_events = events.clone();
         let webview = WebViewBuilder::new_with_web_context(context)
             .with_url(home)
             .with_bounds(bounds)
@@ -57,6 +61,9 @@ impl Tab {
             .with_initialization_script(scripts::in_document(&scripts::audio_router("")))
             // Keine "Website verlassen?"-Abfrage, wenn Playtube selbst eine neue Seite lädt.
             .with_initialization_script(scripts::NO_LEAVE_PROMPT)
+            // Playtube-Ton (src/relay.rs): Ton der Seite abgreifen und über Playtube.exe ausgeben.
+            .with_initialization_script(scripts::audio_tap(audio_tap))
+            .with_ipc_handler(move |request| ipc_events.ipc(index, request.into_body()))
             // Links mit target=_blank im selben Tab öffnen statt in einem neuen Fenster.
             .with_new_window_req_handler(move |url, _features| {
                 window_events.open_url(index, url);

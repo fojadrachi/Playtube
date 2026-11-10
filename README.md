@@ -75,6 +75,16 @@ tokio-tungstenite/rustls) und [src/jam_ui.rs](src/jam_ui.rs); der Dienst selbst 
 Projekt `playtube-jam` (Cloudflare Worker). Server änderbar über `"jam": {"server": "…"}` in der
 `config.json` (Standard `https://jam.fojadrachi.de`).
 
+## Playtube-Ton (Discord-Streams, Sonar)
+
+WebView2 spielt den Ton nicht in `Playtube.exe`, sondern im Hilfsprozess `msedgewebview2.exe` ab – den
+ordnet Windows nicht Playtubes Prozessbaum zu (gemessen: Prozess-Loopback auf Playtube.exe = Stille).
+Deshalb hörten Discord-Zuschauer beim Teilen des Fensters nichts, und Sonar zeigte „MSEDGEWEBVIEW2“.
+Mit „Ton über Playtube ausgeben“ (Einstellungen › Audioausgabe, Standard an) greift
+[src/js/audio_tap.js](src/js/audio_tap.js) den Ton der Video-Elemente per Web Audio ab (die Edge-Engine
+selbst bleibt stumm) und schickt ihn an [src/relay.rs](src/relay.rs), das ihn per WASAPI aus Playtube.exe
+auf dem eingestellten Gerät ausgibt (etwa 70 ms Vorlauf).
+
 ## Fernsteuerung (Stream Dock)
 
 Named Pipe `\\.\pipe\Playtube.Remote.Playtube`, eine JSON-Nachricht pro Zeile, z. B.

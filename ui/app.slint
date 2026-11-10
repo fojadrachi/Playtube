@@ -80,6 +80,8 @@ export struct Texts {
     updates-check-now: string,
     updates-install: string,
     audio-hint: string,
+    audio-via-playtube: string,
+    audio-via-playtube-hint: string,
     phone-enabled: string,
     phone-hint: string,
     phone-pair: string,
@@ -221,6 +223,7 @@ export component AppWindow inherits Window {
     in property <[string]> audio-devices;
     in-out property <int> youtube-output: 0;
     in-out property <int> music-output: 0;
+    in-out property <bool> audio-via-playtube: true;
     in-out property <bool> phone-enabled;
     in property <bool> phone-running;
     in property <string> phone-status;
@@ -413,6 +416,8 @@ export component AppWindow inherits Window {
                             Row { FieldLabel { text: root.t.field-youtube; } ComboBox { model: root.audio-devices; current-index <=> root.youtube-output; min-width: 360px; } }
                             Row { FieldLabel { text: root.t.field-music; } ComboBox { model: root.audio-devices; current-index <=> root.music-output; min-width: 360px; } }
                             Hint { text: root.t.audio-hint; }
+                            CheckBox { text: root.t.audio-via-playtube; checked <=> root.audio-via-playtube; }
+                            Hint { text: root.t.audio-via-playtube-hint; }
                         }
                     }
 

@@ -41,11 +41,19 @@ impl Default for Updates {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Audio {
     pub youtube_output: String,
     pub music_output: String,
+    /// Ton über Playtube.exe ausgeben statt über die Edge-Engine (Discord-Streams, Sonar)
+    pub via_playtube: bool,
+}
+
+impl Default for Audio {
+    fn default() -> Self {
+        Self { youtube_output: String::new(), music_output: String::new(), via_playtube: true }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
