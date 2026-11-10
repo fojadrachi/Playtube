@@ -73,6 +73,9 @@ export struct Texts {
     field-music: string,
     field-start-tab: string,
     field-language: string,
+    field-music-view: string,
+    music-view-playtube: string,
+    music-view-original: string,
     discord-show-idle: string,
     updates-check-now: string,
     updates-install: string,
@@ -227,6 +230,8 @@ export component AppWindow inherits Window {
     in property <[string]> languages;
     in-out property <int> language-index: 0;
     in-out property <int> start-tab-index: 0;
+    // 0 = Playtube-Ansicht, 1 = Original-Seite von YouTube Music
+    in-out property <int> music-view-index: 0;
     in property <string> saved-text;
 
     callback tab-selected(int);
@@ -244,6 +249,8 @@ export component AppWindow inherits Window {
 
     // Playtube-Ansicht für YouTube Music (src/music.rs)
     in property <bool> music-view;
+    // Google-Anmeldung läuft (Knopf "Fertig" in der Navigationsleiste)
+    in property <bool> music-login;
     in property <string> music-view-label;
     callback toggle-music-view();
 
@@ -340,7 +347,7 @@ export component AppWindow inherits Window {
                 NavButton { text: "\u{E72C}"; enabled: root.current-tab < 2; clicked => { root.reload(); } }
                 NavButton { text: "\u{E80F}"; enabled: root.current-tab < 2; clicked => { root.go-home(); } }
                 Rectangle { width: 6px; }
-                if root.current-tab == 1 && !root.music-view: Rectangle {
+                if root.current-tab == 1 && root.music-login: Rectangle {
                     width: mv-text.preferred-width + 24px;
                     border-radius: 15px;
                     background: @linear-gradient(90deg, #7c3aed 0%, #ec4899 100%);
@@ -431,6 +438,7 @@ export component AppWindow inherits Window {
                             spacing: 8px;
                             Row { FieldLabel { text: root.t.field-start-tab; } ComboBox { model: ["YouTube", "YouTube Music"]; current-index <=> root.start-tab-index; min-width: 200px; } }
                             Row { FieldLabel { text: root.t.field-language; } ComboBox { model: root.languages; current-index <=> root.language-index; min-width: 200px; } }
+                            Row { FieldLabel { text: root.t.field-music-view; } ComboBox { model: [root.t.music-view-playtube, root.t.music-view-original]; current-index <=> root.music-view-index; min-width: 200px; } }
                         }
                     }
 

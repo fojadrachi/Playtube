@@ -583,6 +583,7 @@ impl App {
         ui.set_check_interval(config.updates.check_interval_hours as i32);
         ui.set_phone_enabled(config.lan_remote.enabled);
         ui.set_start_tab_index(if config.start_tab == "music" { 1 } else { 0 });
+        ui.set_music_view_index(if config.music_view { 0 } else { 1 });
         let language = i18n::current();
         ui.set_language_index(i18n::LANGUAGES.iter().position(|(code, _)| *code == language).unwrap_or(0) as i32);
         drop(config);
@@ -605,6 +606,7 @@ impl App {
             config.audio.music_output = values.get(ui.get_music_output() as usize).cloned().unwrap_or_default();
             config.lan_remote.enabled = ui.get_phone_enabled();
             config.start_tab = if ui.get_start_tab_index() == 1 { "music" } else { "youtube" }.into();
+            config.music_view = ui.get_music_view_index() == 0;
             config.language = i18n::LANGUAGES.get(ui.get_language_index() as usize).map(|(c, _)| c.to_string()).unwrap_or_default();
             config::save(&config);
         }
@@ -618,6 +620,8 @@ impl App {
         self.start_discord();
         self.apply_lan();
         self.setup_update_timer();
+        // Ansicht von YouTube Music sofort übernehmen
+        self.select_tab(self.current.get());
         self.ui.set_saved_text(tr("settings.saved").into());
         self.saved_timer.start(slint::TimerMode::SingleShot, Duration::from_secs(4), || {
             with_app(|app| app.ui.set_saved_text(SharedString::new()))
@@ -730,6 +734,9 @@ fn apply_texts(ui: &AppWindow) {
         field_music: tr("field.music").into(),
         field_start_tab: tr("field.start_tab").into(),
         field_language: tr("field.language").into(),
+        field_music_view: tr("field.music_view").into(),
+        music_view_playtube: tr("field.music_view.playtube").into(),
+        music_view_original: tr("field.music_view.original").into(),
         discord_show_idle: tr("discord.show_idle").into(),
         updates_check_now: tr("updates.check_now").into(),
         updates_install: tr("updates.install").into(),

@@ -132,12 +132,13 @@ impl App {
     /// Ist die Playtube-Ansicht gerade zu sehen? (Im Tab YouTube Music immer - außer während der
     /// Google-Anmeldung.)
     pub fn music_active(&self) -> bool {
-        self.current.get() == TAB_MUSIC && !self.music_login.get()
+        self.current.get() == TAB_MUSIC && !self.music_login.get() && self.config.borrow().music_view
     }
 
     /// Google-Anmeldung im YouTube-Music-Tab zeigen; nach der Anmeldung geht es von selbst zurück.
     pub fn music_start_login(&self) {
         self.music_login.set(true);
+        self.ui.set_music_login(true);
         self.tabs[TAB_MUSIC].load(LOGIN_URL);
         self.select_tab(TAB_MUSIC);
     }
@@ -147,6 +148,7 @@ impl App {
         if !self.music_login.replace(false) {
             return;
         }
+        self.ui.set_music_login(false);
         {
             let mut music = self.music();
             music.auth = None;
