@@ -93,6 +93,8 @@ struct App {
     jam_results: RefCell<Vec<jam::SearchResult>>,
     music: RefCell<music::MusicState>,
     music_timer: slint::Timer,
+    /// Google-Anmeldung läuft (YouTube-Music-Tab zeigt kurz die echte Seite)
+    music_login: Cell<bool>,
 }
 
 struct Events;
@@ -101,6 +103,9 @@ impl TabEvents for Events {
     fn url_changed(&self, tab: usize, url: String) {
         with_app(|app| {
             *app.tabs[tab].url.borrow_mut() = url.clone();
+            if tab == music::TAB_MUSIC {
+                app.music_url_changed(&url);
+            }
             if app.current.get() == tab && !app.music_active() {
                 app.ui.set_url_text(url.into());
             }
@@ -792,6 +797,7 @@ fn build_app(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config) -
         jam_results: RefCell::new(Vec::new()),
         music: RefCell::new(music::MusicState::default()),
         music_timer: slint::Timer::default(),
+        music_login: Cell::new(false),
     }))
 }
 

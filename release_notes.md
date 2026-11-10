@@ -2,6 +2,8 @@
 
 - **Keine „Website verlassen?“-Abfrage mehr:** Beim Abspielen aus der Playtube-Ansicht oder im Jam fragte
   YouTube Music manchmal nach, ob man die Seite verlassen will. Playtube verlässt sie jetzt immer ohne Nachfrage.
+- **YouTube Music nur noch in der Playtube-Ansicht:** Der Umschalter zur Original-Seite entfällt. Bist du nicht
+  angemeldet, zeigt „Anmelden“ kurz die Google-Anmeldung; danach geht es automatisch zurück.
 
 Neu in 2.4.0:
 
@@ -11,7 +13,6 @@ Neu in 2.4.0:
   Fortschritt, Lautstärke) und Warteschlange rechts – in Playtube-Lila/Pink.
 - **Premium bleibt erhalten:** Abgespielt wird weiterhin im echten YouTube-Music-Player mit deinem Login – keine
   Werbung, volle Qualität, eigene Uploads, dein Verlauf und deine Empfehlungen.
-- Umschalten jederzeit: „Original YouTube Music“ unten rechts, zurück über „Playtube-Ansicht“ oben.
 - Zurück/Vor/Neu laden/Start und die Adresszeile (als Suche) bedienen in der neuen Ansicht deren Seiten.
 - Behoben: Status und Zeit des laufenden Titels wurden bei YouTube Music teils falsch gelesen (betraf auch
   Discord, Handy-Steuerung und Stream Dock).
@@ -25,6 +26,8 @@ aktualisiert sich auch von selbst.
 
 - **No more "Leave site?" prompt:** when playing from the Playtube view or in a jam, YouTube Music sometimes asked
   whether to leave the page. Playtube now always leaves without asking.
+- **YouTube Music only in the Playtube view:** the switch to the original page is gone. If you are not signed in,
+  "Sign in" briefly shows the Google sign-in and returns automatically afterwards.
 
 New in 2.4.0:
 
@@ -34,7 +37,6 @@ New in 2.4.0:
   Playtube purple/pink.
 - **Premium stays:** playback still runs in the real YouTube Music player with your account – no ads, full
   quality, your uploads, history and recommendations.
-- Switch anytime: "Original YouTube Music" at the bottom right, back via "Playtube view" at the top.
 - Fixed: the state and time of the current track were sometimes read wrongly on YouTube Music (also affected
   Discord, phone control and Stream Dock).
 

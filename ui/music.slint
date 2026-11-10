@@ -30,7 +30,7 @@ export struct MusicTexts {
     play: string,
     queue: string,
     queue-empty: string,
-    original: string,
+    login: string,
     loading: string,
     login-hint: string,
     nothing: string,
@@ -92,7 +92,8 @@ export global Music {
     callback set-volume(float);
     callback toggle-queue();
     callback play-queue(int);
-    callback show-original();
+    // Google-Anmeldung kurz einblenden (danach automatisch zurück)
+    callback login();
 }
 
 component Icon inherits Text {
@@ -327,7 +328,18 @@ export component MusicView inherits Rectangle {
                             height: 44px;
                             HorizontalLayout {
                                 padding-left: 24px;
+                                spacing: 16px;
                                 Text { text: Music.t.login-hint; color: #fbcfe8; vertical-alignment: center; }
+                                Rectangle {
+                                    width: login-text.preferred-width + 32px;
+                                    height: 32px;
+                                    y: (parent.height - self.height) / 2;
+                                    border-radius: 16px;
+                                    background: login-touch.has-hover ? #ffffff : #f2f2f6;
+                                    login-text := Text { text: Music.t.login; color: #000000; font-size: 13px; font-weight: 700; }
+                                    login-touch := TouchArea { clicked => { Music.login(); } }
+                                }
+                                Rectangle { horizontal-stretch: 1; }
                             }
                         }
                         if Music.error != "": Rectangle {
@@ -538,16 +550,6 @@ export component PlayerBar inherits Rectangle {
                 maximum: 100;
                 value: Music.volume;
                 released(value) => { Music.set-volume(value); }
-            }
-            Rectangle {
-                width: original-text.preferred-width + 20px;
-                height: 28px;
-                y: (parent.height - self.height) / 2;
-                border-radius: 14px;
-                border-width: 1px;
-                border-color: o-touch.has-hover ? #ffffff : #55555f;
-                original-text := Text { text: Music.t.original; color: #e5e5ea; font-size: 12px; }
-                o-touch := TouchArea { clicked => { Music.show-original(); } }
             }
         }
     }

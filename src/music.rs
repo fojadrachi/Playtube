@@ -10,6 +10,8 @@ use std::time::Instant;
 
 /// Der YouTube-Music-Tab.
 pub const TAB_MUSIC: usize = 1;
+/// Google-Anmeldung für YouTube Music; danach leitet Google zurück zu music.youtube.com.
+const LOGIN_URL: &str = "https://accounts.google.com/ServiceLogin?service=youtube&passive=true&continue=https%3A%2F%2Fmusic.youtube.com%2F";
 const CARD_PX: u32 = 226;
 const ROW_PX: u32 = 120;
 const HEADER_PX: u32 = 300;
@@ -69,7 +71,7 @@ fn texts() -> MusicTexts {
         play: tr("music.play").into(),
         queue: tr("music.queue").into(),
         queue_empty: tr("music.queue_empty").into(),
-        original: tr("music.original").into(),
+        login: tr("music.login").into(),
         loading: tr("music.loading").into(),
         login_hint: tr("music.login_hint").into(),
         nothing: tr("music.nothing").into(),
@@ -98,8 +100,8 @@ pub fn wire(ui: &AppWindow) {
     music.on_set_volume(|v| with_app(|app| app.media_command(TAB_MUSIC, "set_volume", v as f64)));
     music.on_toggle_queue(|| with_app(|app| app.music_toggle_queue()));
     music.on_play_queue(|i| with_app(|app| app.music_play_queue(i as u32)));
-    music.on_show_original(|| with_app(|app| app.set_music_view(false)));
-    ui.on_toggle_music_view(|| with_app(|app| app.set_music_view(true)));
+    music.on_login(|| with_app(|app| app.music_start_login()));
+    ui.on_toggle_music_view(|| with_app(|app| app.music_end_login()));
 }
 
 fn card(id: usize, entry: &Entry, image: Option<Image>) -> MusicCard {
@@ -127,19 +129,39 @@ impl App {
         self.music.borrow_mut()
     }
 
-    /// Ist die Playtube-Ansicht gerade zu sehen?
+    /// Ist die Playtube-Ansicht gerade zu sehen? (Im Tab YouTube Music immer - außer während der
+    /// Google-Anmeldung.)
     pub fn music_active(&self) -> bool {
-        self.current.get() == TAB_MUSIC && self.config.borrow().music_view
+        self.current.get() == TAB_MUSIC && !self.music_login.get()
     }
 
-    /// Playtube-Ansicht an/aus (gespeichert).
-    pub fn set_music_view(&self, on: bool) {
-        {
-            let mut config = self.config.borrow_mut();
-            config.music_view = on;
-            config::save(&config);
+    /// Google-Anmeldung im YouTube-Music-Tab zeigen; nach der Anmeldung geht es von selbst zurück.
+    pub fn music_start_login(&self) {
+        self.music_login.set(true);
+        self.tabs[TAB_MUSIC].load(LOGIN_URL);
+        self.select_tab(TAB_MUSIC);
+    }
+
+    /// Zurück zur Playtube-Ansicht (nach der Anmeldung oder über "Fertig").
+    pub fn music_end_login(&self) {
+        if !self.music_login.replace(false) {
+            return;
         }
-        self.select_tab(self.current.get());
+        {
+            let mut music = self.music();
+            music.auth = None;
+            music.sidebar_loaded = false;
+        }
+        self.select_tab(TAB_MUSIC);
+        self.music_reload();
+    }
+
+    /// Adresswechsel im YouTube-Music-Tab: Ist die Anmeldung fertig (wieder auf music.youtube.com),
+    /// automatisch zurück zur Playtube-Ansicht.
+    pub fn music_url_changed(&self, url: &str) {
+        if self.music_login.get() && url.starts_with(ytm::ORIGIN) {
+            self.music_end_login();
+        }
     }
 
     /// Nach jedem Tabwechsel: WebView verstecken und Seite laden, falls nötig.

@@ -122,8 +122,6 @@ pub struct Config {
     pub remote_control: RemoteControl,
     pub lan_remote: LanRemote,
     pub jam: Jam,
-    /// Eigene Playtube-Ansicht (Spotify-Stil) statt der Original-Seite von YouTube Music
-    pub music_view: bool,
     /// "youtube" oder "music"
     pub start_tab: String,
     /// "de", "en" oder leer (= Windows-Sprache)
@@ -143,7 +141,6 @@ impl Default for Config {
             remote_control: RemoteControl::default(),
             lan_remote: LanRemote::default(),
             jam: Jam::default(),
-            music_view: true,
             start_tab: "youtube".into(),
             language: String::new(),
             home_youtube: "https://www.youtube.com/".into(),

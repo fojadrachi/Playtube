@@ -56,8 +56,9 @@ music.youtube.com selbst nutzt (InnerTube, [src/ytm.rs](src/ytm.rs)), mit dem Lo
 (Cookies der WebView, `SAPISIDHASH`). Abgespielt wird weiterhin im echten YouTube-Music-Player
 – er liegt dabei außerhalb des sichtbaren Bereichs –, deshalb bleiben Premium, eigene Uploads und
 Verlauf erhalten. Oberfläche: [ui/music.slint](ui/music.slint), Anbindung: [src/music.rs](src/music.rs).
-Umschalten über „Original YouTube Music“ bzw. „Playtube-Ansicht“ (gespeichert als `music_view` in der
-`config.json`). Angemeldet wird man in der Original-Ansicht.
+Die Original-Seite von YouTube Music wird nicht mehr angezeigt – außer zum Anmelden: „Anmelden“
+öffnet die Google-Anmeldung im Tab, nach der Weiterleitung zu music.youtube.com (oder über „Fertig“)
+geht es automatisch zurück.
 
 ## Playtube Jam
 
