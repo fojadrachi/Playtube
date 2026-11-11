@@ -64,6 +64,8 @@ pub struct Page {
     pub shelves: Vec<Shelf>,
     /// "Abspielen" für die ganze Seite (Album/Playlist)
     pub play: Option<Nav>,
+    /// Laut Antwort von YouTube angemeldet? (`None` = keine Angabe)
+    pub logged_in: Option<bool>,
 }
 
 // ---------------------------------------------------------------------------- Hilfen
@@ -329,6 +331,7 @@ pub fn parse_page(response: &Value) -> Page {
         }
     }
     collect_shelves(&response["contents"], &mut page.shelves);
+    page.logged_in = response_logged_in(response);
     // Ganze Seite abspielen: erster Song mit Playlist-ID (Album, Playlist).
     page.play = page
         .shelves
@@ -340,6 +343,16 @@ pub fn parse_page(response: &Value) -> Page {
             _ => None,
         });
     page
+}
+
+/// Ob YouTube die Anfrage als angemeldet behandelt hat (`responseContext.serviceTrackingParams`).
+pub fn response_logged_in(response: &Value) -> Option<bool> {
+    response["responseContext"]["serviceTrackingParams"].as_array()?.iter().find_map(|service| {
+        service["params"].as_array()?.iter().find_map(|p| match (p["key"].as_str(), p["value"].as_str()) {
+            (Some("logged_in"), Some(v)) => Some(v == "1"),
+            _ => None,
+        })
+    })
 }
 
 /// Adresse für den YouTube-Music-Player.
@@ -363,6 +376,13 @@ pub struct Auth {
     pub cookie: String,
     /// Wert des Cookies SAPISID (bzw. __Secure-3PAPISID) - nur angemeldet
     pub sapisid: Option<String>,
+    /// __Secure-1PAPISID / __Secure-3PAPISID (für SAPISID1PHASH / SAPISID3PHASH)
+    pub sapisid_1p: Option<String>,
+    pub sapisid_3p: Option<String>,
+    /// Konto-ID aus DATASYNC_ID (geht mit in die Prüfsumme ein)
+    pub user_session_id: Option<String>,
+    /// ytcfg der Seite war schon da (sonst nach dem Laden der Seite auffrischen)
+    pub complete: bool,
     pub client_version: String,
     pub visitor_data: Option<String>,
     pub hl: String,
@@ -381,16 +401,41 @@ impl Auth {
         let cookie = cookies.iter().map(|(n, v)| format!("{n}={v}")).collect::<Vec<_>>().join("; ");
         let find = |name: &str| cookies.iter().find(|(n, _)| n == name).map(|(_, v)| v.clone());
         let sapisid = find("SAPISID").or_else(|| find("__Secure-3PAPISID"));
+        // DATASYNC_ID: "<konto>||" oder bei Markenkonten "<kanal>||<konto>"
+        let datasync = opt_str(&ytcfg["DATASYNC_ID"]).unwrap_or_default();
+        let parts: Vec<&str> = datasync.split("||").collect();
+        let (delegated, user) = match parts.as_slice() {
+            [channel, user, ..] if !user.is_empty() => (Some(channel.to_string()), Some(user.to_string())),
+            [user, ..] if !user.is_empty() => (None, Some(user.to_string())),
+            _ => (None, None),
+        };
         Self {
             cookie,
             sapisid,
+            sapisid_1p: find("__Secure-1PAPISID"),
+            sapisid_3p: find("__Secure-3PAPISID"),
+            user_session_id: opt_str(&ytcfg["USER_SESSION_ID"]).or(user),
+            complete: ytcfg["INNERTUBE_CLIENT_VERSION"].is_string(),
             client_version: opt_str(&ytcfg["INNERTUBE_CLIENT_VERSION"]).unwrap_or_else(|| FALLBACK_CLIENT_VERSION.into()),
             visitor_data: opt_str(&ytcfg["VISITOR_DATA"]),
             hl: opt_str(&ytcfg["HL"]).unwrap_or_else(|| "de".into()),
             gl: opt_str(&ytcfg["GL"]).unwrap_or_else(|| "DE".into()),
             session_index: ytcfg["SESSION_INDEX"].as_u64().map(|n| n.to_string()).or_else(|| opt_str(&ytcfg["SESSION_INDEX"])).unwrap_or_else(|| "0".into()),
-            on_behalf_of: opt_str(&ytcfg["DELEGATED_SESSION_ID"]),
+            on_behalf_of: opt_str(&ytcfg["DELEGATED_SESSION_ID"]).or(delegated),
         }
+    }
+
+    /// `Authorization`-Kopfzeile wie bei der Webseite: SAPISIDHASH, SAPISID1PHASH, SAPISID3PHASH.
+    pub fn authorization(&self, timestamp: u64) -> Option<String> {
+        let parts: Vec<String> = [
+            ("SAPISIDHASH", &self.sapisid),
+            ("SAPISID1PHASH", &self.sapisid_1p),
+            ("SAPISID3PHASH", &self.sapisid_3p),
+        ]
+        .into_iter()
+        .filter_map(|(scheme, sid)| sid.as_deref().map(|sid| sid_hash(scheme, sid, timestamp, ORIGIN, self.user_session_id.as_deref())))
+        .collect();
+        (!parts.is_empty()).then(|| parts.join(" "))
     }
 
     fn context(&self) -> Value {
@@ -407,10 +452,24 @@ impl Auth {
 }
 
 /// `SAPISIDHASH <zeit>_<sha1(zeit SAPISID origin)>` - so meldet sich auch die Seite selbst an.
+#[cfg(test)]
 pub fn sapisid_hash(sapisid: &str, timestamp: u64, origin: &str) -> String {
+    sid_hash("SAPISIDHASH", sapisid, timestamp, origin, None)
+}
+
+/// Eine Prüfsumme `<schema> <zeit>_<sha1>[_u]`; mit Konto-ID geht diese vorne mit ein.
+fn sid_hash(scheme: &str, sid: &str, timestamp: u64, origin: &str, user: Option<&str>) -> String {
     use sha1::{Digest, Sha1};
-    let digest = Sha1::digest(format!("{timestamp} {sapisid} {origin}").as_bytes());
-    format!("SAPISIDHASH {timestamp}_{}", hex::encode(digest))
+    match user {
+        Some(user) => {
+            let digest = Sha1::digest(format!("{user} {timestamp} {sid} {origin}").as_bytes());
+            format!("{scheme} {timestamp}_{}_u", hex::encode(digest))
+        }
+        None => {
+            let digest = Sha1::digest(format!("{timestamp} {sid} {origin}").as_bytes());
+            format!("{scheme} {timestamp}_{}", hex::encode(digest))
+        }
+    }
 }
 
 fn client() -> reqwest::Client {
@@ -431,16 +490,28 @@ pub async fn call(auth: &Auth, endpoint: &str, mut body: Value) -> anyhow::Resul
     if !auth.cookie.is_empty() {
         request = request.header("Cookie", &auth.cookie);
     }
-    if let Some(sapisid) = &auth.sapisid {
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-        request = request.header("Authorization", sapisid_hash(sapisid, now, ORIGIN));
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    if let Some(authorization) = auth.authorization(now) {
+        request = request.header("Authorization", authorization).header("X-Youtube-Bootstrap-Logged-In", "true");
+    }
+    if let Some(page_id) = &auth.on_behalf_of {
+        request = request.header("X-Goog-PageId", page_id);
     }
     if let Some(v) = &auth.visitor_data {
         request = request.header("X-Goog-Visitor-Id", v);
     }
     let response = request.send().await?;
     anyhow::ensure!(response.status().is_success(), "YouTube Music: HTTP {}", response.status());
-    Ok(response.json().await?)
+    let value: Value = response.json().await?;
+    if auth.logged_in() && response_logged_in(&value) == Some(false) {
+        crate::log::line(&format!(
+            "ytm: {endpoint} als nicht angemeldet beantwortet (vollständig: {}, Konto-ID: {}, Kanal: {})",
+            auth.complete,
+            auth.user_session_id.is_some(),
+            auth.on_behalf_of.is_some()
+        ));
+    }
+    Ok(value)
 }
 
 pub async fn browse(auth: &Auth, browse_id: &str, params: Option<&str>) -> anyhow::Result<Page> {
@@ -548,6 +619,42 @@ mod tests {
         let hash = sapisid_hash("abc", 1_700_000_000, ORIGIN);
         assert!(hash.starts_with("SAPISIDHASH 1700000000_"));
         assert_eq!(hash.len(), "SAPISIDHASH 1700000000_".len() + 40);
+    }
+
+    #[test]
+    fn builds_all_three_hashes_with_account() {
+        let cookies = vec![
+            ("SAPISID".to_string(), "a".to_string()),
+            ("__Secure-1PAPISID".to_string(), "b".to_string()),
+            ("__Secure-3PAPISID".to_string(), "c".to_string()),
+        ];
+        let auth = Auth::from_parts(&cookies, &json!({ "INNERTUBE_CLIENT_VERSION": "1.2", "DATASYNC_ID": "123||" }));
+        assert!(auth.complete);
+        assert_eq!(auth.user_session_id.as_deref(), Some("123"));
+        assert_eq!(auth.on_behalf_of, None);
+        let header = auth.authorization(1_700_000_000).unwrap();
+        let parts: Vec<&str> = header.split(' ').collect();
+        assert_eq!(parts[0], "SAPISIDHASH");
+        assert!(parts[1].starts_with("1700000000_") && parts[1].ends_with("_u"));
+        assert_eq!(parts[2], "SAPISID1PHASH");
+        assert_eq!(parts[4], "SAPISID3PHASH");
+        // Markenkonto: Kanal || Konto
+        let brand = Auth::from_parts(&cookies, &json!({ "DATASYNC_ID": "kanal||konto" }));
+        assert_eq!(brand.on_behalf_of.as_deref(), Some("kanal"));
+        assert_eq!(brand.user_session_id.as_deref(), Some("konto"));
+        assert!(!brand.complete);
+        assert!(Auth::default().authorization(1).is_none());
+    }
+
+    #[test]
+    fn reads_logged_in_flag_from_response() {
+        let yes = json!({ "responseContext": { "serviceTrackingParams": [
+            { "service": "GFEEDBACK", "params": [{ "key": "logged_in", "value": "1" }] }] } });
+        let no = json!({ "responseContext": { "serviceTrackingParams": [
+            { "service": "GFEEDBACK", "params": [{ "key": "logged_in", "value": "0" }] }] } });
+        assert_eq!(response_logged_in(&yes), Some(true));
+        assert_eq!(response_logged_in(&no), Some(false));
+        assert_eq!(response_logged_in(&json!({})), None);
     }
 
     #[test]

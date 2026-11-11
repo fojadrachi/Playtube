@@ -20,7 +20,8 @@ const QUEUE_EVERY: Duration = Duration::from_secs(3);
 /// Liest die Einstellungen des eingeloggten YouTube Music aus der Seite (für die Anfragen).
 const YTCFG_JS: &str = "(function(){try{var g=function(k){return (window.ytcfg&&ytcfg.get)?ytcfg.get(k):null;};\
 return JSON.stringify({INNERTUBE_CLIENT_VERSION:g('INNERTUBE_CLIENT_VERSION'),VISITOR_DATA:g('VISITOR_DATA'),\
-HL:g('HL'),GL:g('GL'),SESSION_INDEX:g('SESSION_INDEX'),DELEGATED_SESSION_ID:g('DELEGATED_SESSION_ID')});}catch(e){return '{}';}})();";
+HL:g('HL'),GL:g('GL'),SESSION_INDEX:g('SESSION_INDEX'),DELEGATED_SESSION_ID:g('DELEGATED_SESSION_ID'),\
+DATASYNC_ID:g('DATASYNC_ID'),USER_SESSION_ID:g('USER_SESSION_ID')});}catch(e){return '{}';}})();";
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Target {
@@ -156,6 +157,16 @@ impl App {
         }
         self.select_tab(TAB_MUSIC);
         self.music_reload();
+    }
+
+    /// YouTube Music ist fertig geladen: Wurde die Anmeldung vorher ohne die Angaben der Seite
+    /// gebaut (direkt nach dem Start), jetzt vollständig neu holen und die Seiten neu laden.
+    pub fn music_page_loaded(&self) {
+        let incomplete = self.music.borrow().auth.as_ref().is_some_and(|a| !a.complete);
+        if incomplete {
+            self.music().sidebar_loaded = false;
+            self.music_reload();
+        }
     }
 
     /// Adresswechsel im YouTube-Music-Tab: Ist die Anmeldung fertig (wieder auf music.youtube.com),
@@ -339,6 +350,9 @@ impl App {
             }
         }
         let ui = self.ui.global::<Music>();
+        if page.logged_in == Some(false) {
+            ui.set_logged_in(false);
+        }
         let has_header = matches!(target, Target::Browse { .. } | Target::Library) && !page.title.is_empty();
         ui.set_has_header(has_header);
         ui.set_page_title(page.title.clone().into());

@@ -7,6 +7,9 @@
   MSEDGEWEBVIEW2 an.
 - Einstellbar unter Audioausgabe: „Ton über Playtube ausgeben“ (standardmäßig an). Die Geräteauswahl pro Tab gilt
   weiterhin.
+- **Playlists und Bibliothek laden zuverlässiger:** Playtube meldet sich jetzt wie die Webseite selbst bei YouTube
+  Music an (inkl. Markenkonten/Kanälen) und frischt die Anmeldung auf, sobald YouTube Music nach dem Start fertig
+  geladen ist – vorher blieben die Playlists nach einem Neustart teils leer.
 - **YouTube Music wahlweise im Original:** Unter Allgemein › „YouTube Music anzeigen als“ wählst du zwischen der
   Playtube-Ansicht und der Original-Seite.
 
@@ -24,6 +27,9 @@ aktualisiert sich auch von selbst.
   MSEDGEWEBVIEW2.
 - Configurable under Audio output: "Play sound through Playtube" (on by default). The per-tab device choice still
   applies.
+- **Playlists and library load more reliably:** Playtube now signs in to YouTube Music exactly like the website
+  (including brand accounts/channels) and refreshes the sign-in once YouTube Music has finished loading after
+  startup – previously playlists could stay empty after a restart.
 - **YouTube Music in the original layout if you like:** General › "Show YouTube Music as" lets you choose between the
   Playtube view and the original page.
 

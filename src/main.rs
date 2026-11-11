@@ -122,6 +122,9 @@ impl TabEvents for Events {
             if app.audio_routing_wanted() {
                 app.tabs[tab].set_device_names_allowed(true);
             }
+            if tab == music::TAB_MUSIC {
+                app.music_page_loaded();
+            }
             // Playtube-Ton nach jedem Seitenaufbau auf die aktuelle Einstellung bringen.
             let on = app.config.borrow().audio.via_playtube;
             app.tabs[tab].eval(&scripts::audio_tap_enable(on));
