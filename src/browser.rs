@@ -130,6 +130,49 @@ impl Tab {
         let _ = self.webview.evaluate_script_with_callback(js, move |raw| callback(scripts::decode_result(&raw)));
     }
 
+    /// Cookies für `url` lesen, ohne zu warten: `done` wird später im UI-Thread aufgerufen.
+    /// (wry's `cookies_for_url` wartet blockierend - innerhalb einer WebView2-Meldung kommt die
+    /// Antwort dann nie an und Playtube hängt.)
+    pub fn cookies_async(&self, url: &str, done: impl FnOnce(Vec<(String, String)>) + 'static) {
+        use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2_2;
+        use webview2_com::GetCookiesCompletedHandler;
+        let done: Rc<RefCell<Option<Box<dyn FnOnce(Vec<(String, String)>)>>>> = Rc::new(RefCell::new(Some(Box::new(done))));
+        let finish = done.clone();
+        let handler = GetCookiesCompletedHandler::create(Box::new(move |result, list| {
+            let mut cookies = Vec::new();
+            if result.is_ok() {
+                if let Some(list) = list {
+                    unsafe {
+                        let mut count = 0u32;
+                        list.Count(&mut count)?;
+                        for i in 0..count {
+                            let cookie = list.GetValueAtIndex(i)?;
+                            let mut name = windows::core::PWSTR::null();
+                            let mut value = windows::core::PWSTR::null();
+                            cookie.Name(&mut name)?;
+                            cookie.Value(&mut value)?;
+                            cookies.push((webview2_com::take_pwstr(name), webview2_com::take_pwstr(value)));
+                        }
+                    }
+                }
+            }
+            if let Some(done) = finish.borrow_mut().take() {
+                done(cookies);
+            }
+            Ok(())
+        }));
+        let started = self
+            .core()
+            .cast::<ICoreWebView2_2>()
+            .and_then(|core| unsafe { core.CookieManager() })
+            .and_then(|manager| unsafe { manager.GetCookies(&HSTRING::from(url), &handler) });
+        if started.is_err() {
+            if let Some(done) = done.borrow_mut().take() {
+                done(Vec::new());
+            }
+        }
+    }
+
     pub fn load(&self, url: &str) {
         let _ = self.webview.load_url(url);
     }

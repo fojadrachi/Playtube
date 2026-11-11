@@ -107,7 +107,8 @@ impl TabEvents for Events {
         with_app(|app| {
             *app.tabs[tab].url.borrow_mut() = url.clone();
             if tab == music::TAB_MUSIC {
-                app.music_url_changed(&url);
+                let url = url.clone();
+                let _ = slint::invoke_from_event_loop(move || with_app(|app| app.music_url_changed(&url)));
             }
             if app.current.get() == tab && !app.music_active() {
                 app.ui.set_url_text(url.into());
@@ -123,7 +124,8 @@ impl TabEvents for Events {
                 app.tabs[tab].set_device_names_allowed(true);
             }
             if tab == music::TAB_MUSIC {
-                app.music_page_loaded();
+                // Erst nach der WebView2-Meldung (dort darf nichts auf die WebView warten).
+                let _ = slint::invoke_from_event_loop(|| with_app(|app| app.music_page_loaded()));
             }
             // Playtube-Ton nach jedem Seitenaufbau auf die aktuelle Einstellung bringen.
             let on = app.config.borrow().audio.via_playtube;

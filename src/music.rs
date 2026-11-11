@@ -207,11 +207,11 @@ impl App {
             return;
         }
         self.music().auth_pending = Some(then);
-        let cookies: Vec<(String, String)> = self.tabs[TAB_MUSIC]
-            .webview
-            .cookies_for_url(ytm::ORIGIN)
-            .map(|list| list.into_iter().map(|c| (c.name().to_string(), c.value().to_string())).collect())
-            .unwrap_or_default();
+        // Cookies ohne Warten lesen (sonst kann Playtube hängen), danach ytcfg aus der Seite.
+        self.tabs[TAB_MUSIC].cookies_async(ytm::ORIGIN, |cookies| with_app(|app| app.music_auth_cookies(cookies)));
+    }
+
+    fn music_auth_cookies(&self, cookies: Vec<(String, String)>) {
         self.tabs[TAB_MUSIC].eval_with(YTCFG_JS, move |cfg| {
             let cfg = cfg.unwrap_or(Value::Null);
             let cookies = cookies.clone();

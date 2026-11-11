@@ -1,4 +1,10 @@
-## Playtube 2.5.0
+## Playtube 2.5.1
+
+- **Behoben: Playtube reagierte nicht mehr auf Klicks** (z. B. Einstellungen ließen sich nicht scrollen), nachdem
+  YouTube Music eine Seite geladen hatte. Ursache war das Auffrischen der Anmeldung aus 2.5.0, das auf die WebView
+  wartete; Playtube liest die Anmeldung jetzt ohne zu warten.
+
+Neu in 2.5.0:
 
 - **Ton in Discord-Streams:** Teilst du in Discord das Playtube-Fenster, hören die Zuschauer jetzt auch die Musik.
   Bisher kam der Ton aus dem Hilfsprozess der Edge-Engine („msedgewebview2“), den Discord nicht dem Fenster
@@ -13,12 +19,18 @@
 - **YouTube Music wahlweise im Original:** Unter Allgemein › „YouTube Music anzeigen als“ wählst du zwischen der
   Playtube-Ansicht und der Original-Seite.
 
-**Installieren:** `Playtube-Setup-2.5.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
+**Installieren:** `Playtube-Setup-2.5.1.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
 aktualisiert sich auch von selbst.
 
 ---
 
-## Playtube 2.5.0
+## Playtube 2.5.1
+
+- **Fixed: Playtube stopped responding to clicks** (e.g. the settings could not be scrolled) after YouTube Music
+  loaded a page. The sign-in refresh added in 2.5.0 waited on the WebView; Playtube now reads the sign-in without
+  waiting.
+
+New in 2.5.0:
 
 - **Sound in Discord streams:** when you share the Playtube window in Discord, viewers now hear the music too.
   Previously the sound came from the Edge engine's helper process ("msedgewebview2"), which Discord does not link to
@@ -33,4 +45,4 @@ aktualisiert sich auch von selbst.
 - **YouTube Music in the original layout if you like:** General › "Show YouTube Music as" lets you choose between the
   Playtube view and the original page.
 
-**Install:** run `Playtube-Setup-2.5.0.exe` – it replaces any older Playtube. Playtube also updates itself.
+**Install:** run `Playtube-Setup-2.5.1.exe` – it replaces any older Playtube. Playtube also updates itself.
