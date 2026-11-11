@@ -46,13 +46,14 @@ impl Default for Updates {
 pub struct Audio {
     pub youtube_output: String,
     pub music_output: String,
-    /// Ton über Playtube.exe ausgeben statt über die Edge-Engine (Discord-Streams, Sonar)
-    pub via_playtube: bool,
+    /// Tonausgabe "Für Discord-Streams": Ton über Playtube.exe statt über die Edge-Engine
+    /// (Discord-Fenster-Streams, Sonar zeigt "Playtube"). Standard: aus = normale Tonausgabe.
+    pub stream_mode: bool,
 }
 
 impl Default for Audio {
     fn default() -> Self {
-        Self { youtube_output: String::new(), music_output: String::new(), via_playtube: true }
+        Self { youtube_output: String::new(), music_output: String::new(), stream_mode: false }
     }
 }
 

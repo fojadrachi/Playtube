@@ -14,9 +14,12 @@ use webview2_com::{
 };
 use windows::core::{Interface, HSTRING};
 use wry::dpi::{LogicalPosition, LogicalSize};
-use wry::{BackgroundThrottlingPolicy, NewWindowResponse, PageLoadEvent, Rect, WebContext, WebView, WebViewBuilder, WebViewExtWindows};
+use wry::{BackgroundThrottlingPolicy, NewWindowResponse, PageLoadEvent, Rect, WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows, WebViewExtWindows};
 
 const YOUTUBE_ORIGINS: [&str; 2] = ["https://www.youtube.com", "https://music.youtube.com"];
+
+/// Argumente für die Edge-Engine (WebView2), siehe `Tab::new`.
+const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,BackgroundVideoPauseOptimization,BackgroundVideoTrackOptimization     --autoplay-policy=no-user-gesture-required --disable-background-media-suspend --disable-renderer-backgrounding     --disable-background-timer-throttling";
 
 /// Ereignisse eines Tabs an die App (laufen im UI-Thread).
 pub trait TabEvents: 'static {
@@ -55,6 +58,12 @@ impl Tab {
             .with_url(home)
             .with_bounds(bounds)
             .with_autoplay(true)
+            // Eigene Browser-Argumente ersetzen die von wry (deshalb dessen Standard + Autoplay mit
+            // angeben). Zusätzlich: Medien im Hintergrund nie anhalten. Chromium pausiert sonst
+            // ein verstecktes Video, das (für die Engine) stumm ist - das passiert im Modus
+            // "Für Discord-Streams", weil der Ton über Playtube läuft, und führte zu ständigem
+            // Play/Pause, sobald ein anderer Tab (Einstellungen, Jam) offen war.
+            .with_additional_browser_args(BROWSER_ARGS)
             .with_devtools(cfg!(debug_assertions))
             // Musik soll auch bei minimiertem/verstecktem Fenster ungebremst weiterlaufen.
             .with_background_throttling(BackgroundThrottlingPolicy::Disabled)

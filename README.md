@@ -80,7 +80,7 @@ Projekt `playtube-jam` (Cloudflare Worker). Server änderbar über `"jam": {"ser
 WebView2 spielt den Ton nicht in `Playtube.exe`, sondern im Hilfsprozess `msedgewebview2.exe` ab – den
 ordnet Windows nicht Playtubes Prozessbaum zu (gemessen: Prozess-Loopback auf Playtube.exe = Stille).
 Deshalb hörten Discord-Zuschauer beim Teilen des Fensters nichts, und Sonar zeigte „MSEDGEWEBVIEW2“.
-Mit „Ton über Playtube ausgeben“ (Einstellungen › Audioausgabe, Standard an) greift
+Mit „Tonausgabe: Für Discord-Streams“ (Einstellungen › Audioausgabe; Standard ist „Normal“) greift
 [src/js/audio_tap.js](src/js/audio_tap.js) den Ton der Video-Elemente per Web Audio ab (die Edge-Engine
 selbst bleibt stumm) und schickt ihn an [src/relay.rs](src/relay.rs), das ihn per WASAPI aus Playtube.exe
 auf dem eingestellten Gerät ausgibt (etwa 70 ms Vorlauf).

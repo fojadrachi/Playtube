@@ -44,7 +44,8 @@
         var ctx = context();
         var source;
         try { source = ctx.createMediaElementSource(el); } catch (e) { return; }
-        var proc = ctx.createScriptProcessor(1024, 2, 2);
+        // 2048 Frames (~43 ms) je Stück: weniger Aufrufe, robuster gegen kurze Ruckler der Seite.
+        var proc = ctx.createScriptProcessor(2048, 2, 2);
         var sink = ctx.createMediaStreamDestination();
         source.connect(proc);
         proc.connect(sink);

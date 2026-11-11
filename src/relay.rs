@@ -10,10 +10,12 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-/// Ziel-Vorlauf im Puffer (ms): klein genug für Lippensynchronität, groß genug gegen Aussetzer.
-const TARGET_MS: u32 = 70;
-/// Mehr als das im Puffer: älteste Daten verwerfen (Drift, Hänger).
-const MAX_MS: u32 = 250;
+/// Ziel-Vorlauf im Puffer (ms): groß genug, dass kurze Ruckler der Seite keine Aussetzer machen.
+const TARGET_MS: u32 = 140;
+/// Mehr als das im Puffer: auf den Vorlauf zurückkürzen (Uhren-Drift, Hänger).
+const MAX_MS: u32 = 450;
+/// Länge der Ein-/Ausblendung bei Aussetzern (Frames bei 48 kHz ~ 5 ms) - verhindert Knacken.
+const FADE_FRAMES: usize = 240;
 
 struct Shared {
     buffer: Mutex<VecDeque<i16>>,
@@ -163,6 +165,8 @@ unsafe fn play(shared: &Shared, device_name: &str) -> windows::core::Result<()> 
         let render: IAudioRenderClient = client.GetService()?;
         client.Start()?;
         let target = (rate * TARGET_MS / 1000 * 2) as usize;
+        let mut last = [0i16; 2];
+        let mut fade_in = 0usize;
         let result = loop {
             if shared.stop.load(Ordering::Relaxed) || shared.reopen.load(Ordering::Relaxed) {
                 break Ok(());
@@ -188,21 +192,36 @@ unsafe fn play(shared: &Shared, device_name: &str) -> windows::core::Result<()> 
             }
             let mut written = 0;
             if shared.primed.load(Ordering::Relaxed) {
-                for slot in out.iter_mut() {
-                    match buffer.pop_front() {
-                        Some(s) => {
-                            *slot = s;
-                            written += 1;
-                        }
-                        None => break,
+                for frame in out.chunks_exact_mut(2) {
+                    if buffer.len() < 2 {
+                        break;
                     }
+                    // Nach einer Pause sanft einblenden.
+                    let gain = if fade_in < FADE_FRAMES { fade_in as f32 / FADE_FRAMES as f32 } else { 1.0 };
+                    fade_in = fade_in.saturating_add(1);
+                    for slot in frame.iter_mut() {
+                        let sample = buffer.pop_front().unwrap_or(0);
+                        *slot = (sample as f32 * gain) as i16;
+                    }
+                    last = [frame[0], frame[1]];
+                    written += 2;
                 }
-                if buffer.is_empty() {
+                if buffer.len() < 2 {
                     shared.primed.store(false, Ordering::Relaxed);
                 }
             }
             drop(buffer);
-            out[written..].fill(0);
+            // Aussetzer: vom letzten Wert sanft auf Stille ausblenden statt hart abzuschneiden.
+            let rest = &mut out[written..];
+            for (i, frame) in rest.chunks_exact_mut(2).enumerate() {
+                let gain = if i < FADE_FRAMES { 1.0 - (i + 1) as f32 / FADE_FRAMES as f32 } else { 0.0 };
+                frame[0] = (last[0] as f32 * gain) as i16;
+                frame[1] = (last[1] as f32 * gain) as i16;
+            }
+            if written < out.len() {
+                last = [0, 0];
+                fade_in = 0;
+            }
             let _ = render.ReleaseBuffer(free, 0);
         };
         let _ = client.Stop();

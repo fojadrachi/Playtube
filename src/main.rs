@@ -128,7 +128,7 @@ impl TabEvents for Events {
                 let _ = slint::invoke_from_event_loop(|| with_app(|app| app.music_page_loaded()));
             }
             // Playtube-Ton nach jedem Seitenaufbau auf die aktuelle Einstellung bringen.
-            let on = app.config.borrow().audio.via_playtube;
+            let on = app.config.borrow().audio.stream_mode;
             app.tabs[tab].eval(&scripts::audio_tap_enable(on));
         });
     }
@@ -158,10 +158,12 @@ impl App {
         let height = size.height as f64 / scale;
         let top = self.ui.get_content_top() as f64;
         let music_view = self.music_active();
+        let current = self.current.get();
         for tab in &self.tabs {
-            // Playtube-Ansicht: YouTube Music bleibt "sichtbar" (sonst startet die Wiedergabe nicht),
-            // liegt aber außerhalb des Fensters - davor ist die eigene Oberfläche.
-            let x = if music_view && tab.index == music::TAB_MUSIC { -(width + 4000.0) } else { 0.0 };
+            // Nicht gezeigte Tabs (und YouTube Music hinter der Playtube-Ansicht) bleiben für die
+            // Edge-Engine "sichtbar", liegen aber außerhalb des Fensters - siehe select_tab.
+            let away = (music_view && tab.index == music::TAB_MUSIC) || tab.index != current;
+            let x = if away { -(width + 4000.0) } else { 0.0 };
             tab.set_bounds(x, top, width, height - top);
         }
     }
@@ -169,9 +171,13 @@ impl App {
     fn select_tab(&self, index: usize) {
         self.current.set(index);
         self.ui.set_current_tab(index as i32);
+        // Tabs nie verstecken, sondern nur aus dem Fenster schieben (layout): Eine versteckte Seite
+        // startet keine neue Wiedergabe (Jam, Playtube-Ansicht, Playlist aus der Ferne) und hält im
+        // Modus "Für Discord-Streams" ein für sie stummes Video an - das gab ständiges Play/Pause.
         for tab in &self.tabs {
-            tab.set_visible(tab.index == index);
+            tab.set_visible(true);
         }
+        self.layout();
         if index < self.tabs.len() {
             self.ui.set_url_text(self.tabs[index].url.borrow().clone().into());
             let _ = self.tabs[index].webview.focus();
@@ -420,7 +426,7 @@ impl App {
         self.tabs[0].set_audio_output(&config.audio.youtube_output);
         self.tabs[1].set_audio_output(&config.audio.music_output);
         // Playtube-Ton: an/aus und Ausgabegerät je Tab
-        let on = config.audio.via_playtube;
+        let on = config.audio.stream_mode;
         let outputs = [config.audio.youtube_output.clone(), config.audio.music_output.clone()];
         drop(config);
         let mut relays = self.relays.borrow_mut();
@@ -436,7 +442,7 @@ impl App {
 
     /// Ton aus der Seite (js/audio_tap.js) über Playtube.exe ausgeben.
     fn on_tab_ipc(&self, tab: usize, body: &str) {
-        if tab > 1 || !self.config.borrow().audio.via_playtube {
+        if tab > 1 || !self.config.borrow().audio.stream_mode {
             return;
         }
         let Some((rate, samples)) = relay::parse_message(body) else { return };
@@ -625,7 +631,7 @@ impl App {
         ui.set_updates_enabled(config.updates.enabled);
         ui.set_check_interval(config.updates.check_interval_hours as i32);
         ui.set_phone_enabled(config.lan_remote.enabled);
-        ui.set_audio_via_playtube(config.audio.via_playtube);
+        ui.set_audio_mode_index(if config.audio.stream_mode { 1 } else { 0 });
         ui.set_start_tab_index(if config.start_tab == "music" { 1 } else { 0 });
         ui.set_music_view_index(if config.music_view { 0 } else { 1 });
         let language = i18n::current();
@@ -649,7 +655,7 @@ impl App {
             config.audio.youtube_output = values.get(ui.get_youtube_output() as usize).cloned().unwrap_or_default();
             config.audio.music_output = values.get(ui.get_music_output() as usize).cloned().unwrap_or_default();
             config.lan_remote.enabled = ui.get_phone_enabled();
-            config.audio.via_playtube = ui.get_audio_via_playtube();
+            config.audio.stream_mode = ui.get_audio_mode_index() == 1;
             config.start_tab = if ui.get_start_tab_index() == 1 { "music" } else { "youtube" }.into();
             config.music_view = ui.get_music_view_index() == 0;
             config.language = i18n::LANGUAGES.get(ui.get_language_index() as usize).map(|(c, _)| c.to_string()).unwrap_or_default();
@@ -786,8 +792,10 @@ fn apply_texts(ui: &AppWindow) {
         updates_check_now: tr("updates.check_now").into(),
         updates_install: tr("updates.install").into(),
         audio_hint: tr("audio.hint").into(),
-        audio_via_playtube: tr("audio.via_playtube").into(),
-        audio_via_playtube_hint: tr("audio.via_playtube_hint").into(),
+        audio_mode: tr("audio.mode").into(),
+        audio_mode_normal: tr("audio.mode.normal").into(),
+        audio_mode_stream: tr("audio.mode.stream").into(),
+        audio_mode_hint: tr("audio.mode.hint").into(),
         phone_enabled: tr("phone.enabled").into(),
         phone_hint: trf("phone.hint", &app).into(),
         phone_pair: tr("phone.pair").into(),
@@ -815,7 +823,7 @@ fn build_app(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config) -
     };
     let mut tabs = Vec::new();
     for (index, home) in [config.home_youtube.clone(), config.home_music.clone()].iter().enumerate() {
-        let tab = Tab::new(&handle, &mut context, index, home, events.clone(), bounds, config.audio.via_playtube)
+        let tab = Tab::new(&handle, &mut context, index, home, events.clone(), bounds, config.audio.stream_mode)
             .map_err(|e| format!("{}\n\n({e})", tr("error.webview")))?;
         tabs.push(tab);
     }
