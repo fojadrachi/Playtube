@@ -108,6 +108,23 @@ impl Default for Jam {
     }
 }
 
+/// Diagnosedaten (src/diag.rs): Standard an, abschaltbar in den Einstellungen.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Diagnostics {
+    pub enabled: bool,
+    /// Zufällige Kennung dieser Installation (wird beim ersten Senden erzeugt)
+    pub install_id: String,
+    /// Zeitstempel (Unix-Sekunden) der letzten gesendeten Logzeile
+    pub last_sent: u64,
+}
+
+impl Default for Diagnostics {
+    fn default() -> Self {
+        Self { enabled: true, install_id: String::new(), last_sent: 0 }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WindowSize {
@@ -131,6 +148,7 @@ pub struct Config {
     pub remote_control: RemoteControl,
     pub lan_remote: LanRemote,
     pub jam: Jam,
+    pub diagnostics: Diagnostics,
     /// YouTube Music in der Playtube-Ansicht (Spotify-Stil) statt der Original-Seite
     pub music_view: bool,
     /// "youtube" oder "music"
@@ -152,6 +170,7 @@ impl Default for Config {
             remote_control: RemoteControl::default(),
             lan_remote: LanRemote::default(),
             jam: Jam::default(),
+            diagnostics: Diagnostics::default(),
             music_view: true,
             start_tab: "youtube".into(),
             language: String::new(),
@@ -231,5 +250,8 @@ mod tests {
         assert_eq!(config.lan_remote.port, crate::lan::DEFAULT_PORT);
         assert_eq!(config.lan_remote.devices[0].name, "Pixel");
         assert!(config.updates.enabled);
+        // Diagnose ist Opt-out: ohne Eintrag an.
+        assert!(config.diagnostics.enabled);
+        assert!(config.diagnostics.install_id.is_empty());
     }
 }

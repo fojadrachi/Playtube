@@ -443,7 +443,7 @@ async fn dns_override(server: &str) -> Option<std::net::SocketAddr> {
     Some(addr)
 }
 
-async fn http_client(server: &str) -> reqwest::Client {
+pub(crate) async fn http_client(server: &str) -> reqwest::Client {
     let mut builder = reqwest::Client::builder()
         .user_agent(format!("Playtube/{}", crate::config::VERSION))
         .timeout(Duration::from_secs(10));

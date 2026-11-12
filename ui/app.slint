@@ -88,6 +88,10 @@ export struct Texts {
     phone-hint: string,
     phone-pair: string,
     phone-forget: string,
+    section-diag: string,
+    diag-enabled: string,
+    diag-hint: string,
+    diag-send-now: string,
 }
 
 component TabButton inherits Rectangle {
@@ -239,6 +243,9 @@ export component AppWindow inherits Window {
     // 0 = Playtube-Ansicht, 1 = Original-Seite von YouTube Music
     in-out property <int> music-view-index: 0;
     in property <string> saved-text;
+    in-out property <bool> diag-enabled: true;
+    in property <string> diag-status;
+    in property <bool> diag-busy;
 
     callback tab-selected(int);
     callback navigate(string);
@@ -252,6 +259,7 @@ export component AppWindow inherits Window {
     callback install-update();
     callback pair-phone();
     callback forget-phones();
+    callback send-diagnostics();
 
     // Playtube-Ansicht für YouTube Music (src/music.rs)
     in property <bool> music-view;
@@ -447,6 +455,17 @@ export component AppWindow inherits Window {
                             Row { FieldLabel { text: root.t.field-start-tab; } ComboBox { model: ["YouTube", "YouTube Music"]; current-index <=> root.start-tab-index; min-width: 200px; } }
                             Row { FieldLabel { text: root.t.field-language; } ComboBox { model: root.languages; current-index <=> root.language-index; min-width: 200px; } }
                             Row { FieldLabel { text: root.t.field-music-view; } ComboBox { model: [root.t.music-view-playtube, root.t.music-view-original]; current-index <=> root.music-view-index; min-width: 200px; } }
+                        }
+                    }
+
+                    GroupBox {
+                        title: root.t.section-diag;
+                        VerticalLayout {
+                            spacing: 8px;
+                            CheckBox { text: root.t.diag-enabled; checked <=> root.diag-enabled; }
+                            Row { Button { text: root.t.diag-send-now; enabled: !root.diag-busy; clicked => { root.send-diagnostics(); } } }
+                            if root.diag-status != "": Hint { text: root.diag-status; }
+                            Hint { text: root.t.diag-hint; }
                         }
                     }
 

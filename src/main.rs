@@ -9,6 +9,7 @@
 mod audio;
 mod browser;
 mod config;
+mod diag;
 mod discord;
 mod i18n;
 mod instance;
@@ -542,6 +543,55 @@ impl App {
         self.show_devices();
     }
 
+    // ------------------------------------------------------------------ Diagnose
+
+    /// Neue Logzeilen an den Server schicken. Automatisch nur, wenn die Option an ist und es
+    /// seit dem letzten Bericht neue Zeilen gibt; `manual` = Knopf "Jetzt senden".
+    fn send_diagnostics(&self, manual: bool) {
+        let (body, latest, server) = {
+            let mut config = self.config.borrow_mut();
+            if !manual && !config.diagnostics.enabled {
+                return;
+            }
+            let log_text = std::fs::read_to_string(diag::log_path()).unwrap_or_default();
+            let (lines, latest) = diag::collect(&log_text, config.diagnostics.last_sent);
+            if lines.is_empty() {
+                if manual {
+                    self.ui.set_diag_status(tr("diag.nothing").into());
+                }
+                return;
+            }
+            if config.diagnostics.install_id.is_empty() {
+                config.diagnostics.install_id = diag::new_install_id();
+                config::save(&config);
+            }
+            (diag::report(&config.diagnostics.install_id, &lines, ""), latest, config.jam.server.clone())
+        };
+        if manual {
+            self.ui.set_diag_busy(true);
+            self.ui.set_diag_status(tr("diag.sending").into());
+        }
+        self.runtime.spawn(async move {
+            let result = diag::send(&server, body).await.map_err(|e| format!("{e:#}"));
+            on_ui(move |app| {
+                app.ui.set_diag_busy(false);
+                match result {
+                    Ok(_) => {
+                        let mut config = app.config.borrow_mut();
+                        config.diagnostics.last_sent = latest;
+                        config::save(&config);
+                        if manual {
+                            app.ui.set_diag_status(trf("diag.sent", &[("id", &config.diagnostics.install_id)]).into());
+                        }
+                    }
+                    // Nicht ins Log schreiben – sonst schickt der nächste Versuch nur den eigenen Fehler.
+                    Err(e) if manual => app.ui.set_diag_status(trf("diag.failed", &[("error", &e)]).into()),
+                    Err(_) => {}
+                }
+            });
+        });
+    }
+
     // ------------------------------------------------------------------ Updates
 
     fn setup_update_timer(&self) {
@@ -631,6 +681,7 @@ impl App {
         ui.set_updates_enabled(config.updates.enabled);
         ui.set_check_interval(config.updates.check_interval_hours as i32);
         ui.set_phone_enabled(config.lan_remote.enabled);
+        ui.set_diag_enabled(config.diagnostics.enabled);
         ui.set_audio_mode_index(if config.audio.stream_mode { 1 } else { 0 });
         ui.set_start_tab_index(if config.start_tab == "music" { 1 } else { 0 });
         ui.set_music_view_index(if config.music_view { 0 } else { 1 });
@@ -655,6 +706,7 @@ impl App {
             config.audio.youtube_output = values.get(ui.get_youtube_output() as usize).cloned().unwrap_or_default();
             config.audio.music_output = values.get(ui.get_music_output() as usize).cloned().unwrap_or_default();
             config.lan_remote.enabled = ui.get_phone_enabled();
+            config.diagnostics.enabled = ui.get_diag_enabled();
             config.audio.stream_mode = ui.get_audio_mode_index() == 1;
             config.start_tab = if ui.get_start_tab_index() == 1 { "music" } else { "youtube" }.into();
             config.music_view = ui.get_music_view_index() == 0;
@@ -800,6 +852,10 @@ fn apply_texts(ui: &AppWindow) {
         phone_hint: trf("phone.hint", &app).into(),
         phone_pair: tr("phone.pair").into(),
         phone_forget: tr("phone.forget").into(),
+        section_diag: tr("section.diag").into(),
+        diag_enabled: tr("diag.enabled").into(),
+        diag_hint: tr("diag.hint").into(),
+        diag_send_now: tr("diag.send_now").into(),
     });
     jam_ui::apply_jam_texts(ui);
     music::apply_music_texts(ui);
@@ -912,6 +968,18 @@ fn start(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config, jam_c
     tray_timer.start(slint::TimerMode::Repeated, Duration::from_millis(100), || with_app(|app| app.poll_tray()));
     app.timers.borrow_mut().extend([media_timer, tray_timer]);
 
+    // Diagnose: kurz nach dem Start (dann steht ein Absturz vom letzten Mal im Log) und alle 6 Stunden.
+    let diag_timer = slint::Timer::default();
+    diag_timer.start(slint::TimerMode::SingleShot, Duration::from_secs(30), || {
+        with_app(|app| {
+            app.send_diagnostics(false);
+            let repeat = slint::Timer::default();
+            repeat.start(slint::TimerMode::Repeated, Duration::from_secs(6 * 3600), || with_app(|app| app.send_diagnostics(false)));
+            app.timers.borrow_mut().push(repeat);
+        })
+    });
+    app.timers.borrow_mut().push(diag_timer);
+
     if updates_enabled {
         let timer = slint::Timer::default();
         timer.start(slint::TimerMode::SingleShot, Duration::from_secs(5), || with_app(|app| app.check_updates(false)));
@@ -964,6 +1032,7 @@ fn main() {
     ui.on_install_update(|| with_app(|app| app.install_update()));
     ui.on_pair_phone(|| with_app(|app| app.pair_phone()));
     ui.on_forget_phones(|| with_app(|app| app.pairing.forget_all()));
+    ui.on_send_diagnostics(|| with_app(|app| app.send_diagnostics(true)));
     jam_ui::wire(&ui);
     music::wire(&ui);
 

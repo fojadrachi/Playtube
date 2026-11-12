@@ -80,6 +80,17 @@ tokio-tungstenite/rustls) und [src/jam_ui.rs](src/jam_ui.rs); der Dienst selbst 
 Projekt `playtube-jam` (Cloudflare Worker). Server änderbar über `"jam": {"server": "…"}` in der
 `config.json` (Standard `https://jam.fojadrachi.de`).
 
+## Diagnosedaten
+
+Damit Fehler schneller gefunden werden, schickt Playtube **standardmäßig** kurz nach dem Start und
+höchstens alle 6 Stunden die neuen Zeilen aus `%APPDATA%\Playtube\logs\playtube.log` (Fehler,
+Abstürze, Verbindungsprobleme) mit Version, Windows-Version und einer zufälligen Kennung an den
+Playtube-Dienst (`/api/diag` im Projekt `playtube-jam`). Vorher entfernt
+[src/diag.rs](src/diag.rs) Cookies, Tokens, E-Mail-Adressen, URL-Parameter, Video-IDs und den
+Windows-Benutzernamen; die Debug-Zeilen mit Songtiteln bleiben ganz weg. Abschalten unter
+*Einstellungen › Diagnose* (`"diagnostics": {"enabled": false}` in der `config.json`); dort sendet
+**Jetzt senden** sofort und zeigt die Kennung der Installation. Gespeichert wird 30 Tage.
+
 ## Playtube-Ton (Discord-Streams, Sonar)
 
 WebView2 spielt den Ton nicht in `Playtube.exe`, sondern im Hilfsprozess `msedgewebview2.exe` ab – den
@@ -190,6 +201,16 @@ playlist (including your own private playlists) and at the top of album/playlist
 in a jam. With several songs queued, the next one starts automatically – the server knows each song's
 length and advances even when nobody is listening. Code: [src/jam.rs](src/jam.rs), [src/jam_ui.rs](src/jam_ui.rs); the
 service lives in the separate `playtube-jam` project.
+
+## Diagnostics
+
+To find bugs faster, Playtube sends the new lines of `%APPDATA%\Playtube\logs\playtube.log`
+(errors, crashes, connection problems) with version, Windows version and a random ID to the Playtube
+service (`/api/diag` in the `playtube-jam` project) **by default** – shortly after start and at most
+every 6 hours. [src/diag.rs](src/diag.rs) strips cookies, tokens, e-mail addresses, URL parameters,
+video IDs and the Windows user name first; debug lines with song titles are never sent. Turn it off
+under *Settings › Diagnostics* (`"diagnostics": {"enabled": false}` in `config.json`); **Send now**
+sends immediately and shows the installation ID. Reports are kept for 30 days.
 
 ## Remote control (Stream Dock)
 
