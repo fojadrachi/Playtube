@@ -1,4 +1,11 @@
-## Playtube 2.6.0
+## Playtube 2.6.1
+
+- **Behoben: „+ Jam“-Knopf flackerte**, sobald die Maus darauf stand (auch der Abspielen-Knopf an Zeilen und
+  Karten). Zeile bzw. Karte bleiben jetzt markiert, solange die Maus auf einem ihrer Knöpfe ist; im Jam ist der
+  Platz für „+ Jam“ fest reserviert, damit die Songlänge beim Darüberfahren nicht springt.
+
+Neu in 2.6.0:
+
 
 - **„+ Jam“ in der Playtube-Ansicht:** Während eines Jams erscheint beim Darüberfahren an jedem Song, Album und
   jeder Playlist ein „+ Jam“-Knopf – auch bei deinen eigenen, privaten Playlists. Oben auf Album- und
@@ -10,12 +17,19 @@
 
 Alles Weitere wie in 2.5.2 (Tonausgabe Normal/Discord, Fixes).
 
-**Installieren:** `Playtube-Setup-2.6.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
+**Installieren:** `Playtube-Setup-2.6.1.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
 aktualisiert sich auch von selbst.
 
 ---
 
-## Playtube 2.6.0
+## Playtube 2.6.1
+
+- **Fixed: the "+ Jam" button flickered** while the mouse was on it (the play button on rows and cards too). The
+  row or card now stays highlighted while the mouse is on one of its buttons; in a jam the space for "+ Jam" is
+  reserved so the song length no longer jumps on hover.
+
+New in 2.6.0:
+
 
 - **"+ Jam" in the Playtube view:** while you are in a jam, hovering any song, album or playlist shows a "+ Jam"
   button – including your own private playlists. At the top of album and playlist pages, "+ Jam" adds all songs
@@ -27,4 +41,4 @@ aktualisiert sich auch von selbst.
 
 Everything else as in 2.5.2 (sound output Normal/Discord, fixes).
 
-**Install:** run `Playtube-Setup-2.6.0.exe` – it replaces any older Playtube. Playtube also updates itself.
+**Install:** run `Playtube-Setup-2.6.1.exe` – it replaces any older Playtube. Playtube also updates itself.

@@ -126,6 +126,7 @@ component IconButton inherits Rectangle {
         font-size: root.size * (root.primary ? 0.42 : 0.45);
         color: !root.enabled ? #55555f : root.active ? #ec4899 : root.primary ? #ffffff : (touch.has-hover ? #ffffff : #b3b3bb);
     }
+    out property <bool> hovered: touch.has-hover;
     touch := TouchArea { enabled: root.enabled; clicked => { root.clicked(); } }
 }
 
@@ -184,6 +185,7 @@ component SideRow inherits Rectangle {
 // "+ Jam": fügt Song, Album oder Playlist zum laufenden Jam hinzu.
 component JamButton inherits Rectangle {
     callback clicked();
+    out property <bool> hovered: jam-touch.has-hover;
     width: jam-label.preferred-width + 24px;
     height: 26px;
     border-radius: 13px;
@@ -200,7 +202,9 @@ component Card inherits Rectangle {
     width: 196px;
     height: 268px;
     border-radius: 8px;
-    background: touch.has-hover ? #1f1f26 : transparent;
+    // Hover der Karte bleibt, solange die Maus auf einem ihrer Knöpfe steht.
+    property <bool> hovered: touch.has-hover || card-play.hovered || card-jam.hovered;
+    background: root.hovered ? #1f1f26 : transparent;
     touch := TouchArea { clicked => { root.clicked(); } }
     VerticalLayout {
         padding: 12px;
@@ -209,7 +213,8 @@ component Card inherits Rectangle {
         Rectangle {
             height: 172px;
             Cover { width: 172px; height: 172px; source: root.card.image; has-image: root.card.has-image; round: root.card.round; }
-            if touch.has-hover: IconButton {
+            card-play := IconButton {
+                visible: root.hovered;
                 x: parent.width - self.width - 8px;
                 y: parent.height - self.height - 8px;
                 icon: "\u{E768}";
@@ -217,7 +222,8 @@ component Card inherits Rectangle {
                 primary: true;
                 clicked => { root.play(); }
             }
-            if touch.has-hover && Music.in-jam: JamButton {
+            card-jam := JamButton {
+                visible: root.hovered && Music.in-jam;
                 x: parent.width - self.width - 8px;
                 y: 8px;
                 clicked => { root.jam-add(); }
@@ -237,7 +243,9 @@ component Row inherits Rectangle {
     callback jam-add();
     height: 56px;
     border-radius: 6px;
-    background: touch.has-hover ? #24242c : transparent;
+    // Hover der Zeile bleibt, solange die Maus auf einem ihrer Knöpfe steht.
+    property <bool> hovered: touch.has-hover || row-play.hovered || row-jam.hovered;
+    background: root.hovered ? #24242c : transparent;
     touch := TouchArea {
         clicked => { root.clicked(); }
         double-clicked => { root.play(); }
@@ -248,7 +256,7 @@ component Row inherits Rectangle {
         spacing: 14px;
         Rectangle {
             width: 28px;
-            if !touch.has-hover: Text {
+            if !root.hovered: Text {
                 text: root.card.playing ? "\u{E995}" : root.number;
                 font-family: root.card.playing ? "Segoe MDL2 Assets" : "Segoe UI";
                 color: root.card.playing ? #ec4899 : #a7a7b0;
@@ -257,7 +265,7 @@ component Row inherits Rectangle {
                 width: 100%;
                 height: 100%;
             }
-            if touch.has-hover: IconButton { icon: "\u{E768}"; size: 28px; y: (parent.height - self.height) / 2; clicked => { root.play(); } }
+            row-play := IconButton { visible: root.hovered; icon: "\u{E768}"; size: 28px; y: (parent.height - self.height) / 2; clicked => { root.play(); } }
         }
         if root.card.has-image || root.card.subtitle != "": Cover {
             width: 40px;
@@ -273,7 +281,11 @@ component Row inherits Rectangle {
             Text { text: root.card.title; color: root.card.playing ? #ec4899 : #ffffff; font-size: 15px; overflow: elide; }
             Text { text: root.card.subtitle; color: #a7a7b0; font-size: 13px; overflow: elide; }
         }
-        if touch.has-hover && Music.in-jam: JamButton { y: (parent.height - self.height) / 2; clicked => { root.jam-add(); } }
+        // Platz ist im Jam immer reserviert, damit die Dauer beim Darüberfahren nicht springt.
+        Rectangle {
+            width: Music.in-jam ? row-jam.width : 0px;
+            row-jam := JamButton { visible: root.hovered && Music.in-jam; y: (parent.height - self.height) / 2; clicked => { root.jam-add(); } }
+        }
         Text { text: root.card.duration; color: #a7a7b0; font-size: 13px; vertical-alignment: center; }
     }
 }
