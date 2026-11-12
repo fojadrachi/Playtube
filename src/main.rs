@@ -555,17 +555,15 @@ impl App {
             }
             let log_text = std::fs::read_to_string(diag::log_path()).unwrap_or_default();
             let (lines, latest) = diag::collect(&log_text, config.diagnostics.last_sent);
-            if lines.is_empty() {
-                if manual {
-                    self.ui.set_diag_status(tr("diag.nothing").into());
-                }
+            // Automatisch nur mit neuen Zeilen; "Jetzt senden" geht immer raus (dann mit Vermerk).
+            if lines.is_empty() && !manual {
                 return;
             }
             if config.diagnostics.install_id.is_empty() {
                 config.diagnostics.install_id = diag::new_install_id();
                 config::save(&config);
             }
-            (diag::report(&config.diagnostics.install_id, &lines, ""), latest, config.jam.server.clone())
+            (diag::report(&config.diagnostics.install_id, &lines, diag::note(manual, lines.is_empty())), latest, config.jam.server.clone())
         };
         if manual {
             self.ui.set_diag_busy(true);

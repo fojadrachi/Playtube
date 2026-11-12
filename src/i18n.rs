@@ -83,7 +83,6 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ("diag.send_now", "Jetzt senden", "Send now"),
     ("diag.sending", "Sende …", "Sending …"),
     ("diag.sent", "Gesendet. Kennung dieser Installation: {id}", "Sent. ID of this installation: {id}"),
-    ("diag.nothing", "Keine neuen Logzeilen seit dem letzten Bericht.", "No new log lines since the last report."),
     ("diag.failed", "Senden fehlgeschlagen: {error}", "Sending failed: {error}"),
     ("field.enabled", "Aktiviert", "Enabled"),
     ("field.client_id", "Client-ID", "Client ID"),

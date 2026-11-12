@@ -110,6 +110,16 @@ pub fn is_error(line: &str) -> bool {
     ["panic", "fehlgeschlagen", "failed", "fehler", "error", "nicht erstellbar", "nicht verfuegbar"].iter().any(|w| lower.contains(w))
 }
 
+/// Vermerk zum Bericht: manuell gesendet (ggf. ohne neue Zeilen) oder leer. Ohne Zeilen braucht
+/// der Server einen Vermerk, sonst lehnt er den Bericht als leer ab.
+pub fn note(manual: bool, no_new_lines: bool) -> &'static str {
+    match (manual, no_new_lines) {
+        (true, true) => "manuell gesendet (keine neuen Zeilen)",
+        (true, false) => "manuell gesendet",
+        _ => "",
+    }
+}
+
 /// Bericht als JSON (Format siehe playtube-jam/src/diag.js).
 pub fn report(install_id: &str, lines: &[String], note: &str) -> serde_json::Value {
     let errors: Vec<&String> = lines.iter().filter(|l| is_error(l)).collect();
@@ -223,6 +233,16 @@ mod tests {
         let (lines, _) = collect(&log, 0);
         assert_eq!(lines.len(), MAX_LINES);
         assert_eq!(lines[0], "[701] Zeile 701");
+    }
+
+    #[test]
+    fn manual_report_without_lines_has_note() {
+        assert_eq!(note(true, true), "manuell gesendet (keine neuen Zeilen)");
+        assert_eq!(note(true, false), "manuell gesendet");
+        assert_eq!(note(false, true), "");
+        let r = report("abc123abc123", &[], note(true, true));
+        assert!(r["lines"].as_array().unwrap().is_empty());
+        assert!(!r["note"].as_str().unwrap().is_empty());
     }
 
     #[test]
