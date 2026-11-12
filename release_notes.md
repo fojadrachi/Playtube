@@ -6,7 +6,6 @@
 
 Neu in 2.6.0:
 
-
 - **„+ Jam“ in der Playtube-Ansicht:** Während eines Jams erscheint beim Darüberfahren an jedem Song, Album und
   jeder Playlist ein „+ Jam“-Knopf – auch bei deinen eigenen, privaten Playlists. Oben auf Album- und
   Playlist-Seiten fügt „+ Jam“ alle Songs auf einmal hinzu.
@@ -29,7 +28,6 @@ aktualisiert sich auch von selbst.
   reserved so the song length no longer jumps on hover.
 
 New in 2.6.0:
-
 
 - **"+ Jam" in the Playtube view:** while you are in a jam, hovering any song, album or playlist shows a "+ Jam"
   button – including your own private playlists. At the top of album and playlist pages, "+ Jam" adds all songs
