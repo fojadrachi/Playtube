@@ -214,13 +214,7 @@ impl LanServer {
         let mut tasks = vec![runtime.spawn(accept_loop(listener, pairing, dispatch))];
 
         // Ohne Suche klappt die Verbindung trotzdem über die IP-Adresse von Hand.
-        match std::net::UdpSocket::bind(("0.0.0.0", DISCOVERY_PORT)).and_then(|s| {
-            s.set_nonblocking(true)?;
-            tokio::net::UdpSocket::from_std(s)
-        }) {
-            Ok(udp) => tasks.push(runtime.spawn(discovery_loop(udp, port))),
-            Err(e) => crate::log::line(&format!("lan: Suche nicht verfuegbar: {e}")),
-        }
+        tasks.push(runtime.spawn(discovery_task(port, DISCOVERY_PORT)));
         Ok(Self { tasks })
     }
 }
@@ -246,6 +240,40 @@ async fn accept_loop(listener: tokio::net::TcpListener, pairing: Pairing, dispat
     }
 }
 
+/// UDP-Socket für die Suche. Mit SO_REUSEADDR, damit ein noch nicht freigegebener Socket
+/// (Neustart der Fernsteuerung, Update, zweite Instanz) das Binden nicht blockiert –
+/// die Suche kommt per Broadcast und erreicht jeden gebundenen Socket.
+fn bind_discovery(discovery_port: u16) -> std::io::Result<tokio::net::UdpSocket> {
+    use socket2::{Domain, Protocol, Socket, Type};
+    let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+    socket.set_reuse_address(true)?;
+    socket.bind(&std::net::SocketAddr::from(([0, 0, 0, 0], discovery_port)).into())?;
+    socket.set_nonblocking(true)?;
+    tokio::net::UdpSocket::from_std(socket.into())
+}
+
+/// Bindet die Suche; ist der Port belegt, wird alle paar Sekunden erneut versucht (nur einmal geloggt).
+async fn discovery_task(port: u16, discovery_port: u16) {
+    let mut logged = false;
+    loop {
+        match bind_discovery(discovery_port) {
+            Ok(udp) => {
+                if logged {
+                    crate::log::line("lan: Suche doch noch gestartet");
+                }
+                return discovery_loop(udp, port).await;
+            }
+            Err(e) => {
+                if !logged {
+                    crate::log::line(&format!("lan: Suche noch nicht verfuegbar, versuche es weiter: {e}"));
+                    logged = true;
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+        }
+    }
+}
+
 async fn discovery_loop(udp: tokio::net::UdpSocket, port: u16) {
     let mut buffer = [0u8; 512];
     loop {
@@ -260,6 +288,38 @@ async fn discovery_loop(udp: tokio::net::UdpSocket, port: u16) {
 mod tests {
     use super::*;
     use crate::remote::Action;
+
+    /// Port schon belegt (alter Socket, andere Instanz): die Suche bindet trotzdem und antwortet.
+    #[test]
+    fn discovery_works_while_port_is_taken() {
+        let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
+        runtime.block_on(async {
+            // Eigener Port, damit eine laufende Playtube den Test nicht stört.
+            const TEST_PORT: u16 = 47_899;
+            let _stale = bind_discovery(TEST_PORT).expect("alter Socket");
+            let task = tokio::spawn(discovery_task(59_871, TEST_PORT));
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            let client = tokio::net::UdpSocket::bind("0.0.0.0:0").await.unwrap();
+            client.set_broadcast(true).unwrap();
+            let mut buffer = [0u8; 512];
+            let mut found = false;
+            for _ in 0..10 {
+                client.send_to(DISCOVERY_REQUEST, ("255.255.255.255", TEST_PORT)).await.unwrap();
+                let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(300);
+                while let Ok(Ok((len, _))) = tokio::time::timeout_at(deadline, client.recv_from(&mut buffer)).await {
+                    if String::from_utf8_lossy(&buffer[..len]).contains("59871") {
+                        found = true;
+                        break;
+                    }
+                }
+                if found {
+                    break;
+                }
+            }
+            task.abort();
+            assert!(found, "keine Antwort der Suche");
+        });
+    }
 
     fn pairing() -> (Pairing, Arc<Mutex<Vec<Vec<PairedDevice>>>>) {
         let changes = Arc::new(Mutex::new(Vec::new()));

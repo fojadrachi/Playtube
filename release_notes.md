@@ -1,4 +1,10 @@
-## Playtube 2.6.1
+## Playtube 2.6.2
+
+- **Behoben: Das Handy fand den PC manchmal nicht von selbst.** Die automatische Suche im WLAN startete nicht,
+  wenn ihr Port gerade noch belegt war (z. B. kurz nach einem Update oder Neustart der Fernsteuerung). Playtube
+  teilt sich den Port jetzt und versucht es weiter, bis die Suche läuft.
+
+Neu in 2.6.1:
 
 - **Behoben: „+ Jam“-Knopf flackerte**, sobald die Maus darauf stand (auch der Abspielen-Knopf an Zeilen und
   Karten). Zeile bzw. Karte bleiben jetzt markiert, solange die Maus auf einem ihrer Knöpfe ist; im Jam ist der
@@ -19,12 +25,18 @@ Neu in 2.6.0:
 
 Alles Weitere wie in 2.5.2 (Tonausgabe Normal/Discord, Fixes).
 
-**Installieren:** `Playtube-Setup-2.6.1.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
+**Installieren:** `Playtube-Setup-2.6.2.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
 aktualisiert sich auch von selbst.
 
 ---
 
-## Playtube 2.6.1
+## Playtube 2.6.2
+
+- **Fixed: the phone sometimes didn't find the PC on its own.** Automatic discovery on the local network didn't
+  start while its port was still in use (e.g. right after an update or a restart of the remote control).
+  Playtube now shares the port and keeps trying until discovery runs.
+
+New in 2.6.1:
 
 - **Fixed: the "+ Jam" button flickered** while the mouse was on it (the play button on rows and cards too). The
   row or card now stays highlighted while the mouse is on one of its buttons; in a jam the space for "+ Jam" is
@@ -45,4 +57,4 @@ New in 2.6.0:
 
 Everything else as in 2.5.2 (sound output Normal/Discord, fixes).
 
-**Install:** run `Playtube-Setup-2.6.1.exe` – it replaces any older Playtube. Playtube also updates itself.
+**Install:** run `Playtube-Setup-2.6.2.exe` – it replaces any older Playtube. Playtube also updates itself.
