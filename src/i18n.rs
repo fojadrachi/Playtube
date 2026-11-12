@@ -191,6 +191,12 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ("jam.added", "Hinzugefügt: {title}", "Added: {title}"),
     // Playtube-Ansicht (YouTube Music im Spotify-Stil)
     ("music.home", "Startseite", "Home"),
+    ("music.jam_add", "Jam", "Jam"),
+    ("music.jam_added_one", "Zum Jam hinzugefügt: {title}", "Added to the jam: {title}"),
+    ("music.jam_added_many", "{count} Songs zum Jam hinzugefügt", "Added {count} songs to the jam"),
+    ("music.jam_nothing", "Hier sind keine Songs für den Jam.", "There are no songs for the jam here."),
+    ("jam.playlist_adding", "Playlist wird hinzugefügt …", "Adding playlist …"),
+    ("jam.error.playlist_not_found", "Diese Playlist ist nicht öffentlich oder existiert nicht.", "This playlist is not public or does not exist."),
     ("music.search", "Suchen", "Search"),
     ("music.library", "Bibliothek", "Your Library"),
     ("music.your_playlists", "Deine Playlists", "Your playlists"),

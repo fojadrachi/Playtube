@@ -163,6 +163,35 @@ pub fn parse_video_id(input: &str) -> Option<String> {
     valid_video_id(&id).then_some(id)
 }
 
+/// Playlist-/Album-ID aus einer ID oder einem Link (`list=`).
+pub fn parse_playlist_id(input: &str) -> Option<String> {
+    let text = input.trim();
+    let id = if text.contains("://") || text.starts_with("youtube.com") || text.contains("youtube.com/") {
+        let (host, rest) = text.split_once("://").map(|(_, r)| r).unwrap_or(text).split_once('/').unwrap_or((text, ""));
+        let host = host.to_ascii_lowercase();
+        let host = host.trim_start_matches("www.").trim_start_matches("m.").trim_start_matches("music.");
+        if host != "youtube.com" && host != "youtu.be" {
+            return None;
+        }
+        rest.split_once('?')?.1.split('&').find_map(|p| p.strip_prefix("list="))?.split('#').next()?.to_string()
+    } else {
+        text.to_string()
+    };
+    let id = id.strip_prefix("VL").map(str::to_string).unwrap_or(id);
+    let prefix_ok = ["PL", "OLAK5uy_", "RD", "LL", "UU", "FL", "OL", "LM"].iter().any(|p| id.starts_with(p));
+    let chars_ok = id.len() <= 90 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_');
+    (prefix_ok && chars_ok).then_some(id)
+}
+
+/// "3:45" bzw. "1:02:03" -> Sekunden.
+pub fn parse_duration(text: &str) -> Option<f64> {
+    let parts: Vec<&str> = text.trim().split(':').collect();
+    if !(2..=3).contains(&parts.len()) || parts.iter().any(|p| p.is_empty() || !p.bytes().all(|b| b.is_ascii_digit())) {
+        return None;
+    }
+    Some(parts.iter().fold(0.0, |sum, p| sum * 60.0 + p.parse::<f64>().unwrap_or(0.0)))
+}
+
 /// Video-ID aus der URL des YouTube-Music-Tabs (`…/watch?v=…`).
 pub fn video_id_from_url(url: &str) -> Option<String> {
     if !url.contains("/watch") {
@@ -654,6 +683,20 @@ mod tests {
         assert_eq!(parse_video_id("kurz"), None);
         assert_eq!(video_id_from_url("https://music.youtube.com/").as_deref(), None);
         assert_eq!(video_id_from_url(&format!("https://music.youtube.com/watch?v={id}&list=x")).as_deref(), Some(id));
+    }
+
+    #[test]
+    fn parses_playlist_links_and_durations() {
+        assert_eq!(parse_playlist_id("https://music.youtube.com/playlist?list=PLabc_1").as_deref(), Some("PLabc_1"));
+        assert_eq!(parse_playlist_id("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDxyz").as_deref(), Some("RDxyz"));
+        assert_eq!(parse_playlist_id("OLAK5uy_abc").as_deref(), Some("OLAK5uy_abc"));
+        assert_eq!(parse_playlist_id("VLPLabc").as_deref(), Some("PLabc"));
+        assert_eq!(parse_playlist_id("https://evil.example/playlist?list=PLabc"), None);
+        assert_eq!(parse_playlist_id("queen"), None);
+        assert_eq!(parse_duration("3:45"), Some(225.0));
+        assert_eq!(parse_duration("1:02:03"), Some(3723.0));
+        assert_eq!(parse_duration("3"), None);
+        assert_eq!(parse_duration("a:bc"), None);
     }
 
     #[test]

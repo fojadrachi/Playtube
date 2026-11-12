@@ -4,6 +4,7 @@
 
 use super::*;
 use crate::ytm::{self, Entry, Nav, Page, PageType};
+use serde_json::json;
 use slint::{Image, Model, Rgba8Pixel, SharedPixelBuffer};
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
@@ -79,6 +80,7 @@ fn texts() -> MusicTexts {
         top_result: tr("music.top_result").into(),
         results: tr("music.results").into(),
         search_placeholder: tr("music.search_placeholder").into(),
+        jam_add: tr("music.jam_add").into(),
     }
 }
 
@@ -96,6 +98,8 @@ pub fn wire(ui: &AppWindow) {
     music.on_play_card(|id| with_app(|app| app.music_open_card(id as usize, true)));
     music.on_open_sidebar(|id| with_app(|app| app.music_open_sidebar(id as usize)));
     music.on_play_page(|| with_app(|app| app.music_play_page()));
+    music.on_jam_add(|id| with_app(|app| app.music_jam_add(id as usize)));
+    music.on_jam_add_page(|| with_app(|app| app.music_jam_add_page()));
     music.on_media(|command| with_app(|app| app.media_command(TAB_MUSIC, command.as_str(), 0.0)));
     music.on_seek(|fraction| with_app(|app| app.music_seek(fraction as f64)));
     music.on_set_volume(|v| with_app(|app| app.media_command(TAB_MUSIC, "set_volume", v as f64)));
@@ -116,6 +120,23 @@ fn card(id: usize, entry: &Entry, image: Option<Image>) -> MusicCard {
         round: entry.round,
         playing: false,
     }
+}
+
+/// Ein Eintrag als Jam-Song (`videoId`, Titel, Interpret, Bild, Länge) - nur Songs/Videos.
+fn jam_item(entry: &Entry) -> Option<Value> {
+    let video_id = match entry.play.as_ref().or(entry.open.as_ref()) {
+        Some(Nav::Play { video_id: Some(v), .. }) => v.clone(),
+        _ => return None,
+    };
+    // Bei Songzeilen ist der erste Teil des Untertitels der Interpret.
+    let artist = entry.subtitle.split(" • ").next().unwrap_or("").to_string();
+    Some(json!({
+        "videoId": video_id,
+        "title": entry.title,
+        "artist": artist,
+        "thumb": entry.thumb.as_deref().map(|t| ytm::sized_thumb(t, ROW_PX)),
+        "dur": entry.duration.as_deref().and_then(crate::jam::parse_duration),
+    }))
 }
 
 fn entry_video(entry: &Entry) -> Option<&str> {
@@ -480,6 +501,78 @@ impl App {
             Some(nav @ Nav::Play { .. }) if play || entry.duration.is_none() => self.music_play(nav),
             _ => {}
         }
+    }
+
+    // ------------------------------------------------------------------ Jam
+
+    /// Kurze Meldung oben in der Ansicht (verschwindet nach ein paar Sekunden).
+    fn music_notice(&self, text: String) {
+        self.ui.global::<Music>().set_notice(text.into());
+        let timer = slint::Timer::default();
+        timer.start(slint::TimerMode::SingleShot, Duration::from_secs(4), || {
+            with_app(|app| app.ui.global::<Music>().set_notice(SharedString::new()))
+        });
+        self.timers.borrow_mut().push(timer);
+        self.timers.borrow_mut().retain(|t| t.running());
+    }
+
+    /// Einen Song, ein Album oder eine Playlist (Karte/Zeile) zum Jam hinzufügen.
+    fn music_jam_add(&self, id: usize) {
+        let Some(entry) = self.music.borrow().entries.get(id).cloned() else { return };
+        if let Some(item) = jam_item(&entry) {
+            self.jam_send(json!({ "t": "add", "videoId": item["videoId"], "title": item["title"], "artist": item["artist"], "thumb": item["thumb"], "dur": item["dur"] }));
+            self.music_notice(trf("music.jam_added_one", &[("title", &entry.title)]));
+            return;
+        }
+        // Album/Playlist: mit dem eigenen Login laden (auch private Playlists) und alle Songs schicken.
+        let Some(Nav::Browse { browse_id, params, .. }) = entry.open.clone() else { return };
+        let Some(auth) = self.music.borrow().auth.clone() else { return };
+        self.music_notice(tr("music.loading").into());
+        self.runtime.spawn(async move {
+            let result = ytm::browse(&auth, &browse_id, params.as_deref()).await;
+            on_ui(move |app| match result {
+                Ok(page) => app.music_jam_send_page(&page),
+                Err(e) => {
+                    log::line(&format!("music: Playlist für den Jam nicht geladen: {e:#}"));
+                    app.music_notice(tr("music.error").into());
+                }
+            });
+        });
+    }
+
+    /// Alle Songs der offenen Seite (Album/Playlist) zum Jam hinzufügen.
+    fn music_jam_add_page(&self) {
+        let page = self.music.borrow().page.clone();
+        if let Some(page) = page {
+            self.music_jam_send_page(&page);
+        }
+    }
+
+    fn music_jam_send_page(&self, page: &Page) {
+        let items: Vec<Value> = page
+            .shelves
+            .iter()
+            .filter(|s| s.rows)
+            .flat_map(|s| &s.entries)
+            .filter_map(|e| {
+                let mut item = jam_item(e)?;
+                // Albumzeilen haben kein eigenes Bild: das Albumcover nehmen.
+                if item["thumb"].is_null() {
+                    if let Some(t) = &page.thumb {
+                        item["thumb"] = json!(ytm::sized_thumb(t, ROW_PX));
+                    }
+                }
+                Some(item)
+            })
+            .take(200)
+            .collect();
+        if items.is_empty() {
+            self.music_notice(tr("music.jam_nothing").into());
+            return;
+        }
+        let count = items.len();
+        self.jam_send(json!({ "t": "addMany", "items": items }));
+        self.music_notice(trf("music.jam_added_many", &[("count", &count.to_string())]));
     }
 
     fn music_play_page(&self) {

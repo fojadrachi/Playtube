@@ -37,6 +37,7 @@ export struct MusicTexts {
     top-result: string,
     results: string,
     search-placeholder: string,
+    jam-add: string,
 }
 
 export global Music {
@@ -46,6 +47,10 @@ export global Music {
     in property <bool> loading;
     in property <string> error;
     in property <bool> logged-in: true;
+    // Gerade in einem Jam: "Zum Jam"-Knöpfe zeigen
+    in property <bool> in-jam;
+    // Kurze Meldung oben (z. B. "12 Songs zum Jam hinzugefügt")
+    in property <string> notice;
 
     // Seite
     in property <bool> has-header;
@@ -87,6 +92,8 @@ export global Music {
     callback play-card(int);
     callback open-sidebar(int);
     callback play-page();
+    callback jam-add(int);
+    callback jam-add-page();
     callback media(string);
     callback seek(float);
     callback set-volume(float);
@@ -174,10 +181,22 @@ component SideRow inherits Rectangle {
 }
 
 // Karte im Regal: Bild, Titel, Untertitel; beim Darüberfahren erscheint der Abspielknopf.
+// "+ Jam": fügt Song, Album oder Playlist zum laufenden Jam hinzu.
+component JamButton inherits Rectangle {
+    callback clicked();
+    width: jam-label.preferred-width + 24px;
+    height: 26px;
+    border-radius: 13px;
+    background: jam-touch.has-hover ? #ec4899 : #7c3aedcc;
+    jam-label := Text { text: "+ " + Music.t.jam-add; color: #ffffff; font-size: 12px; font-weight: 700; }
+    jam-touch := TouchArea { clicked => { root.clicked(); } }
+}
+
 component Card inherits Rectangle {
     in property <MusicCard> card;
     callback clicked();
     callback play();
+    callback jam-add();
     width: 196px;
     height: 268px;
     border-radius: 8px;
@@ -198,6 +217,11 @@ component Card inherits Rectangle {
                 primary: true;
                 clicked => { root.play(); }
             }
+            if touch.has-hover && Music.in-jam: JamButton {
+                x: parent.width - self.width - 8px;
+                y: 8px;
+                clicked => { root.jam-add(); }
+            }
         }
         Text { text: root.card.title; color: #ffffff; font-size: 15px; font-weight: 600; overflow: elide; }
         Text { text: root.card.subtitle; color: #a7a7b0; font-size: 13px; wrap: word-wrap; max-height: 36px; overflow: elide; }
@@ -210,6 +234,7 @@ component Row inherits Rectangle {
     in property <int> number;
     callback clicked();
     callback play();
+    callback jam-add();
     height: 56px;
     border-radius: 6px;
     background: touch.has-hover ? #24242c : transparent;
@@ -248,6 +273,7 @@ component Row inherits Rectangle {
             Text { text: root.card.title; color: root.card.playing ? #ec4899 : #ffffff; font-size: 15px; overflow: elide; }
             Text { text: root.card.subtitle; color: #a7a7b0; font-size: 13px; overflow: elide; }
         }
+        if touch.has-hover && Music.in-jam: JamButton { y: (parent.height - self.height) / 2; clicked => { root.jam-add(); } }
         Text { text: root.card.duration; color: #a7a7b0; font-size: 13px; vertical-alignment: center; }
     }
 }
@@ -313,6 +339,7 @@ export component MusicView inherits Rectangle {
                             accepted(text) => { Music.search(text); }
                         }
                         Rectangle { horizontal-stretch: 1; }
+                        if Music.notice != "": Text { text: Music.notice; color: #f5d0fe; vertical-alignment: center; }
                         if Music.loading: Text { text: Music.t.loading; color: #a7a7b0; vertical-alignment: center; }
                     }
                 }
@@ -382,7 +409,9 @@ export component MusicView inherits Rectangle {
                                     }
                                     if Music.page-can-play: HorizontalLayout {
                                         alignment: start;
+                                        spacing: 16px;
                                         IconButton { icon: "\u{E768}"; size: 56px; primary: true; clicked => { Music.play-page(); } }
+                                        if Music.in-jam: JamButton { y: (parent.height - self.height) / 2; clicked => { Music.jam-add-page(); } }
                                     }
                                 }
                             }
@@ -411,6 +440,7 @@ export component MusicView inherits Rectangle {
                                     number: i + 1;
                                     clicked => { Music.open-card(card.id); }
                                     play => { Music.play-card(card.id); }
+                                    jam-add => { Music.jam-add(card.id); }
                                 }
                             }
                             if !shelf.rows: Flickable {
@@ -423,6 +453,7 @@ export component MusicView inherits Rectangle {
                                         card: card;
                                         clicked => { Music.open-card(card.id); }
                                         play => { Music.play-card(card.id); }
+                                        jam-add => { Music.jam-add(card.id); }
                                     }
                                 }
                             }

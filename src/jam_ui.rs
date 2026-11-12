@@ -308,6 +308,7 @@ impl App {
 
     /// Jam lokal beenden (Verbindung zu, Oberfläche zurück).
     fn jam_close(&self, status: String, forget: bool) {
+        self.ui.global::<Music>().set_in_jam(false);
         self.jam_timer.stop();
         self.jam.borrow_mut().take();
         self.ui.set_jam_active(false);
@@ -440,6 +441,13 @@ impl App {
         if text.is_empty() {
             return;
         }
+        // Playlist-/Album-Link ohne einzelnes Video: alle Songs (löst der Jam-Server auf).
+        if let Some(playlist_id) = jam::parse_playlist_id(&text).filter(|_| jam::parse_video_id(&text).is_none()) {
+            self.jam_send(json!({ "t": "addPlaylist", "playlistId": playlist_id }));
+            self.ui.set_jam_add_input(SharedString::new());
+            self.jam_set_status(status_text("jam.playlist_adding"));
+            return;
+        }
         if let Some(video_id) = jam::parse_video_id(&text) {
             self.jam_send(json!({ "t": "add", "videoId": video_id }));
             self.ui.set_jam_add_input(SharedString::new());
@@ -512,6 +520,7 @@ impl App {
 
     fn jam_render(&self) {
         let Some(state) = self.jam_state() else { return };
+        self.ui.global::<Music>().set_in_jam(true);
         let item_subtitle = |item: &jam::Item| {
             let by = trf("jam.by", &[("name", &item.by_name)]);
             if item.artist.is_empty() { by } else { format!("{} · {by}", item.artist) }
