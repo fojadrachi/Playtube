@@ -3,6 +3,9 @@
 - **Behoben: „+ Jam“-Knopf flackerte**, sobald die Maus darauf stand (auch der Abspielen-Knopf an Zeilen und
   Karten). Zeile bzw. Karte bleiben jetzt markiert, solange die Maus auf einem ihrer Knöpfe ist; im Jam ist der
   Platz für „+ Jam“ fest reserviert, damit die Songlänge beim Darüberfahren nicht springt.
+- **Neu: Diagnosedaten** (Einstellungen › Diagnose): Playtube kann gefilterte Fehler- und Logzeilen (ohne Cookies,
+  Tokens, E-Mails, Video-IDs oder Songtitel) mit Version und einer zufälligen Installations-Kennung an den
+  Playtube-Dienst schicken, damit Fehler schneller gefunden werden. Standardmäßig an, jederzeit abschaltbar.
 
 Neu in 2.6.0:
 
@@ -26,6 +29,9 @@ aktualisiert sich auch von selbst.
 - **Fixed: the "+ Jam" button flickered** while the mouse was on it (the play button on rows and cards too). The
   row or card now stays highlighted while the mouse is on one of its buttons; in a jam the space for "+ Jam" is
   reserved so the song length no longer jumps on hover.
+- **New: diagnostics** (Settings › Diagnostics): Playtube can send filtered error and log lines (no cookies,
+  tokens, e-mails, video IDs or song titles) with the version and a random installation ID to the Playtube
+  service so bugs are found faster. On by default, can be turned off any time.
 
 New in 2.6.0:
 
