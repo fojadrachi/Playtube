@@ -257,6 +257,37 @@ impl App {
         });
     }
 
+    /// Beim Start: War Playtube noch in einem Jam (beendet, abgestürzt, Neustart nach Update), still
+    /// mit demselben Schlüssel zurück - gleiche Rolle und Rechte wie vorher (Host bleibt Host).
+    /// Gibt es den Jam nicht mehr, wird er vergessen.
+    pub fn jam_resume(&self) {
+        let (code, token) = {
+            let config = self.config.borrow();
+            (config.jam.last_code.clone(), config.jam.last_token.clone())
+        };
+        if code.is_empty() || token.is_empty() || self.jam.borrow().is_some() {
+            return;
+        }
+        let server = self.jam_server();
+        self.runtime.spawn(async move {
+            let result = jam::exists(&server, &code).await;
+            on_ui(move |app| match result {
+                Ok(true) if app.jam.borrow().is_none() => {
+                    log::line("jam: nach dem Start wieder im letzten Jam");
+                    app.jam_connect(&code, Some(token), false);
+                }
+                Ok(false) => {
+                    let mut config = app.config.borrow_mut();
+                    config.jam.last_code.clear();
+                    config.jam.last_token.clear();
+                    config::save(&config);
+                }
+                // Offline o. Ä.: beim nächsten Start wieder versuchen.
+                _ => {}
+            });
+        });
+    }
+
     /// Einladung von außen (playtube://jam/<code>): Jam-Tab zeigen und beitreten.
     pub fn jam_open_code(&self, code: String) {
         self.show_window();

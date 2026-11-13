@@ -1,6 +1,6 @@
 [package]
 name = "playtube"
-version = "2.9.0"
+version = "2.9.1"
 edition = "2024"
 description = "Playtube – YouTube und YouTube Music als eigene Desktop-App"
 license = "UNLICENSED"

@@ -1,4 +1,12 @@
-## Playtube 2.9.0
+## Playtube 2.9.1
+
+- **Behoben: In der Suchleiste der Playtube-Ansicht ließ sich nichts eingeben.** Die Tastatur blieb bei der
+  (unsichtbaren) YouTube-Music-Seite hängen; jetzt bekommt die Playtube-Ansicht den Fokus.
+- **Nach einem Neustart wieder im Jam:** Wird Playtube beendet, neu gestartet (z. B. nach einem Update) oder
+  stürzt ab, tritt es beim nächsten Start von selbst wieder dem letzten Jam bei – mit derselben Rolle und
+  denselben Rechten wie vorher (der Host bleibt Host). Wer den Jam bewusst verlässt, bleibt draußen.
+
+Neu in 2.9.0:
 
 - **Mit Windows starten:** Unter Einstellungen › Allgemein kannst du Playtube beim Hochfahren automatisch starten
   lassen (standardmäßig aus) – auf Wunsch nur im Tray, ohne dass ein Fenster aufgeht.
@@ -55,12 +63,20 @@ Neu in 2.6.0:
 
 Alles Weitere wie in 2.5.2 (Tonausgabe Normal/Discord, Fixes).
 
-**Installieren:** `Playtube-Setup-2.9.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
+**Installieren:** `Playtube-Setup-2.9.1.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
 aktualisiert sich auch von selbst.
 
 ---
 
-## Playtube 2.9.0
+## Playtube 2.9.1
+
+- **Fixed: nothing could be typed into the search bar of the Playtube view.** The keyboard stayed with the
+  (hidden) YouTube Music page; the Playtube view now gets the focus.
+- **Back in the jam after a restart:** if Playtube is closed, restarted (e.g. after an update) or crashes, it
+  rejoins the last jam on the next start – with the same role and rights as before (the host stays host).
+  Leaving the jam on purpose keeps you out.
+
+New in 2.9.0:
 
 - **Start with Windows:** under Settings › General, Playtube can start automatically when you sign in (off by
   default) – optionally in the tray only, without opening a window.
@@ -117,4 +133,4 @@ New in 2.6.0:
 
 Everything else as in 2.5.2 (sound output Normal/Discord, fixes).
 
-**Install:** run `Playtube-Setup-2.9.0.exe` – it replaces any older Playtube. Playtube also updates itself.
+**Install:** run `Playtube-Setup-2.9.1.exe` – it replaces any older Playtube. Playtube also updates itself.

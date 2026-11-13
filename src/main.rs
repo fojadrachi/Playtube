@@ -182,14 +182,26 @@ impl App {
             tab.set_visible(true);
         }
         self.layout();
+        // Playtube-Ansicht: YouTube-Music-WebView verstecken, eigene Oberfläche zeigen.
+        self.music_on_select();
         if index < self.tabs.len() {
             self.ui.set_url_text(self.tabs[index].url.borrow().clone().into());
-            let _ = self.tabs[index].webview.focus();
         } else {
             self.ui.set_url_text(SharedString::new());
         }
-        // Playtube-Ansicht: YouTube-Music-WebView verstecken, eigene Oberfläche zeigen.
-        self.music_on_select();
+        // Tastatur: zur gezeigten Seite - oder zu Playtube selbst (Playtube-Ansicht, Einstellungen,
+        // Jam). Sonst behält eine Seite außerhalb des Fensters den Fokus und Eingaben (z. B. in der
+        // Suchleiste der Playtube-Ansicht) landen dort.
+        match self.tabs.get(index).filter(|_| !self.music_active()) {
+            Some(tab) => {
+                let _ = tab.webview.focus();
+            }
+            None => {
+                for tab in &self.tabs {
+                    let _ = tab.webview.focus_parent();
+                }
+            }
+        }
         self.update_presence();
     }
 
@@ -1018,9 +1030,11 @@ fn start(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config, jam_c
             None => app.show_window(),
         })
     });
-    // Gestartet über eine Einladung (playtube://jam/<code>).
+    // Gestartet über eine Einladung (playtube://jam/<code>) - sonst ggf. zurück in den letzten Jam.
     if let Some(code) = jam_code {
         app.jam_open_code(code);
+    } else {
+        app.jam_resume();
     }
     // Stream-Dock-Plugin: eigener Pipe-Name pro Datenordner.
     if remote_enabled {
