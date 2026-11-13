@@ -312,7 +312,6 @@ impl App {
         let config = self.config.borrow();
         let worker = config.discord.enabled.then(|| {
             DiscordWorker::start(
-                config.discord.update_interval_seconds,
                 config.discord.show_idle_presence,
             )
         });
@@ -725,7 +724,6 @@ impl App {
         let config = self.config.borrow();
         let ui = &self.ui;
         ui.set_discord_enabled(config.discord.enabled);
-        ui.set_discord_interval(config.discord.update_interval_seconds as i32);
         ui.set_show_idle(config.discord.show_idle_presence);
         ui.set_updates_enabled(config.updates.enabled);
         ui.set_check_interval(config.updates.check_interval_hours as i32);
@@ -749,7 +747,6 @@ impl App {
         {
             let mut config = self.config.borrow_mut();
             config.discord.enabled = ui.get_discord_enabled();
-            config.discord.update_interval_seconds = ui.get_discord_interval().clamp(15, 120) as u64;
             config.discord.show_idle_presence = ui.get_show_idle();
             config.updates.enabled = ui.get_updates_enabled();
             config.updates.check_interval_hours = ui.get_check_interval().clamp(1, 168) as u64;
@@ -885,7 +882,6 @@ fn apply_texts(ui: &AppWindow) {
         section_phone: tr("section.phone").into(),
         section_general: tr("section.general").into(),
         field_enabled: tr("field.enabled").into(),
-        field_update_interval: tr("field.update_interval").into(),
         field_check_interval: tr("field.check_interval").into(),
         field_youtube: tr("field.youtube").into(),
         field_music: tr("field.music").into(),

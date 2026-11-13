@@ -2,8 +2,10 @@
 
 - **Mit Windows starten:** Unter Einstellungen › Allgemein kannst du Playtube beim Hochfahren automatisch starten
   lassen (standardmäßig aus) – auf Wunsch nur im Tray, ohne dass ein Fenster aufgeht.
-- **Discord-Status immer als „Playtube“:** Die Discord-Client-ID ist jetzt fest eingebaut, das Feld in den
-  Einstellungen ist weg.
+- **Discord-Status immer als „Playtube“:** Die Discord-Client-ID ist jetzt fest eingebaut, ebenso der Takt von
+  15 s für Statusupdates (mehr erlaubt Discord nicht) – beide Felder sind aus den Einstellungen verschwunden.
+- **Playtube-Ansicht ohne Browserleiste:** Zurück, Neu laden und Adressfeld gibt es nur noch bei YouTube und der
+  Original-Seite; die Playtube-Ansicht hat ihre eigene Navigation und mehr Platz.
 
 Neu in 2.8.0:
 
@@ -62,7 +64,10 @@ aktualisiert sich auch von selbst.
 
 - **Start with Windows:** under Settings › General, Playtube can start automatically when you sign in (off by
   default) – optionally in the tray only, without opening a window.
-- **Discord status always shows "Playtube":** the Discord client ID is now built in; the settings field is gone.
+- **Discord status always shows "Playtube":** the Discord client ID and the 15 s update rate (Discord's limit)
+  are now built in; both settings fields are gone.
+- **Playtube view without browser bar:** back, reload and the address field are only shown for YouTube and the
+  original page; the Playtube view has its own navigation and more room.
 
 New in 2.8.0:
 

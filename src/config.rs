@@ -11,7 +11,6 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[serde(default)]
 pub struct Discord {
     pub enabled: bool,
-    pub update_interval_seconds: u64,
     pub show_idle_presence: bool,
 }
 
@@ -19,7 +18,6 @@ impl Default for Discord {
     fn default() -> Self {
         Self {
             enabled: true,
-            update_interval_seconds: 15,
             show_idle_presence: true,
         }
     }
@@ -211,7 +209,6 @@ pub fn load() -> Config {
     let path = config_path();
     match std::fs::read_to_string(&path).ok().and_then(|text| serde_json::from_str::<Config>(&text).ok()) {
         Some(mut config) => {
-            config.discord.update_interval_seconds = config.discord.update_interval_seconds.clamp(15, 120);
             config.updates.check_interval_hours = config.updates.check_interval_hours.clamp(1, 168);
             if config.jam.server.trim().is_empty() {
                 config.jam.server = crate::jam::DEFAULT_SERVER.into();

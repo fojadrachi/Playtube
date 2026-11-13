@@ -85,7 +85,6 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ("diag.sent", "Gesendet. Kennung dieser Installation: {id}", "Sent. ID of this installation: {id}"),
     ("diag.failed", "Senden fehlgeschlagen: {error}", "Sending failed: {error}"),
     ("field.enabled", "Aktiviert", "Enabled"),
-    ("field.update_interval", "Update-Intervall (Sekunden)", "Update interval (seconds)"),
     ("field.check_interval", "Prüfintervall (Stunden)", "Check interval (hours)"),
     ("field.youtube", "YouTube", "YouTube"),
     ("field.music", "YouTube Music", "YouTube Music"),

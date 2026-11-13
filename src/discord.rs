@@ -40,11 +40,14 @@ pub struct DiscordWorker {
 /// wird ignoriert.
 pub const CLIENT_ID: &str = "1548023494976086127";
 
+/// Fester Takt für Statusupdates: Discord erlaubt höchstens ein Update je 15 s.
+const INTERVAL: Duration = Duration::from_secs(15);
+
 impl DiscordWorker {
-    pub fn start(interval_seconds: u64, show_idle: bool) -> Self {
+    pub fn start(show_idle: bool) -> Self {
         let client_id = CLIENT_ID.to_string();
         let (tx, rx) = mpsc::channel();
-        let interval = Duration::from_secs(interval_seconds.max(15));
+        let interval = INTERVAL;
         let thread = std::thread::Builder::new()
             .name("discord".into())
             .spawn(move || run(rx, client_id, interval, show_idle))
