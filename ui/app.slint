@@ -648,8 +648,9 @@ export component AppWindow inherits Window {
                                     padding: 16px;
                                     spacing: 10px;
                                     CardTitle { text: root.jt.invite; }
+                                    // QR-Code oben, Code und "Link kopieren" darunter - nebeneinander
+                                    // passte der Code in der schmalen Spalte nicht in die Karte.
                                     HorizontalLayout {
-                                        spacing: 12px;
                                         alignment: start;
                                         Rectangle {
                                             width: 132px;
@@ -658,12 +659,20 @@ export component AppWindow inherits Window {
                                             border-radius: 8px;
                                             Image { source: root.jam-qr; width: 120px; height: 120px; image-rendering: pixelated; }
                                         }
-                                        VerticalLayout {
-                                            spacing: 8px;
-                                            alignment: center;
-                                            Text { text: root.jam-code; font-size: 24px; font-weight: 700; color: #ffffff; letter-spacing: 2px; }
-                                            Button { text: root.jt.copy; clicked => { root.jam-copy-link(); } }
+                                    }
+                                    HorizontalLayout {
+                                        spacing: 12px;
+                                        Text {
+                                            text: root.jam-code;
+                                            font-size: 24px;
+                                            font-weight: 700;
+                                            color: #ffffff;
+                                            letter-spacing: 2px;
+                                            vertical-alignment: center;
+                                            horizontal-stretch: 1;
+                                            overflow: elide;
                                         }
+                                        Button { text: root.jt.copy; clicked => { root.jam-copy-link(); } }
                                     }
                                     Hint { text: root.jam-link; }
                                 }

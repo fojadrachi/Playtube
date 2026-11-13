@@ -1,4 +1,9 @@
-## Playtube 2.9.2
+## Playtube 2.9.3
+
+- **Behoben: Der Jam-Code ragte über die Karte „Freunde einladen“ hinaus.** Code und „Link kopieren“ stehen jetzt
+  unter dem QR-Code und passen auch in schmale Fenster.
+
+Neu in 2.9.2:
 
 - **Medientasten der Tastatur:** Play/Pause, Weiter, Zurück und Stopp auf der Tastatur steuern jetzt Playtube –
   auch wenn das Fenster im Hintergrund oder nur im Tray ist, im Jam auch den Jam. Playtube reagiert nur, wenn gerade
@@ -70,12 +75,17 @@ Neu in 2.6.0:
 
 Alles Weitere wie in 2.5.2 (Tonausgabe Normal/Discord, Fixes).
 
-**Installieren:** `Playtube-Setup-2.9.2.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
+**Installieren:** `Playtube-Setup-2.9.3.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
 aktualisiert sich auch von selbst.
 
 ---
 
-## Playtube 2.9.2
+## Playtube 2.9.3
+
+- **Fixed: the jam code stuck out of the "Invite friends" card.** The code and "Copy link" now sit below the QR
+  code and fit narrow windows too.
+
+New in 2.9.2:
 
 - **Keyboard media keys:** play/pause, next, previous and stop on your keyboard now control Playtube – also when the
   window is in the background or only in the tray, and the jam while you are in one. Playtube only reacts while
@@ -146,4 +156,4 @@ New in 2.6.0:
 
 Everything else as in 2.5.2 (sound output Normal/Discord, fixes).
 
-**Install:** run `Playtube-Setup-2.9.2.exe` – it replaces any older Playtube. Playtube also updates itself.
+**Install:** run `Playtube-Setup-2.9.3.exe` – it replaces any older Playtube. Playtube also updates itself.
