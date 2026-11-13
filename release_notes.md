@@ -5,6 +5,7 @@
 - **Nach einem Neustart wieder im Jam:** Wird Playtube beendet, neu gestartet (z. B. nach einem Update) oder
   stürzt ab, tritt es beim nächsten Start von selbst wieder dem letzten Jam bei – mit derselben Rolle und
   denselben Rechten wie vorher (der Host bleibt Host). Wer den Jam bewusst verlässt, bleibt draußen.
+- **Diagnosedaten:** Video-IDs und Songtitel werden jetzt zuverlässig entfernt, auch in technischen Logzeilen.
 
 Neu in 2.9.0:
 
@@ -75,6 +76,7 @@ aktualisiert sich auch von selbst.
 - **Back in the jam after a restart:** if Playtube is closed, restarted (e.g. after an update) or crashes, it
   rejoins the last jam on the next start – with the same role and rights as before (the host stays host).
   Leaving the jam on purpose keeps you out.
+- **Diagnostics:** video IDs and song titles are now reliably removed, also from technical log lines.
 
 New in 2.9.0:
 
