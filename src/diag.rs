@@ -27,6 +27,7 @@ pub fn sanitize(line: &str) -> String {
             return format!("{head}{marker} [entfernt]").chars().take(MAX_LINE_CHARS).collect();
         }
     }
+    let line = &scrub_json_fields(line);
     let mut out: Vec<String> = Vec::new();
     for word in line.split(' ') {
         out.push(clean_word(word));
@@ -62,20 +63,97 @@ fn clean_word(word: &str) -> String {
             }
         }
     }
-    let core: String = word.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-').collect();
-    if looks_like_video_id(&core) || looks_like_secret(&core) {
-        return word.replace(&core, if core.len() == 11 { "[video]" } else { "[id]" });
-    }
-    word.to_string()
+    replace_ids(word)
 }
 
-/// YouTube-Video-ID: 11 Zeichen, Groß- und Kleinbuchstaben gemischt plus Ziffer, `_` oder `-`.
+/// Jede Folge aus `[A-Za-z0-9_-]` im Wort prüfen (auch mitten in JSON wie `"id":"…"`).
+fn replace_ids(word: &str) -> String {
+    let is_id_char = |c: char| c.is_ascii_alphanumeric() || c == '_' || c == '-';
+    let mut out = String::with_capacity(word.len());
+    let mut run = String::new();
+    let flush = |run: &mut String, out: &mut String| {
+        if looks_like_video_id(run) {
+            out.push_str("[video]");
+        } else if looks_like_secret(run) {
+            out.push_str("[id]");
+        } else {
+            out.push_str(run);
+        }
+        run.clear();
+    };
+    for c in word.chars() {
+        if is_id_char(c) {
+            run.push(c);
+        } else {
+            flush(&mut run, &mut out);
+            out.push(c);
+        }
+    }
+    flush(&mut run, &mut out);
+    out
+}
+
+/// Titel, Interpret, Namen und Suchbegriffe in JSON-Auszügen (z. B. Player-Zustand) leeren.
+fn scrub_json_fields(line: &str) -> String {
+    const KEYS: [&str; 8] = ["title", "artist", "author", "album", "name", "query", "q", "search"];
+    let mut text = line.to_string();
+    for key in KEYS {
+        let needle = format!("\"{key}\":");
+        let mut from = 0;
+        while let Some(found) = text[from..].find(&needle) {
+            let mut i = from + found + needle.len();
+            while text[i..].starts_with(' ') {
+                i += 1;
+            }
+            if !text[i..].starts_with('"') {
+                from = i;
+                continue;
+            }
+            // Ende des Strings suchen (mit \" im Text).
+            let bytes = text.as_bytes();
+            let mut end = i + 1;
+            while end < bytes.len() && !(bytes[end] == b'"' && bytes[end - 1] != b'\\') {
+                end += 1;
+            }
+            let end = (end + 1).min(text.len());
+            text.replace_range(i..end, "\"[entfernt]\"");
+            from = i + "\"[entfernt]\"".len();
+        }
+    }
+    text
+}
+
+/// YouTube-Video-ID: 11 Zeichen aus `[A-Za-z0-9_-]`, entweder Buchstaben plus Ziffer/`_`/`-` oder
+/// mindestens zwei Großbuchstaben ohne normale Schreibweise (nicht "Verbindunge", "ServerError").
 pub fn looks_like_video_id(word: &str) -> bool {
-    word.len() == 11
-        && word.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-        && word.chars().any(|c| c.is_ascii_uppercase())
-        && word.chars().any(|c| c.is_ascii_lowercase())
-        && word.chars().any(|c| c.is_ascii_digit() || c == '_' || c == '-')
+    if word.len() != 11 || !word.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        return false;
+    }
+    let letters = word.chars().any(|c| c.is_ascii_alphabetic());
+    if word.chars().any(|c| c.is_ascii_digit() || c == '_' || c == '-') {
+        return letters;
+    }
+    let upper = word.chars().filter(|c| c.is_ascii_uppercase()).count();
+    upper >= 2 && word.chars().any(|c| c.is_ascii_lowercase()) && !is_camel_case(word)
+}
+
+/// "ServerError", "PlaytubeApp": Wörter, die jeweils mit einem Großbuchstaben beginnen.
+fn is_camel_case(word: &str) -> bool {
+    let mut prev_upper = false;
+    for (i, c) in word.chars().enumerate() {
+        if c.is_ascii_uppercase() {
+            if prev_upper || (i > 0 && i == word.len() - 1) {
+                return false;
+            }
+            prev_upper = true;
+        } else {
+            if i == 0 {
+                return false;
+            }
+            prev_upper = false;
+        }
+    }
+    true
 }
 
 /// Lange zufällig wirkende Zeichenketten (Tokens, Playlist-IDs) ab 20 Zeichen.
@@ -206,6 +284,18 @@ mod tests {
         // Normale Wörter bleiben (auch lange deutsche).
         assert_eq!(sanitize("update: Prüfung fehlgeschlagen: Verbindung abgelehnt"), "update: Prüfung fehlgeschlagen: Verbindung abgelehnt");
         assert_eq!(sanitize("Verbindungen"), "Verbindungen");
+    }
+
+    #[test]
+    fn removes_ids_without_digits_and_json_titles() {
+        assert_eq!(sanitize("jam: lade JZYXtUJcTws"), "jam: lade [video]");
+        let probe = r#"jam: Titel [video] spielt hier nicht an, Player: {"artist":"Band","id":"Rlg9P5i1bkQ","title":"Mein \"Song\"","paused":true}"#;
+        assert_eq!(
+            sanitize(probe),
+            r#"jam: Titel [video] spielt hier nicht an, Player: {"artist":"[entfernt]","id":"[video]","title":"[entfernt]","paused":true}"#
+        );
+        assert_eq!(sanitize(r#"{"title":null,"artist": "X"}"#), r#"{"title":null,"artist": "[entfernt]"}"#);
+        assert_eq!(sanitize("Verbindunge ServerError PlaytubeApp"), "Verbindunge ServerError PlaytubeApp");
     }
 
     #[test]
