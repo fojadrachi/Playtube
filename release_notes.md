@@ -1,4 +1,14 @@
-## Playtube 2.7.0
+## Playtube 2.8.0
+
+- **Kleine Updates ohne Setup:** Ab dieser Version lädt Playtube kleine Updates (gleiche Hauptversion) still im
+  Hintergrund und spielt sie direkt ein, während es weiterläuft – kein Setup-Fenster, keine Unterbrechung. Die
+  neue Version gilt ab dem nächsten Start; wer nicht warten will, klickt in den Einstellungen auf „Jetzt neu
+  starten“. Abschaltbar unter Updates › „Kleine Updates automatisch im Hintergrund installieren“. Große Updates
+  laufen wie bisher über das Setup.
+- **Behoben: Discord zeigte im Jam „Unbekannter Titel“.** Fehlt der Titel in der YouTube-Music-Leiste, nimmt
+  Playtube ihn jetzt aus der Wiedergabe-Info bzw. aus dem Jam.
+
+Neu in 2.7.0:
 
 - **Jam deutlich genauer synchron:** Kleine Abweichungen gleicht Playtube jetzt unhörbar aus, indem es kurz eine
   Spur schneller oder langsamer abspielt (die Tonhöhe bleibt). Gesprungen wird erst ab 1 s statt 1,5 s – und mit
@@ -36,12 +46,22 @@ Neu in 2.6.0:
 
 Alles Weitere wie in 2.5.2 (Tonausgabe Normal/Discord, Fixes).
 
-**Installieren:** `Playtube-Setup-2.7.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
+**Installieren:** `Playtube-Setup-2.8.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
 aktualisiert sich auch von selbst.
 
 ---
 
-## Playtube 2.7.0
+## Playtube 2.8.0
+
+- **Small updates without setup:** from this version on, Playtube downloads small updates (same major version)
+  quietly in the background and applies them while it keeps running – no setup window, no interruption. The new
+  version takes effect on the next start; if you don't want to wait, click "Restart now" in the settings. Can be
+  turned off under Updates › "Install small updates automatically in the background". Major updates still use
+  the setup.
+- **Fixed: Discord showed "Unknown title" during a jam.** If the YouTube Music player bar has no title, Playtube
+  now takes it from the media session or from the jam.
+
+New in 2.7.0:
 
 - **Jam stays much more closely in sync:** small differences are now evened out inaudibly by playing a touch
   faster or slower for a moment (pitch stays the same). Playtube only jumps from 1 s instead of 1.5 s – with a
@@ -79,4 +99,4 @@ New in 2.6.0:
 
 Everything else as in 2.5.2 (sound output Normal/Discord, fixes).
 
-**Install:** run `Playtube-Setup-2.7.0.exe` – it replaces any older Playtube. Playtube also updates itself.
+**Install:** run `Playtube-Setup-2.8.0.exe` – it replaces any older Playtube. Playtube also updates itself.

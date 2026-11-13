@@ -33,11 +33,13 @@ impl Default for Discord {
 pub struct Updates {
     pub enabled: bool,
     pub check_interval_hours: u64,
+    /// Kleine Updates (gleiche Hauptversion) still laden und direkt einspielen.
+    pub auto_install: bool,
 }
 
 impl Default for Updates {
     fn default() -> Self {
-        Self { enabled: true, check_interval_hours: 6 }
+        Self { enabled: true, check_interval_hours: 6, auto_install: true }
     }
 }
 

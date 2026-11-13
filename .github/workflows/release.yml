@@ -3,6 +3,8 @@ name: Release
 # Baut Playtube (Rust) und veröffentlicht das Setup als GitHub-Release, sobald ein
 # Tag "vX.Y.Z" gepusht wird. Die App sucht Updates über /releases/latest und lädt
 # "Playtube-Setup-<Version>.exe" (src/updater.rs); GitHub liefert dazu die SHA-256-Prüfsumme.
+# Kleine Updates (gleiche Hauptversion) nehmen stattdessen "Playtube-<Version>-win64.exe" und
+# tauschen sie ohne Setup gegen die laufende Datei (gilt ab dem nächsten Start).
 # Der Titel "Playtube vX.Y.Z" lässt auch die alte Python-Version (1.0.0) das Update finden.
 
 on:
@@ -40,5 +42,5 @@ jobs:
           $tag = "${{ github.ref_name }}"
           $version = $tag.TrimStart('v')
           gh release delete $tag --repo "${{ github.repository }}" --yes 2>$null
-          gh release create $tag "dist\Playtube-Setup-$version.exe" `
+          gh release create $tag "dist\Playtube-Setup-$version.exe" "dist\Playtube-$version-win64.exe" `
             --repo "${{ github.repository }}" --title "Playtube $tag" --notes-file release_notes.md --latest --verify-tag

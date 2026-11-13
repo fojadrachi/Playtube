@@ -85,6 +85,8 @@ struct App {
     dispatch: Dispatch,
     audio_values: RefCell<Vec<String>>,
     update: RefCell<Option<updater::UpdateInfo>>,
+    /// Ohne Setup eingespieltes Update (Version), aktiv ab dem nächsten Start.
+    update_staged: RefCell<Option<String>>,
     tray: RefCell<Option<(TrayIcon, Menu, TrayIds)>>,
     timers: RefCell<Vec<slint::Timer>>,
     update_timer: slint::Timer,
@@ -621,7 +623,17 @@ impl App {
 
     fn on_update_checked(&self, result: anyhow::Result<updater::UpdateInfo>, manual: bool) {
         self.ui.set_update_busy(false);
+        // Schon eingespielt, nur noch nicht neu gestartet.
+        if let (Ok(info), Some(staged)) = (&result, self.update_staged.borrow().as_ref()) {
+            if info.latest == *staged {
+                self.ui.set_update_status(trf("updates.staged", &[("version", staged)]).into());
+                return;
+            }
+        }
         match result {
+            Ok(info) if info.available && self.config.borrow().updates.auto_install && updater::is_installed() && updater::is_minor(&info, VERSION) => {
+                self.install_in_place(info);
+            }
             Ok(info) if info.available => {
                 let first_time = self.update.borrow().as_ref().map(|u| u.latest != info.latest).unwrap_or(true);
                 self.ui.set_update_status(trf("updates.available", &[("version", &info.latest)]).into());
@@ -640,6 +652,37 @@ impl App {
                 log::line(&format!("update: Prüfung fehlgeschlagen: {e:#}"));
                 self.ui.set_update_status(tr("updates.failed").into());
             }
+        }
+    }
+
+    /// Kleines Update still laden und einspielen; Playtube läuft dabei einfach weiter.
+    fn install_in_place(&self, info: updater::UpdateInfo) {
+        log::line(&format!("update: lade {} im Hintergrund", info.latest));
+        self.runtime.spawn(async move {
+            let result = updater::install_in_place(&info).await;
+            on_ui(move |app| match result {
+                Ok(()) => {
+                    log::line(&format!("update: {} eingespielt, aktiv ab dem nächsten Start", info.latest));
+                    app.ui.set_update_available(false);
+                    app.ui.set_update_restart(true);
+                    app.ui.set_update_status(trf("updates.staged", &[("version", &info.latest)]).into());
+                    *app.update_staged.borrow_mut() = Some(info.latest.clone());
+                }
+                Err(e) => {
+                    // Rückfall: wie bisher über das Setup anbieten.
+                    log::line(&format!("update: Einspielen ohne Setup fehlgeschlagen: {e:#}"));
+                    app.ui.set_update_status(trf("updates.available", &[("version", &info.latest)]).into());
+                    app.ui.set_update_available(true);
+                    *app.update.borrow_mut() = Some(info);
+                }
+            });
+        });
+    }
+
+    fn restart_after_update(&self) {
+        match updater::relaunch() {
+            Ok(()) => self.quit(),
+            Err(e) => self.ui.set_update_status(trf("updates.install_failed", &[("error", &format!("{e:#}"))]).into()),
         }
     }
 
@@ -687,6 +730,7 @@ impl App {
         ui.set_show_idle(config.discord.show_idle_presence);
         ui.set_updates_enabled(config.updates.enabled);
         ui.set_check_interval(config.updates.check_interval_hours as i32);
+        ui.set_updates_auto(config.updates.auto_install);
         ui.set_phone_enabled(config.lan_remote.enabled);
         ui.set_diag_enabled(config.diagnostics.enabled);
         ui.set_audio_mode_index(if config.audio.stream_mode { 1 } else { 0 });
@@ -709,6 +753,7 @@ impl App {
             config.discord.show_idle_presence = ui.get_show_idle();
             config.updates.enabled = ui.get_updates_enabled();
             config.updates.check_interval_hours = ui.get_check_interval().clamp(1, 168) as u64;
+            config.updates.auto_install = ui.get_updates_auto();
             let values = self.audio_values.borrow();
             config.audio.youtube_output = values.get(ui.get_youtube_output() as usize).cloned().unwrap_or_default();
             config.audio.music_output = values.get(ui.get_music_output() as usize).cloned().unwrap_or_default();
@@ -850,6 +895,8 @@ fn apply_texts(ui: &AppWindow) {
         discord_show_idle: tr("discord.show_idle").into(),
         updates_check_now: tr("updates.check_now").into(),
         updates_install: tr("updates.install").into(),
+        updates_auto: tr("updates.auto").into(),
+        updates_restart: tr("updates.restart").into(),
         audio_hint: tr("audio.hint").into(),
         audio_mode: tr("audio.mode").into(),
         audio_mode_normal: tr("audio.mode.normal").into(),
@@ -912,6 +959,7 @@ fn build_app(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config) -
         dispatch,
         audio_values: RefCell::new(Vec::new()),
         update: RefCell::new(None),
+        update_staged: RefCell::new(None),
         tray: RefCell::new(None),
         timers: RefCell::new(Vec::new()),
         update_timer: slint::Timer::default(),
@@ -998,6 +1046,9 @@ fn main() {
     std::panic::set_hook(Box::new(|info| log::line(&format!("PANIC: {info}"))));
 
     let args: Vec<String> = std::env::args().collect();
+    // Neustart nach einem Update: erst warten, bis die alte Instanz weg ist.
+    updater::wait_for_previous(&args);
+    updater::cleanup();
     let jam_code = jam::code_from_args(&args);
     if instance::notify_running(jam_code.as_deref()) {
         return;
@@ -1037,6 +1088,7 @@ fn main() {
     ui.on_save_settings(|| with_app(|app| app.save_settings()));
     ui.on_check_updates(|| with_app(|app| app.check_updates(true)));
     ui.on_install_update(|| with_app(|app| app.install_update()));
+    ui.on_restart_update(|| with_app(|app| app.restart_after_update()));
     ui.on_pair_phone(|| with_app(|app| app.pair_phone()));
     ui.on_forget_phones(|| with_app(|app| app.pairing.forget_all()));
     ui.on_send_diagnostics(|| with_app(|app| app.send_diagnostics(true)));

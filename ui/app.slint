@@ -79,6 +79,8 @@ export struct Texts {
     discord-show-idle: string,
     updates-check-now: string,
     updates-install: string,
+    updates-auto: string,
+    updates-restart: string,
     audio-hint: string,
     audio-mode: string,
     audio-mode-normal: string,
@@ -221,6 +223,9 @@ export component AppWindow inherits Window {
     in-out property <bool> show-idle;
     in-out property <bool> updates-enabled;
     in-out property <int> check-interval: 6;
+    in-out property <bool> updates-auto: true;
+    // Update ohne Setup eingespielt: "Jetzt neu starten" anbieten
+    in property <bool> update-restart;
     in property <string> update-status;
     in property <bool> update-available;
     in property <bool> update-busy;
@@ -257,6 +262,7 @@ export component AppWindow inherits Window {
     callback save-settings();
     callback check-updates();
     callback install-update();
+    callback restart-update();
     callback pair-phone();
     callback forget-phones();
     callback send-diagnostics();
@@ -411,9 +417,11 @@ export component AppWindow inherits Window {
                             spacing: 8px;
                             CheckBox { text: root.t.field-enabled; checked <=> root.updates-enabled; }
                             Row { FieldLabel { text: root.t.field-check-interval; } SpinBox { minimum: 1; maximum: 168; value <=> root.check-interval; } }
+                            CheckBox { text: root.t.updates-auto; checked <=> root.updates-auto; }
                             Row {
                                 Button { text: root.t.updates-check-now; enabled: !root.update-busy; clicked => { root.check-updates(); } }
                                 if root.update-available: Button { text: root.t.updates-install; primary: true; enabled: !root.update-busy; clicked => { root.install-update(); } }
+                                if root.update-restart: Button { text: root.t.updates-restart; primary: true; clicked => { root.restart-update(); } }
                             }
                             Hint { text: root.update-status; }
                             if root.update-progress >= 0: ProgressIndicator { progress: root.update-progress; height: 6px; }

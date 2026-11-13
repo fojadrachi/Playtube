@@ -1,5 +1,6 @@
 # Baut das Playtube-Setup für ein Release:
-#   dist\Playtube-Setup-<Version>.exe   (Installer, auch für Updates aus der App)
+#   dist\Playtube-Setup-<Version>.exe   (Installer, auch für große Updates aus der App)
+#   dist\Playtube-<Version>-win64.exe    (nackte Programmdatei für kleine Updates ohne Setup)
 # Die Version kommt aus Cargo.toml.
 param([string]$Iscc = "")
 
@@ -29,6 +30,8 @@ try {
 $exe = Join-Path $root "target\release\playtube.exe"
 $dist = Join-Path $root "dist"
 New-Item -ItemType Directory -Force $dist | Out-Null
+
+Copy-Item $exe (Join-Path $dist "Playtube-$version-win64.exe") -Force
 
 & $Iscc /Q "/DAppVersion=$version" "/DSourceExe=$exe" (Join-Path $root "installer\Playtube.iss")
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup fehlgeschlagen" }
