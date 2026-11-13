@@ -7,6 +7,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod audio;
+mod autostart;
 mod browser;
 mod config;
 mod diag;
@@ -309,9 +310,8 @@ impl App {
 
     fn start_discord(&self) {
         let config = self.config.borrow();
-        let worker = (config.discord.enabled && !config.discord.client_id.trim().is_empty()).then(|| {
+        let worker = config.discord.enabled.then(|| {
             DiscordWorker::start(
-                config.discord.client_id.trim().to_string(),
                 config.discord.update_interval_seconds,
                 config.discord.show_idle_presence,
             )
@@ -725,7 +725,6 @@ impl App {
         let config = self.config.borrow();
         let ui = &self.ui;
         ui.set_discord_enabled(config.discord.enabled);
-        ui.set_client_id(config.discord.client_id.clone().into());
         ui.set_discord_interval(config.discord.update_interval_seconds as i32);
         ui.set_show_idle(config.discord.show_idle_presence);
         ui.set_updates_enabled(config.updates.enabled);
@@ -736,6 +735,8 @@ impl App {
         ui.set_audio_mode_index(if config.audio.stream_mode { 1 } else { 0 });
         ui.set_start_tab_index(if config.start_tab == "music" { 1 } else { 0 });
         ui.set_music_view_index(if config.music_view { 0 } else { 1 });
+        ui.set_autostart(config.autostart);
+        ui.set_autostart_tray(config.autostart_tray);
         let language = i18n::current();
         ui.set_language_index(i18n::LANGUAGES.iter().position(|(code, _)| *code == language).unwrap_or(0) as i32);
         drop(config);
@@ -748,7 +749,6 @@ impl App {
         {
             let mut config = self.config.borrow_mut();
             config.discord.enabled = ui.get_discord_enabled();
-            config.discord.client_id = ui.get_client_id().trim().to_string();
             config.discord.update_interval_seconds = ui.get_discord_interval().clamp(15, 120) as u64;
             config.discord.show_idle_presence = ui.get_show_idle();
             config.updates.enabled = ui.get_updates_enabled();
@@ -762,6 +762,8 @@ impl App {
             config.audio.stream_mode = ui.get_audio_mode_index() == 1;
             config.start_tab = if ui.get_start_tab_index() == 1 { "music" } else { "youtube" }.into();
             config.music_view = ui.get_music_view_index() == 0;
+            config.autostart = ui.get_autostart();
+            config.autostart_tray = ui.get_autostart_tray();
             config.language = i18n::LANGUAGES.get(ui.get_language_index() as usize).map(|(c, _)| c.to_string()).unwrap_or_default();
             config::save(&config);
         }
@@ -775,6 +777,7 @@ impl App {
         self.start_discord();
         self.apply_lan();
         self.setup_update_timer();
+        autostart::apply(self.config.borrow().autostart);
         // Ansicht von YouTube Music sofort übernehmen
         self.select_tab(self.current.get());
         self.ui.set_saved_text(tr("settings.saved").into());
@@ -882,7 +885,6 @@ fn apply_texts(ui: &AppWindow) {
         section_phone: tr("section.phone").into(),
         section_general: tr("section.general").into(),
         field_enabled: tr("field.enabled").into(),
-        field_client_id: tr("field.client_id").into(),
         field_update_interval: tr("field.update_interval").into(),
         field_check_interval: tr("field.check_interval").into(),
         field_youtube: tr("field.youtube").into(),
@@ -890,6 +892,8 @@ fn apply_texts(ui: &AppWindow) {
         field_start_tab: tr("field.start_tab").into(),
         field_language: tr("field.language").into(),
         field_music_view: tr("field.music_view").into(),
+        field_autostart: tr("field.autostart").into(),
+        field_autostart_tray: tr("field.autostart_tray").into(),
         music_view_playtube: tr("field.music_view.playtube").into(),
         music_view_original: tr("field.music_view.original").into(),
         discord_show_idle: tr("discord.show_idle").into(),
@@ -999,6 +1003,17 @@ fn start(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config, jam_c
     app.build_tray();
     app.setup_update_timer();
     app.jam_init_ui();
+    // Eintrag mit dem aktuellen Pfad auffrischen; vom Autostart gestartet: auf Wunsch nur im Tray.
+    let (autostart_on, tray_only) = {
+        let config = app.config.borrow();
+        (config.autostart, config.autostart_tray)
+    };
+    if autostart_on {
+        autostart::apply(true);
+    }
+    if tray_only && autostart::started_by_autostart(&std::env::args().collect::<Vec<_>>()) {
+        let _ = app.ui.hide();
+    }
 
     // Ein zweiter Start holt dieses Fenster nach vorn (bzw. tritt einem Jam bei).
     instance::listen(app.runtime.handle(), |jam_code| {

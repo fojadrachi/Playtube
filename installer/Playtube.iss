@@ -122,6 +122,8 @@ end;
 function InitializeUninstall(): Boolean;
 begin
   StopRunningPlaytube();
+  { Autostart-Eintrag (Einstellungen › Allgemein › Mit Windows starten) entfernen. }
+  RegDeleteValue(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Run', 'Playtube');
   Result := True;
 end;
 

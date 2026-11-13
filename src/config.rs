@@ -11,7 +11,6 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[serde(default)]
 pub struct Discord {
     pub enabled: bool,
-    pub client_id: String,
     pub update_interval_seconds: u64,
     pub show_idle_presence: bool,
 }
@@ -20,8 +19,6 @@ impl Default for Discord {
     fn default() -> Self {
         Self {
             enabled: true,
-            // Discord-Anwendung "Playtube" (öffentliche ID, kein Geheimnis).
-            client_id: "1548023494976086127".into(),
             update_interval_seconds: 15,
             show_idle_presence: true,
         }
@@ -155,6 +152,10 @@ pub struct Config {
     pub music_view: bool,
     /// "youtube" oder "music"
     pub start_tab: String,
+    /// Mit Windows starten
+    pub autostart: bool,
+    /// Beim Autostart nur im Tray starten (kein Fenster)
+    pub autostart_tray: bool,
     /// "de", "en" oder leer (= Windows-Sprache)
     pub language: String,
     pub home_youtube: String,
@@ -175,6 +176,8 @@ impl Default for Config {
             diagnostics: Diagnostics::default(),
             music_view: true,
             start_tab: "youtube".into(),
+            autostart: false,
+            autostart_tray: true,
             language: String::new(),
             home_youtube: "https://www.youtube.com/".into(),
             home_music: "https://music.youtube.com/".into(),
@@ -247,7 +250,6 @@ mod tests {
             "unbekannt": 1}"#;
         let config: Config = serde_json::from_str(text).unwrap();
         assert!(!config.discord.enabled);
-        assert_eq!(config.discord.client_id, "1548023494976086127");
         assert_eq!(config.start_tab, "music");
         assert_eq!(config.lan_remote.port, crate::lan::DEFAULT_PORT);
         assert_eq!(config.lan_remote.devices[0].name, "Pixel");

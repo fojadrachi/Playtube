@@ -66,7 +66,6 @@ export struct Texts {
     section-phone: string,
     section-general: string,
     field-enabled: string,
-    field-client-id: string,
     field-update-interval: string,
     field-check-interval: string,
     field-youtube: string,
@@ -74,6 +73,8 @@ export struct Texts {
     field-start-tab: string,
     field-language: string,
     field-music-view: string,
+    field-autostart: string,
+    field-autostart-tray: string,
     music-view-playtube: string,
     music-view-original: string,
     discord-show-idle: string,
@@ -218,7 +219,6 @@ export component AppWindow inherits Window {
 
     // Einstellungen
     in-out property <bool> discord-enabled;
-    in-out property <string> client-id;
     in-out property <int> discord-interval: 15;
     in-out property <bool> show-idle;
     in-out property <bool> updates-enabled;
@@ -247,6 +247,8 @@ export component AppWindow inherits Window {
     in-out property <int> start-tab-index: 0;
     // 0 = Playtube-Ansicht, 1 = Original-Seite von YouTube Music
     in-out property <int> music-view-index: 0;
+    in-out property <bool> autostart;
+    in-out property <bool> autostart-tray: true;
     in property <string> saved-text;
     in-out property <bool> diag-enabled: true;
     in property <string> diag-status;
@@ -405,7 +407,6 @@ export component AppWindow inherits Window {
                         VerticalLayout {
                             spacing: 8px;
                             CheckBox { text: root.t.field-enabled; checked <=> root.discord-enabled; }
-                            Row { FieldLabel { text: root.t.field-client-id; } LineEdit { text <=> root.client-id; min-width: 260px; } }
                             Row { FieldLabel { text: root.t.field-update-interval; } SpinBox { minimum: 15; maximum: 120; value <=> root.discord-interval; } }
                             CheckBox { text: root.t.discord-show-idle; checked <=> root.show-idle; }
                         }
@@ -463,6 +464,8 @@ export component AppWindow inherits Window {
                             Row { FieldLabel { text: root.t.field-start-tab; } ComboBox { model: ["YouTube", "YouTube Music"]; current-index <=> root.start-tab-index; min-width: 200px; } }
                             Row { FieldLabel { text: root.t.field-language; } ComboBox { model: root.languages; current-index <=> root.language-index; min-width: 200px; } }
                             Row { FieldLabel { text: root.t.field-music-view; } ComboBox { model: [root.t.music-view-playtube, root.t.music-view-original]; current-index <=> root.music-view-index; min-width: 200px; } }
+                            CheckBox { text: root.t.field-autostart; checked <=> root.autostart; }
+                            CheckBox { text: root.t.field-autostart-tray; checked <=> root.autostart-tray; enabled: root.autostart; }
                         }
                     }
 

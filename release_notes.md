@@ -1,4 +1,11 @@
-## Playtube 2.8.0
+## Playtube 2.9.0
+
+- **Mit Windows starten:** Unter Einstellungen › Allgemein kannst du Playtube beim Hochfahren automatisch starten
+  lassen (standardmäßig aus) – auf Wunsch nur im Tray, ohne dass ein Fenster aufgeht.
+- **Discord-Status immer als „Playtube“:** Die Discord-Client-ID ist jetzt fest eingebaut, das Feld in den
+  Einstellungen ist weg.
+
+Neu in 2.8.0:
 
 - **Kleine Updates ohne Setup:** Ab dieser Version lädt Playtube kleine Updates (gleiche Hauptversion) still im
   Hintergrund und spielt sie direkt ein, während es weiterläuft – kein Setup-Fenster, keine Unterbrechung. Die
@@ -46,12 +53,18 @@ Neu in 2.6.0:
 
 Alles Weitere wie in 2.5.2 (Tonausgabe Normal/Discord, Fixes).
 
-**Installieren:** `Playtube-Setup-2.8.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
+**Installieren:** `Playtube-Setup-2.9.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
 aktualisiert sich auch von selbst.
 
 ---
 
-## Playtube 2.8.0
+## Playtube 2.9.0
+
+- **Start with Windows:** under Settings › General, Playtube can start automatically when you sign in (off by
+  default) – optionally in the tray only, without opening a window.
+- **Discord status always shows "Playtube":** the Discord client ID is now built in; the settings field is gone.
+
+New in 2.8.0:
 
 - **Small updates without setup:** from this version on, Playtube downloads small updates (same major version)
   quietly in the background and applies them while it keeps running – no setup window, no interruption. The new
@@ -99,4 +112,4 @@ New in 2.6.0:
 
 Everything else as in 2.5.2 (sound output Normal/Discord, fixes).
 
-**Install:** run `Playtube-Setup-2.8.0.exe` – it replaces any older Playtube. Playtube also updates itself.
+**Install:** run `Playtube-Setup-2.9.0.exe` – it replaces any older Playtube. Playtube also updates itself.

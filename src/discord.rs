@@ -35,8 +35,14 @@ pub struct DiscordWorker {
     thread: Option<std::thread::JoinHandle<()>>,
 }
 
+/// Discord-Anwendung "Playtube" (öffentliche ID, kein Geheimnis). Fest eingebaut, damit der Status
+/// immer als "Playtube" mit den eigenen Bildern erscheint; eine alte `client_id` in der config.json
+/// wird ignoriert.
+pub const CLIENT_ID: &str = "1548023494976086127";
+
 impl DiscordWorker {
-    pub fn start(client_id: String, interval_seconds: u64, show_idle: bool) -> Self {
+    pub fn start(interval_seconds: u64, show_idle: bool) -> Self {
+        let client_id = CLIENT_ID.to_string();
         let (tx, rx) = mpsc::channel();
         let interval = Duration::from_secs(interval_seconds.max(15));
         let thread = std::thread::Builder::new()
