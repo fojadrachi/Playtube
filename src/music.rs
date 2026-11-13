@@ -50,6 +50,8 @@ pub struct MusicState {
     sidebar_urls: Vec<Option<String>>,
     queue_model: Option<Rc<VecModel<MusicCard>>>,
     queue_urls: Vec<Option<String>>,
+    /// Im Jam: Jam-Eintrag je Zeile der Warteschlange (nur kommende Songs sind anklickbar).
+    jam_queue: Vec<Option<String>>,
     page_url: Option<String>,
     now_url: Option<String>,
     images: HashMap<String, SharedPixelBuffer<Rgba8Pixel>>,
@@ -81,6 +83,7 @@ fn texts() -> MusicTexts {
         results: tr("music.results").into(),
         search_placeholder: tr("music.search_placeholder").into(),
         jam_add: tr("music.jam_add").into(),
+        jam_queue: tr("music.jam_queue").into(),
     }
 }
 
@@ -610,6 +613,13 @@ impl App {
     }
 
     fn music_play_queue(&self, index: u32) {
+        if let Some(state) = self.jam_state() {
+            let item = self.music.borrow().jam_queue.get(index as usize).cloned().flatten();
+            if let (Some(item_id), true) = (item, state.can_control) {
+                self.jam_send(json!({ "t": "jump", "itemId": item_id }));
+            }
+            return;
+        }
         self.tabs[TAB_MUSIC].eval(&scripts::play_queue_item(index));
         self.music().last_queue = None;
     }
@@ -696,11 +706,63 @@ impl App {
             && self.music.borrow().last_queue.is_none_or(|t| t.elapsed() > QUEUE_EVERY);
         if queue_due {
             self.music().last_queue = Some(Instant::now());
+            // Im Jam zeigt die Warteschlange die Jam-Liste: die von YouTube Music wird bei jedem
+            // Jam-Song neu erzeugt und hätte mit dem Jam nichts zu tun.
+            if let Some(state) = self.jam_state() {
+                self.music_show_jam_queue(&state);
+                return;
+            }
             self.tabs[TAB_MUSIC].eval_with(scripts::QUEUE, |result| {
                 if let Some(Value::Array(items)) = result {
                     on_ui(move |app| app.music_show_queue(items));
                 }
             });
+        }
+    }
+
+    /// Jam-Liste in der Warteschlange: zuletzt gespielt, läuft gerade, als Nächstes - jeweils mit
+    /// dem Namen, wer den Song hinzugefügt hat.
+    pub(crate) fn music_show_jam_queue(&self, state: &crate::jam::JamState) {
+        let played = state.history.len().saturating_sub(3);
+        let rows = state.history[played..]
+            .iter()
+            .map(|i| (i, false, None, Some(tr("music.jam_played").to_string())))
+            .chain(state.current.iter().map(|i| (i, true, None, None)))
+            .chain(state.queue.iter().map(|i| (i, false, Some(i.id.clone()), None)));
+        let mut urls = Vec::new();
+        let mut ids = Vec::new();
+        let cards: Vec<MusicCard> = rows
+            .take(200)
+            .enumerate()
+            .map(|(n, (item, playing, id, prefix))| {
+                let url = (!item.thumb.is_empty() && item.thumb.starts_with("https://")).then(|| ytm::sized_thumb(&item.thumb, ROW_PX));
+                let image = url.as_ref().and_then(|u| self.music_cached(u));
+                urls.push(url);
+                ids.push(id);
+                let by = trf("jam.by", &[("name", &item.by_name)]);
+                let subtitle = [prefix.unwrap_or_default(), item.artist.clone(), by].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" · ");
+                MusicCard {
+                    id: n as i32,
+                    title: item.title.clone().into(),
+                    subtitle: subtitle.into(),
+                    duration: SharedString::new(),
+                    has_image: image.is_some(),
+                    image: image.unwrap_or_default(),
+                    round: false,
+                    playing,
+                }
+            })
+            .collect();
+        let model = Rc::new(VecModel::from(cards));
+        self.ui.global::<Music>().set_queue(ModelRc::from(model.clone()));
+        {
+            let mut music = self.music();
+            music.queue_model = Some(model);
+            music.queue_urls = urls.clone();
+            music.jam_queue = ids;
+        }
+        for url in urls.into_iter().flatten() {
+            self.music_fetch_image(url);
         }
     }
 

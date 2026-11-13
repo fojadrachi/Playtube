@@ -90,6 +90,15 @@ pub fn jam_seek(seconds: f64) -> Option<String> {
     })
 }
 
+/// Playtube Jam: Wiedergabetempo des Players (Feinabgleich; die Tonhöhe bleibt gleich).
+pub fn jam_rate(rate: f64) -> Option<String> {
+    (rate.is_finite() && (0.5..=2.0).contains(&rate)).then(|| {
+        format!(
+            "(function() {{ var p = document.getElementById('movie_player'); var v = p && p.querySelector('video') || document.querySelector('video');              if (v) {{ v.preservesPitch = true; v.playbackRate = {rate:?}; }} }})();"
+        )
+    })
+}
+
 /// Playtube Jam: abspielen bzw. pausieren über die Player-API (es kann mehrere <video> geben).
 pub fn jam_play(play: bool) -> String {
     let (method, prop) = if play { ("playVideo", "play") } else { ("pauseVideo", "pause") };
@@ -160,6 +169,9 @@ mod tests {
         assert!(jam_play(true).contains("p.playVideo()"));
         assert!(jam_play(false).contains("p.pauseVideo()"));
         assert!(jam_seek(f64::NAN).is_none());
+        assert!(jam_rate(1.05).unwrap().contains("playbackRate = 1.05;"));
+        assert!(jam_rate(f64::NAN).is_none());
+        assert!(jam_rate(9.0).is_none());
     }
 
     #[test]

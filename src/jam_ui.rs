@@ -309,6 +309,11 @@ impl App {
     /// Jam lokal beenden (Verbindung zu, Oberfläche zurück).
     fn jam_close(&self, status: String, forget: bool) {
         self.ui.global::<Music>().set_in_jam(false);
+        self.ui.global::<Music>().set_queue(ModelRc::default());
+        // Feinabgleich zurücknehmen: wieder normales Tempo.
+        if let Some(script) = scripts::jam_rate(1.0) {
+            self.tabs[JAM_TAB].eval(&script);
+        }
         self.jam_timer.stop();
         self.jam.borrow_mut().take();
         self.ui.set_jam_active(false);
@@ -385,7 +390,7 @@ impl App {
 
     // ------------------------------------------------------------------ Bedienung
 
-    fn jam_state(&self) -> Option<jam::JamState> {
+    pub(crate) fn jam_state(&self) -> Option<jam::JamState> {
         self.jam.borrow().as_ref().and_then(|s| s.state.clone())
     }
 
@@ -579,6 +584,10 @@ impl App {
             })
             .collect();
         self.ui.set_jam_queue(ModelRc::new(VecModel::from(queue)));
+        // Warteschlange der Playtube-Ansicht gleich mitziehen.
+        if self.ui.global::<Music>().get_queue_open() {
+            self.music_show_jam_queue(&state);
+        }
         self.jam_update_add_field(state.features.search);
         let cant_play = {
             let session = self.jam.borrow();
@@ -634,11 +643,14 @@ impl App {
             let mut borrowed = self.jam.borrow_mut();
             let Some(session) = borrowed.as_mut() else { return };
             let Some(state) = session.state.as_ref() else { return };
-            let want = jam::target(state, session.clock.server_now(jam::now_ms()));
+            // Soll-Position zum Zeitpunkt der Messung im Tab (nicht erst nach der Antwort).
+            let sampled = probe["now"].as_f64().filter(|t| (t - jam::now_ms()).abs() < 5_000.0).unwrap_or_else(jam::now_ms);
+            let want = jam::target(state, session.clock.server_now(sampled));
             let local = jam::Local {
                 video_id: probe["id"].as_str().filter(|s| !s.is_empty()).map(str::to_string),
                 pos: probe["t"].as_f64().unwrap_or(0.0),
                 paused: probe["paused"].as_bool().unwrap_or(true),
+                rate: probe["rate"].as_f64().filter(|r| *r > 0.0).unwrap_or(1.0),
             };
             let duration = probe["d"].as_f64().unwrap_or(0.0);
             let ad = probe["ad"].as_bool().unwrap_or(false);
@@ -764,6 +776,7 @@ impl App {
                             session.expect_until = now + Duration::from_secs(3);
                             scripts_to_run.extend(Some(scripts::jam_play(false)));
                         }
+                        Step::Rate(rate) => scripts_to_run.extend(scripts::jam_rate(rate)),
                     }
                 }
             }

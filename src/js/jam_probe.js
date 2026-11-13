@@ -41,6 +41,8 @@
         paused: paused,
         ended: state === 0 || (video ? video.ended : false),
         ready: video ? video.readyState : 0,
+        rate: video && video.playbackRate > 0 ? video.playbackRate : 1,
+        now: Date.now(),
         state: state,
         session: session,
         ad: ad,

@@ -16,7 +16,26 @@ use tokio_tungstenite::tungstenite::Message;
 pub const DEFAULT_SERVER: &str = "https://jam.fojadrachi.de";
 /// Ab dieser Abweichung (Sekunden) wird gespult. Etwas großzügiger als im Browser, weil die
 /// Position über ein Skript im WebView gelesen wird.
-pub const TOLERANCE_S: f64 = 1.5;
+pub const TOLERANCE_S: f64 = 1.0;
+/// Beim Spulen etwas vorhalten: bis das Video an der neuen Stelle spielt, vergeht Zeit.
+pub const SEEK_LEAD_S: f64 = 0.2;
+/// Kleine Abweichungen werden nicht gespult, sondern durch leicht schnelleres/langsameres
+/// Abspielen ausgeglichen (unhörbar, die Tonhöhe bleibt).
+const NUDGE_START_S: f64 = 0.08;
+const NUDGE_STOP_S: f64 = 0.03;
+const NUDGE_GAIN: f64 = 0.25;
+const NUDGE_MAX: f64 = 0.08;
+
+/// Wiedergabetempo, das eine Abweichung `drift` (eigene minus Jam-Position, s) ausgleicht.
+/// `current` ist das aktuelle Tempo (Hysterese: einmal angefangen, bis fast 0 ausgleichen).
+pub fn nudge_rate(drift: f64, current: f64) -> f64 {
+    let threshold = if (current - 1.0).abs() > 0.001 { NUDGE_STOP_S } else { NUDGE_START_S };
+    if !drift.is_finite() || drift.abs() < threshold {
+        return 1.0;
+    }
+    let rate = (1.0 - NUDGE_GAIN * drift).clamp(1.0 - NUDGE_MAX, 1.0 + NUDGE_MAX);
+    (rate * 1000.0).round() / 1000.0
+}
 const CODE_ALPHABET: &str = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
 // ---------------------------------------------------------------------------- Protokoll
@@ -286,6 +305,8 @@ pub struct Local {
     pub video_id: Option<String>,
     pub pos: f64,
     pub paused: bool,
+    /// Aktuelles Wiedergabetempo (1.0 = normal).
+    pub rate: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -294,6 +315,8 @@ pub enum Step {
     Seek(f64),
     Play,
     Pause,
+    /// Wiedergabetempo setzen (Feinabgleich).
+    Rate(f64),
 }
 
 /// Was der eigene Player tun soll, damit er zum Jam passt.
@@ -325,14 +348,21 @@ pub fn decide(want: Option<&Target>, local: &Local, tolerance: f64) -> Vec<Step>
         }
         return steps;
     }
-    if (local.pos - want.pos).abs() > tolerance && !(near_end && local.pos > want.pos) {
-        steps.push(Step::Seek(want.pos));
+    let drift = local.pos - want.pos;
+    let seek = drift.abs() > tolerance && !(near_end && local.pos > want.pos);
+    if seek {
+        steps.push(Step::Seek(if want.paused { want.pos } else { want.pos + SEEK_LEAD_S }));
     }
     if want.paused && !local.paused {
         steps.push(Step::Pause);
     }
     if !want.paused && local.paused {
         steps.push(Step::Play);
+    }
+    // Feinabgleich über das Tempo, solange beide normal laufen.
+    let desired = if !seek && !want.paused && !local.paused && !near_end { nudge_rate(drift, local.rate) } else { 1.0 };
+    if (desired - local.rate).abs() > 0.004 {
+        steps.push(Step::Rate(desired));
     }
     steps
 }
@@ -781,7 +811,7 @@ mod tests {
     }
 
     fn local(id: Option<&str>, pos: f64, paused: bool) -> Local {
-        Local { video_id: id.map(str::to_string), pos, paused }
+        Local { video_id: id.map(str::to_string), pos, paused, rate: 1.0 }
     }
 
     #[test]
@@ -809,9 +839,30 @@ mod tests {
     #[test]
     fn seeks_only_beyond_tolerance() {
         let id = Some("aaaaaaaaaaa");
-        assert!(decide(Some(&want(30.0, false)), &local(id, 31.2, false), TOLERANCE_S).is_empty());
-        assert_eq!(decide(Some(&want(30.0, false)), &local(id, 34.0, false), TOLERANCE_S), vec![Step::Seek(30.0)]);
-        assert_eq!(decide(Some(&want(30.0, false)), &local(id, 20.0, false), TOLERANCE_S), vec![Step::Seek(30.0)]);
+        assert!(decide(Some(&want(30.0, false)), &local(id, 30.05, false), TOLERANCE_S).is_empty());
+        assert_eq!(decide(Some(&want(30.0, false)), &local(id, 34.0, false), TOLERANCE_S), vec![Step::Seek(30.0 + SEEK_LEAD_S)]);
+        assert_eq!(decide(Some(&want(30.0, false)), &local(id, 20.0, false), TOLERANCE_S), vec![Step::Seek(30.0 + SEEK_LEAD_S)]);
+        // Pausiert: genau an die Stelle.
+        assert_eq!(decide(Some(&want(30.0, true)), &local(id, 34.0, true), TOLERANCE_S), vec![Step::Seek(30.0)]);
+    }
+
+    #[test]
+    fn small_drift_is_evened_out_by_tempo() {
+        let id = Some("aaaaaaaaaaa");
+        // 0,4 s voraus: etwas langsamer, 0,4 s hinterher: etwas schneller - ohne Spulen.
+        assert_eq!(decide(Some(&want(30.0, false)), &local(id, 30.4, false), TOLERANCE_S), vec![Step::Rate(0.92)]);
+        assert_eq!(decide(Some(&want(30.0, false)), &local(id, 29.8, false), TOLERANCE_S), vec![Step::Rate(1.05)]);
+        // Wieder gleichauf: zurück auf normal.
+        let mut l = local(id, 30.01, false);
+        l.rate = 1.05;
+        assert_eq!(decide(Some(&want(30.0, false)), &l, TOLERANCE_S), vec![Step::Rate(1.0)]);
+        // Hysterese: einmal angefangen, bis fast 0 ausgleichen.
+        assert_eq!(nudge_rate(0.05, 1.02), 0.988);
+        assert_eq!(nudge_rate(0.05, 1.0), 1.0);
+        // Beim Spulen und in der Pause normales Tempo.
+        let mut l = local(id, 34.0, false);
+        l.rate = 1.08;
+        assert_eq!(decide(Some(&want(30.0, false)), &l, TOLERANCE_S), vec![Step::Seek(30.0 + SEEK_LEAD_S), Step::Rate(1.0)]);
     }
 
     #[test]

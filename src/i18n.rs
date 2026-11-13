@@ -201,6 +201,8 @@ const STRINGS: &[(&str, &str, &str)] = &[
     // Playtube-Ansicht (YouTube Music im Spotify-Stil)
     ("music.home", "Startseite", "Home"),
     ("music.jam_add", "Jam", "Jam"),
+    ("music.jam_queue", "Jam-Warteschlange", "Jam queue"),
+    ("music.jam_played", "Gespielt", "Played"),
     ("music.jam_added_one", "Zum Jam hinzugefügt: {title}", "Added to the jam: {title}"),
     ("music.jam_added_many", "{count} Songs zum Jam hinzugefügt", "Added {count} songs to the jam"),
     ("music.jam_nothing", "Hier sind keine Songs für den Jam.", "There are no songs for the jam here."),

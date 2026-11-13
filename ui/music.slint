@@ -38,6 +38,7 @@ export struct MusicTexts {
     results: string,
     search-placeholder: string,
     jam-add: string,
+    jam-queue: string,
 }
 
 export global Music {
@@ -484,7 +485,7 @@ export component MusicView inherits Rectangle {
             VerticalLayout {
                 padding: 16px;
                 spacing: 8px;
-                Text { text: Music.t.queue; color: #ffffff; font-size: 17px; font-weight: 700; }
+                Text { text: Music.in-jam ? Music.t.jam-queue : Music.t.queue; color: #ffffff; font-size: 17px; font-weight: 700; }
                 if Music.queue.length == 0: Text { text: Music.t.queue-empty; color: #a7a7b0; wrap: word-wrap; }
                 ScrollView {
                     VerticalLayout {
