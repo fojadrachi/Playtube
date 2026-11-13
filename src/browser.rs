@@ -19,7 +19,7 @@ use wry::{BackgroundThrottlingPolicy, NewWindowResponse, PageLoadEvent, Rect, We
 const YOUTUBE_ORIGINS: [&str; 2] = ["https://www.youtube.com", "https://music.youtube.com"];
 
 /// Argumente für die Edge-Engine (WebView2), siehe `Tab::new`.
-const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,BackgroundVideoPauseOptimization,BackgroundVideoTrackOptimization     --autoplay-policy=no-user-gesture-required --disable-background-media-suspend --disable-renderer-backgrounding     --disable-background-timer-throttling";
+const BROWSER_ARGS: &str = "--disable-features=HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,BackgroundVideoPauseOptimization,BackgroundVideoTrackOptimization     --autoplay-policy=no-user-gesture-required --disable-background-media-suspend --disable-renderer-backgrounding     --disable-background-timer-throttling";
 
 /// Ereignisse eines Tabs an die App (laufen im UI-Thread).
 pub trait TabEvents: 'static {

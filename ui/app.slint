@@ -72,6 +72,7 @@ export struct Texts {
     field-start-tab: string,
     field-language: string,
     field-music-view: string,
+    field-media-keys: string,
     field-autostart: string,
     field-autostart-tray: string,
     music-view-playtube: string,
@@ -246,6 +247,7 @@ export component AppWindow inherits Window {
     in-out property <int> start-tab-index: 0;
     // 0 = Playtube-Ansicht, 1 = Original-Seite von YouTube Music
     in-out property <int> music-view-index: 0;
+    in-out property <bool> media-keys: true;
     in-out property <bool> autostart;
     in-out property <bool> autostart-tray: true;
     in property <string> saved-text;
@@ -462,6 +464,7 @@ export component AppWindow inherits Window {
                             Row { FieldLabel { text: root.t.field-start-tab; } ComboBox { model: ["YouTube", "YouTube Music"]; current-index <=> root.start-tab-index; min-width: 200px; } }
                             Row { FieldLabel { text: root.t.field-language; } ComboBox { model: root.languages; current-index <=> root.language-index; min-width: 200px; } }
                             Row { FieldLabel { text: root.t.field-music-view; } ComboBox { model: [root.t.music-view-playtube, root.t.music-view-original]; current-index <=> root.music-view-index; min-width: 200px; } }
+                            CheckBox { text: root.t.field-media-keys; checked <=> root.media-keys; }
                             CheckBox { text: root.t.field-autostart; checked <=> root.autostart; }
                             CheckBox { text: root.t.field-autostart-tray; checked <=> root.autostart-tray; enabled: root.autostart; }
                         }

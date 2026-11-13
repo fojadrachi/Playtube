@@ -101,6 +101,15 @@ Mit „Tonausgabe: Für Discord-Streams“ (Einstellungen › Audioausgabe; Stan
 selbst bleibt stumm) und schickt ihn an [src/relay.rs](src/relay.rs), das ihn per WASAPI aus Playtube.exe
 auf dem eingestellten Gerät ausgibt (etwa 70 ms Vorlauf).
 
+## Medientasten
+
+Die Medientasten der Tastatur (Play/Pause, Weiter, Zurück, Stopp) steuern Playtube – auch wenn das Fenster im
+Hintergrund oder nur im Tray ist. Playtube reagiert nur, wenn gerade ein Video bzw. Song geladen ist, und lässt
+die Tasten für andere Programme durch. Im Jam gehen sie an den Jam (wie der Tray). Abschalten unter
+*Einstellungen › Allgemein* (`"media_keys": false` in der `config.json`). Code:
+[src/media_keys.rs](src/media_keys.rs) (Low-Level-Tastatur-Hook; Chromiums eigene Medientasten-Behandlung ist
+abgeschaltet, damit nichts doppelt ankommt).
+
 ## Fernsteuerung (Stream Dock)
 
 Named Pipe `\\.\pipe\Playtube.Remote.Playtube`, eine JSON-Nachricht pro Zeile, z. B.
@@ -126,6 +135,7 @@ installierten App, auch eigene Pipe-Namen) – zum Testen. Diagnose-Log: `<Daten
 | `src/browser.rs` | WebView2-Tab (Profil, Vollbild, Audio-Ausgabe, Gerätenamen-Freigabe) |
 | `src/scripts.rs`, `src/js/` | JavaScript für Wiedergabestand, Steuerung, Playlists, Audio |
 | `src/remote.rs` | Fernsteuerungsprotokoll + Named Pipe |
+| `src/media_keys.rs` | Medientasten der Tastatur (Tastatur-Hook) |
 | `src/lan.rs` | Steuerung vom Handy (Kopplung, TCP, UDP-Suche) |
 | `src/discord.rs` | Discord Rich Presence |
 | `src/updater.rs` | Updates über GitHub-Releases |
@@ -211,6 +221,13 @@ every 6 hours. [src/diag.rs](src/diag.rs) strips cookies, tokens, e-mail address
 video IDs and the Windows user name first; debug lines with song titles are never sent. Turn it off
 under *Settings › Diagnostics* (`"diagnostics": {"enabled": false}` in `config.json`); **Send now**
 sends immediately and shows the installation ID. Reports are kept for 30 days.
+
+## Media keys
+
+The keyboard media keys (play/pause, next, previous, stop) control Playtube – also when the window is in the
+background or only in the tray. Playtube only reacts while a video or song is loaded and passes the keys on to
+other programs. In a jam they go to the jam (like the tray). Turn off under *Settings › General*
+(`"media_keys": false` in `config.json`). Code: [src/media_keys.rs](src/media_keys.rs).
 
 ## Remote control (Stream Dock)
 

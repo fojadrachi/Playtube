@@ -19,6 +19,7 @@ mod jam_ui;
 mod lan;
 mod music;
 mod log;
+mod media_keys;
 mod relay;
 mod remote;
 mod scripts;
@@ -345,6 +346,19 @@ impl App {
         timer.start(slint::TimerMode::SingleShot, REFRESH_AFTER_COMMAND, || with_app(|app| app.poll_media()));
         self.timers.borrow_mut().push(timer);
         self.timers.borrow_mut().retain(|t| t.running());
+    }
+
+    /// Medientaste der Tastatur (src/media_keys.rs): nur wenn eingeschaltet und in Playtube etwas
+    /// geladen ist – sonst gehört die Taste einem anderen Player.
+    fn media_key(&self, command: &str) {
+        if !self.config.borrow().media_keys {
+            return;
+        }
+        let media = self.media.borrow().clone();
+        if !media_keys::should_handle(&[media[0].as_ref(), media[1].as_ref()]) {
+            return;
+        }
+        self.tray_command(command);
     }
 
     /// Ziel für Tray-Befehle: der abspielende Tab, sonst der sichtbare Browser-Tab.
@@ -745,6 +759,7 @@ impl App {
         ui.set_audio_mode_index(if config.audio.stream_mode { 1 } else { 0 });
         ui.set_start_tab_index(if config.start_tab == "music" { 1 } else { 0 });
         ui.set_music_view_index(if config.music_view { 0 } else { 1 });
+        ui.set_media_keys(config.media_keys);
         ui.set_autostart(config.autostart);
         ui.set_autostart_tray(config.autostart_tray);
         let language = i18n::current();
@@ -771,6 +786,7 @@ impl App {
             config.audio.stream_mode = ui.get_audio_mode_index() == 1;
             config.start_tab = if ui.get_start_tab_index() == 1 { "music" } else { "youtube" }.into();
             config.music_view = ui.get_music_view_index() == 0;
+            config.media_keys = ui.get_media_keys();
             config.autostart = ui.get_autostart();
             config.autostart_tray = ui.get_autostart_tray();
             config.language = i18n::LANGUAGES.get(ui.get_language_index() as usize).map(|(c, _)| c.to_string()).unwrap_or_default();
@@ -900,6 +916,7 @@ fn apply_texts(ui: &AppWindow) {
         field_start_tab: tr("field.start_tab").into(),
         field_language: tr("field.language").into(),
         field_music_view: tr("field.music_view").into(),
+        field_media_keys: tr("field.media_keys").into(),
         field_autostart: tr("field.autostart").into(),
         field_autostart_tray: tr("field.autostart_tray").into(),
         music_view_playtube: tr("field.music_view.playtube").into(),
@@ -1037,6 +1054,7 @@ fn start(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config, jam_c
         app.jam_resume();
     }
     // Stream-Dock-Plugin: eigener Pipe-Name pro Datenordner.
+    media_keys::start(|command| on_ui(move |app| app.media_key(command)));
     if remote_enabled {
         let folder = config::data_dir().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
         app.runtime.spawn(remote::run_pipe_server(format!("{}{folder}", remote::PIPE_PREFIX), app.dispatch.clone()));

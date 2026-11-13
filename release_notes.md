@@ -1,4 +1,10 @@
-## Playtube 2.9.1
+## Playtube 2.9.2
+
+- **Medientasten der Tastatur:** Play/Pause, Weiter, Zurück und Stopp auf der Tastatur steuern jetzt Playtube –
+  auch wenn das Fenster im Hintergrund oder nur im Tray ist, im Jam auch den Jam. Playtube reagiert nur, wenn gerade
+  etwas geladen ist, und andere Player bekommen die Tasten weiterhin. Abschaltbar unter Einstellungen › Allgemein.
+
+Neu in 2.9.1:
 
 - **Behoben: In der Suchleiste der Playtube-Ansicht ließ sich nichts eingeben.** Die Tastatur blieb bei der
   (unsichtbaren) YouTube-Music-Seite hängen; jetzt bekommt die Playtube-Ansicht den Fokus.
@@ -64,13 +70,18 @@ Neu in 2.6.0:
 
 Alles Weitere wie in 2.5.2 (Tonausgabe Normal/Discord, Fixes).
 
-**Installieren:** `Playtube-Setup-2.9.1.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
+**Installieren:** `Playtube-Setup-2.9.2.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
 aktualisiert sich auch von selbst.
 
 ---
 
-## Playtube 2.9.1
+## Playtube 2.9.2
 
+- **Keyboard media keys:** play/pause, next, previous and stop on your keyboard now control Playtube – also when the
+  window is in the background or only in the tray, and the jam while you are in one. Playtube only reacts while
+  something is loaded, and other players still get the keys. Can be turned off under Settings › General.
+
+New in 2.9.1:
 - **Fixed: nothing could be typed into the search bar of the Playtube view.** The keyboard stayed with the
   (hidden) YouTube Music page; the Playtube view now gets the focus.
 - **Back in the jam after a restart:** if Playtube is closed, restarted (e.g. after an update) or crashes, it
@@ -135,4 +146,4 @@ New in 2.6.0:
 
 Everything else as in 2.5.2 (sound output Normal/Discord, fixes).
 
-**Install:** run `Playtube-Setup-2.9.1.exe` – it replaces any older Playtube. Playtube also updates itself.
+**Install:** run `Playtube-Setup-2.9.2.exe` – it replaces any older Playtube. Playtube also updates itself.

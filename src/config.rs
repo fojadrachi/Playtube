@@ -148,6 +148,8 @@ pub struct Config {
     pub diagnostics: Diagnostics,
     /// YouTube Music in der Playtube-Ansicht (Spotify-Stil) statt der Original-Seite
     pub music_view: bool,
+    /// Medientasten der Tastatur steuern Playtube (src/media_keys.rs)
+    pub media_keys: bool,
     /// "youtube" oder "music"
     pub start_tab: String,
     /// Mit Windows starten
@@ -173,6 +175,7 @@ impl Default for Config {
             jam: Jam::default(),
             diagnostics: Diagnostics::default(),
             music_view: true,
+            media_keys: true,
             start_tab: "youtube".into(),
             autostart: false,
             autostart_tray: true,
@@ -253,6 +256,7 @@ mod tests {
         assert!(config.updates.enabled);
         // Diagnose ist Opt-out: ohne Eintrag an.
         assert!(config.diagnostics.enabled);
+        assert!(config.media_keys);
         assert!(config.diagnostics.install_id.is_empty());
     }
 }
