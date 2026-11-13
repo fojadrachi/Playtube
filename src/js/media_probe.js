@@ -98,6 +98,11 @@
     if (isMusic) {
         title = txt('.title.ytmusic-player-bar') || txt('ytmusic-player-bar .title');
         subtitle = txt('.byline.ytmusic-player-bar') || txt('ytmusic-player-bar .byline');
+        // Leere Player-Leiste (z. B. im Jam, wenn der Song per URL geladen wurde): die MediaSession
+        // kennt Titel und Interpret trotzdem.
+        var meta = navigator.mediaSession ? navigator.mediaSession.metadata : null;
+        if (!title && meta && meta.title) { title = meta.title; }
+        if (!subtitle && meta && meta.artist) { subtitle = meta.artist; }
         thumbnail = ytThumbnailUrl(videoId) || imgSrc('ytmusic-player-bar img, .image.ytmusic-player-bar img');
     } else {
         var t = document.title.replace(/ - YouTube$/, '');

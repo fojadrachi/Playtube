@@ -253,7 +253,16 @@ impl App {
         }
     }
 
-    fn on_media(&self, index: usize, info: Value) {
+    fn on_media(&self, index: usize, mut info: Value) {
+        // Im Jam weiß Playtube selbst, was läuft: fehlt der Titel in der Seite, den des Jams nehmen.
+        if index == music::TAB_MUSIC && info["title"].as_str().is_none_or(str::is_empty) {
+            if let Some(item) = self.jam_state().and_then(|s| s.current) {
+                info["title"] = Value::String(item.title.clone());
+                if info["subtitle"].as_str().is_none_or(str::is_empty) && !item.artist.is_empty() {
+                    info["subtitle"] = Value::String(item.artist.clone());
+                }
+            }
+        }
         if index == music::TAB_MUSIC {
             self.music_on_media(&info);
         }
