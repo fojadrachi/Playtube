@@ -30,6 +30,7 @@ export struct JamTexts {
     nothing: string,
     hint: string,
     kick: string,
+    make-host: string,
     play-now: string,
     remove: string,
     add-next: string,
@@ -44,6 +45,7 @@ export struct JamMember {
     host: bool,
     online: bool,
     can-kick: bool,
+    can-make-host: bool,
 }
 
 export struct JamItem {
@@ -320,6 +322,7 @@ export component AppWindow inherits Window {
     callback jam-remove(string);
     callback jam-jump(string);
     callback jam-kick(string);
+    callback jam-make-host(string);
     callback jam-set-all-control(bool);
 
     changed width => { root.geometry-changed(); }
@@ -648,10 +651,9 @@ export component AppWindow inherits Window {
                                     padding: 16px;
                                     spacing: 10px;
                                     CardTitle { text: root.jt.invite; }
-                                    // QR-Code oben, Code und "Link kopieren" darunter - nebeneinander
-                                    // passte der Code in der schmalen Spalte nicht in die Karte.
+                                    // Alles untereinander und mittig: QR-Code, Code, Link, "Link kopieren".
                                     HorizontalLayout {
-                                        alignment: start;
+                                        alignment: center;
                                         Rectangle {
                                             width: 132px;
                                             height: 132px;
@@ -660,21 +662,26 @@ export component AppWindow inherits Window {
                                             Image { source: root.jam-qr; width: 120px; height: 120px; image-rendering: pixelated; }
                                         }
                                     }
+                                    Text {
+                                        text: root.jam-code;
+                                        font-size: 24px;
+                                        font-weight: 700;
+                                        color: #ffffff;
+                                        letter-spacing: 2px;
+                                        horizontal-alignment: center;
+                                        overflow: elide;
+                                    }
+                                    Text {
+                                        text: root.jam-link;
+                                        font-size: 12px;
+                                        color: #a7a7b0;
+                                        horizontal-alignment: center;
+                                        overflow: elide;
+                                    }
                                     HorizontalLayout {
-                                        spacing: 12px;
-                                        Text {
-                                            text: root.jam-code;
-                                            font-size: 24px;
-                                            font-weight: 700;
-                                            color: #ffffff;
-                                            letter-spacing: 2px;
-                                            vertical-alignment: center;
-                                            horizontal-stretch: 1;
-                                            overflow: elide;
-                                        }
+                                        alignment: center;
                                         Button { text: root.jt.copy; clicked => { root.jam-copy-link(); } }
                                     }
-                                    Hint { text: root.jam-link; }
                                 }
                             }
 
@@ -714,6 +721,7 @@ export component AppWindow inherits Window {
                                             Text { text: member.name; color: member.online ? #f2f2f6 : #8a8a94; overflow: elide; font-weight: member.host ? 600 : 400; }
                                             Hint { text: member.info; wrap: no-wrap; overflow: elide; }
                                         }
+                                        if member.can-make-host: IconButton { icon: "\u{E734}"; size: 28px; tooltip: root.jt.make-host; clicked => { root.jam-make-host(member.id); } }
                                         if member.can-kick: IconButton { icon: "\u{E711}"; size: 28px; tooltip: root.jt.kick; clicked => { root.jam-kick(member.id); } }
                                     }
                                 }

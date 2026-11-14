@@ -34,6 +34,8 @@ pub struct JamSession {
     baseline: Option<Option<String>>,
     /// Schon an den Jam geschickte Wünsche (bis der Server sie bestätigt).
     picked: HashSet<String>,
+    /// "Zum Host machen" einmal geklickt: wer, und bis wann ein zweiter Klick bestätigt.
+    transfer_pending: Option<(String, Instant)>,
 }
 
 fn status_text(key: &str) -> String {
@@ -131,6 +133,7 @@ pub fn apply_jam_texts(ui: &AppWindow) {
         nothing: tr("jam.nothing").into(),
         hint: tr("jam.hint").into(),
         kick: tr("jam.kick").into(),
+        make_host: tr("jam.make_host").into(),
         play_now: tr("jam.play_now").into(),
         remove: tr("jam.remove").into(),
         add_next: tr("jam.add_next").into(),
@@ -154,6 +157,7 @@ pub fn wire(ui: &AppWindow) {
     ui.on_jam_add_result(|index, next| with_app(|app| app.jam_add_result(index as usize, next)));
     ui.on_jam_remove(|id| with_app(|app| app.jam_send(json!({ "t": "remove", "itemId": id.as_str() }))));
     ui.on_jam_jump(|id| with_app(|app| app.jam_send(json!({ "t": "jump", "itemId": id.as_str() }))));
+    ui.on_jam_make_host(|id| with_app(|app| app.jam_make_host(id.to_string())));
     ui.on_jam_kick(|id| with_app(|app| app.jam_send(json!({ "t": "kick", "memberId": id.as_str() }))));
     ui.on_jam_set_all_control(|on| with_app(|app| app.jam_send(json!({ "t": "settings", "allControl": on }))));
 }
@@ -322,6 +326,7 @@ impl App {
             last_duration: 0.0,
             baseline: if host { Some(None) } else { None },
             picked: HashSet::new(),
+            transfer_pending: None,
         });
         let link = jam::invite_url(&server, code);
         self.ui.set_jam_code(jam::pretty_code(code).into());
@@ -357,6 +362,34 @@ impl App {
             config.jam.last_token.clear();
             config::save(&config);
         }
+    }
+
+    /// Host-Rolle abgeben: erster Klick fragt nach (Statuszeile), ein zweiter innerhalb von 5 s gibt ab.
+    fn jam_make_host(&self, member_id: String) {
+        let name = {
+            let mut borrowed = self.jam.borrow_mut();
+            let Some(session) = borrowed.as_mut() else { return };
+            let name = session
+                .state
+                .as_ref()
+                .and_then(|s| s.members.iter().find(|m| m.id == member_id))
+                .map(|m| m.name.clone())
+                .unwrap_or_default();
+            let confirmed = session
+                .transfer_pending
+                .as_ref()
+                .is_some_and(|(id, since)| *id == member_id && since.elapsed() < Duration::from_secs(5));
+            if !confirmed {
+                session.transfer_pending = Some((member_id, Instant::now()));
+                drop(borrowed);
+                self.jam_set_status(trf("jam.make_host_confirm", &[("name", &name)]));
+                return;
+            }
+            session.transfer_pending = None;
+            name
+        };
+        self.jam_send(json!({ "t": "transfer", "memberId": member_id }));
+        self.jam_set_status(trf("jam.make_host_done", &[("name", &name)]));
     }
 
     pub fn jam_leave(&self) {
@@ -599,6 +632,7 @@ impl App {
                     host: m.host,
                     online: m.online,
                     can_kick: is_host && m.id != state.you,
+                    can_make_host: is_host && m.id != state.you && m.online,
                 }
             })
             .collect();

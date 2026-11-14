@@ -1,4 +1,10 @@
-## Playtube 2.9.3
+## Playtube 2.10.0
+
+- **Host abgeben:** Als Host kannst du die Rolle im Jam an jemand anderen übergeben – in der Liste „Dabei“ auf den
+  Stern neben dem Namen klicken und zur Bestätigung noch einmal. Das geht auch auf Android und im Browser.
+- **„Freunde einladen“ aufgeräumt:** QR-Code mittig, darunter Code, Link und „Link kopieren“.
+
+Neu in 2.9.3:
 
 - **Behoben: Der Jam-Code ragte über die Karte „Freunde einladen“ hinaus.** Code und „Link kopieren“ stehen jetzt
   unter dem QR-Code und passen auch in schmale Fenster.
@@ -75,12 +81,18 @@ Neu in 2.6.0:
 
 Alles Weitere wie in 2.5.2 (Tonausgabe Normal/Discord, Fixes).
 
-**Installieren:** `Playtube-Setup-2.9.3.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
+**Installieren:** `Playtube-Setup-2.10.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
 aktualisiert sich auch von selbst.
 
 ---
 
-## Playtube 2.9.3
+## Playtube 2.10.0
+
+- **Hand over host:** as host you can pass the role in a jam to someone else – click the star next to their name in
+  the "Listening" list and once more to confirm. Works on Android and in the browser too.
+- **"Invite friends" tidied up:** QR code centered, with the code, link and "Copy link" below it.
+
+New in 2.9.3:
 
 - **Fixed: the jam code stuck out of the "Invite friends" card.** The code and "Copy link" now sit below the QR
   code and fit narrow windows too.
@@ -156,4 +168,4 @@ New in 2.6.0:
 
 Everything else as in 2.5.2 (sound output Normal/Discord, fixes).
 
-**Install:** run `Playtube-Setup-2.9.3.exe` – it replaces any older Playtube. Playtube also updates itself.
+**Install:** run `Playtube-Setup-2.10.0.exe` – it replaces any older Playtube. Playtube also updates itself.
