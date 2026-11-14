@@ -9,6 +9,7 @@ pub const MEDIA_PROBE: &str = include_str!("js/media_probe.js");
 pub const LIST_PLAYLISTS: &str = include_str!("js/list_playlists.js");
 pub const QUEUE: &str = include_str!("js/queue.js");
 const PLAY_QUEUE_ITEM: &str = include_str!("js/play_queue_item.js");
+const PLAYLIST_COVER: &str = include_str!("js/playlist_cover.js");
 const CONTROL_PRELUDE: &str = include_str!("js/control_prelude.js");
 const AUDIO_ROUTER: &str = include_str!("js/audio_router.js");
 const AUDIO_TAP: &str = include_str!("js/audio_tap.js");
@@ -112,6 +113,12 @@ pub fn play_queue_item(index: u32) -> String {
     PLAY_QUEUE_ITEM.replace("__INDEX__", &index.to_string())
 }
 
+/// Liest das Cover der Playlist `id` (vorher mit `remote::is_playlist_id` geprüft: nur Buchstaben,
+/// Ziffern, `_` und `-`, landet also unverändert im Skript).
+pub fn playlist_cover(id: &str) -> String {
+    PLAYLIST_COVER.replace("__ID__", id)
+}
+
 /// Legt die Medienelemente der Seite auf das Gerät `device_name` (leer = Systemstandard).
 pub fn audio_router(device_name: &str) -> String {
     AUDIO_ROUTER.replace("__TARGET__", &Value::String(device_name.to_string()).to_string())
@@ -186,6 +193,13 @@ mod tests {
     fn leave_prompt_script_blocks_beforeunload() {
         assert!(NO_LEAVE_PROMPT.contains("'beforeunload'"));
         assert!(NO_LEAVE_PROMPT.contains("onbeforeunload"));
+    }
+
+    #[test]
+    fn playlist_cover_script_contains_the_id() {
+        let script = playlist_cover("PLabc_-1");
+        assert!(script.contains(r#"var id = "PLabc_-1";"#));
+        assert!(!script.contains("__ID__"));
     }
 
     #[test]

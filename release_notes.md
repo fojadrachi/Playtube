@@ -1,4 +1,10 @@
-## Playtube 2.11.0
+## Playtube 2.12.0
+
+- **Stream Dock: Playlist-Tasten zeigen das Cover.** Playtube liefert dem Stream-Dock-Plugin (ab 1.1.0) jetzt das Bild
+  einer Playlist – auch bei privaten Playlists, denn es wird mit deinem Login geholt. Neuer Fernsteuerbefehl
+  `playlist_cover`.
+
+Neu in 2.11.0:
 
 - **Tonausgabe „Automatisch“ (neuer Standard):** Sobald du in Discord in einem Sprachkanal bist – nur von dort aus
   kann man streamen –, schaltet Playtube von selbst auf „Für Discord-Streams“: Zuschauer hören die Musik, wenn du
@@ -93,7 +99,12 @@ aktualisiert sich auch von selbst.
 
 ---
 
-## Playtube 2.11.0
+## Playtube 2.12.0
+
+- **Stream Dock: playlist keys show the cover.** Playtube now gives the Stream Dock plugin (1.1.0+) a playlist's
+  artwork – private playlists included, since it is fetched with your login. New remote command `playlist_cover`.
+
+New in 2.11.0:
 
 - **Sound output "Automatic" (new default):** as soon as you are in a Discord voice channel – the only place you can
   stream from – Playtube switches to "For Discord streams" by itself, so viewers hear the music when you share the

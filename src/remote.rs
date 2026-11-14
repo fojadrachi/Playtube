@@ -22,7 +22,7 @@ const MAX_CLIENTS: usize = 8;
 
 pub const TAB_NAMES: [&str; 2] = ["youtube", "music"];
 const APP_COMMANDS: &[&str] =
-    &["status", "show", "switch_tab", "list_playlists", "play_playlist", "queue", "play_queue_item"];
+    &["status", "show", "switch_tab", "list_playlists", "play_playlist", "playlist_cover", "queue", "play_queue_item"];
 const MAX_PLAYLISTS: usize = 100;
 const MAX_PLAYLIST_TITLE: usize = 100;
 const MAX_QUEUE: usize = 200;
@@ -52,6 +52,7 @@ pub enum Action {
     Media { target: String, command: String, value: f64 },
     ListPlaylists,
     PlayPlaylist(String),
+    PlaylistCover(String),
     Queue(String),
     PlayQueueItem { target: String, index: u32 },
 }
@@ -60,7 +61,7 @@ pub type Reply = Box<dyn FnOnce(Value) + Send>;
 /// Übergibt eine Aktion an die App; die Antwort (Status, Playlists oder null) kommt über `Reply`.
 pub type Dispatch = Arc<dyn Fn(Action, Reply) + Send + Sync>;
 
-fn is_playlist_id(id: &str) -> bool {
+pub fn is_playlist_id(id: &str) -> bool {
     (2..=64).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
@@ -81,10 +82,10 @@ pub fn parse_request(line: &str) -> Result<Request, String> {
         Some(Value::String(t)) if t == "auto" || TAB_NAMES.contains(&t.as_str()) => t.as_str(),
         Some(other) => return Err(format!("unbekanntes Ziel: {other}")),
     };
-    let playlist = if command == "play_playlist" {
+    let playlist = if command == "play_playlist" || command == "playlist_cover" {
         match obj.get("playlist").and_then(Value::as_str) {
             Some(p) if is_playlist_id(p) => Some(p.to_string()),
-            _ => return Err("play_playlist braucht eine gueltige Playlist-ID".into()),
+            _ => return Err(format!("{command} braucht eine gueltige Playlist-ID")),
         }
     } else {
         None
@@ -120,10 +121,20 @@ pub fn action_for(request: &Request) -> Action {
         "switch_tab" => Action::SwitchTab(request.target.clone()),
         "list_playlists" => Action::ListPlaylists,
         "play_playlist" => Action::PlayPlaylist(request.playlist.clone().unwrap_or_default()),
+        "playlist_cover" => Action::PlaylistCover(request.playlist.clone().unwrap_or_default()),
         "queue" => Action::Queue(request.target.clone()),
         "play_queue_item" => Action::PlayQueueItem { target: request.target.clone(), index: request.value as u32 },
         _ => Action::Media { target: request.target.clone(), command: request.command.clone(), value: request.value },
     }
+}
+
+/// Cover-Adresse aus der Seite (fremde Daten!): nur https-Bilder von YouTube/Google, groß angefordert.
+pub fn sanitize_cover(raw: &Value) -> Option<String> {
+    const HOSTS: &[&str] = &["https://lh3.googleusercontent.com/", "https://yt3.googleusercontent.com/",
+                             "https://yt3.ggpht.com/", "https://i.ytimg.com/", "https://i9.ytimg.com/"];
+    let url = raw.as_str()?.trim();
+    let allowed = url.len() < 2000 && HOSTS.iter().any(|h| url.starts_with(h)) && !url.contains(['"', '<', '>', ' ']);
+    allowed.then(|| crate::discord::upsize_thumbnail(url))
 }
 
 fn clean_text(value: Option<&Value>) -> String {
@@ -263,6 +274,10 @@ pub async fn process_line(line: &str, dispatch: &Dispatch) -> Vec<u8> {
             map.insert("ok".into(), Value::Bool(true));
             map.insert("queue".into(), Value::Array(sanitize_queue(&raw)));
         }
+        ("playlist_cover", Ok(Ok(raw))) => {
+            map.insert("ok".into(), Value::Bool(true));
+            map.insert("cover".into(), sanitize_cover(&raw).map(Value::String).unwrap_or(Value::Null));
+        }
         _ => {
             map.insert("ok".into(), Value::Bool(true));
         }
@@ -381,6 +396,40 @@ mod tests {
                     r#"{"cmd": "play_queue_item", "value": 1.5}"#, r#"{"cmd": "play_queue_item", "value": 5000}"#] {
             assert!(parse_request(bad).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn parses_playlist_cover_and_checks_the_url() {
+        let r = parse_request(r#"{"id": 1, "cmd": "playlist_cover", "playlist": "PLabc_-1"}"#).unwrap();
+        assert_eq!(action_for(&r), Action::PlaylistCover("PLabc_-1".into()));
+        for bad in [r#"{"cmd": "playlist_cover"}"#, r#"{"cmd": "playlist_cover", "playlist": "a\"b"}"#,
+                    r#"{"cmd": "playlist_cover", "playlist": "PL1&x=1"}"#] {
+            assert!(parse_request(bad).is_err(), "{bad}");
+        }
+        assert_eq!(
+            sanitize_cover(&json!("https://lh3.googleusercontent.com/abc=w120-h120-l90-rj")).as_deref(),
+            Some("https://lh3.googleusercontent.com/abc=w544-h544-l90-rj")
+        );
+        assert_eq!(sanitize_cover(&json!("https://i.ytimg.com/vi/x/hqdefault.jpg")).as_deref(), Some("https://i.ytimg.com/vi/x/hqdefault.jpg"));
+        for bad in [json!("http://i.ytimg.com/x.jpg"), json!("https://evil.example/x.jpg"), json!("javascript:alert(1)"),
+                    json!("https://i.ytimg.com/x\".jpg"), Value::Null, json!(5)] {
+            assert_eq!(sanitize_cover(&bad), None, "{bad}");
+        }
+    }
+
+    #[tokio::test]
+    async fn playlist_cover_reply_contains_the_cover() {
+        let dispatch: Dispatch = Arc::new(|_action, reply| reply(json!("https://yt3.ggpht.com/c=s88-c")));
+        let reply: Value = serde_json::from_slice(
+            &process_line(r#"{"id": 9, "cmd": "playlist_cover", "playlist": "LM"}"#, &dispatch).await,
+        )
+        .unwrap();
+        assert_eq!(reply["ok"], true);
+        assert_eq!(reply["cover"], "https://yt3.ggpht.com/c=s88-c");
+        let empty: Dispatch = Arc::new(|_action, reply| reply(Value::Null));
+        let reply: Value =
+            serde_json::from_slice(&process_line(r#"{"cmd": "playlist_cover", "playlist": "LM"}"#, &empty).await).unwrap();
+        assert!(reply["cover"].is_null());
     }
 
     #[test]

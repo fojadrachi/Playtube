@@ -420,6 +420,14 @@ impl App {
                 self.tabs[1].load(&format!("{}{id}", scripts::MUSIC_PLAYLIST_URL));
                 reply(Value::Null);
             }
+            Action::PlaylistCover(id) => {
+                let reply = Mutex::new(Some(reply));
+                self.tabs[1].eval_with(&scripts::playlist_cover(&id), move |result| {
+                    if let Some(reply) = reply.lock().unwrap().take() {
+                        reply(result.unwrap_or(Value::Null));
+                    }
+                });
+            }
             Action::Queue(target) => {
                 let index = self.resolve_tab(&target);
                 let reply = Mutex::new(Some(reply));
