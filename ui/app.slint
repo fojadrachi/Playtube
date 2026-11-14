@@ -88,6 +88,7 @@ export struct Texts {
     audio-mode: string,
     audio-mode-normal: string,
     audio-mode-stream: string,
+    audio-mode-auto: string,
     audio-mode-hint: string,
     phone-enabled: string,
     phone-hint: string,
@@ -439,7 +440,7 @@ export component AppWindow inherits Window {
                             Row { FieldLabel { text: root.t.field-youtube; } ComboBox { model: root.audio-devices; current-index <=> root.youtube-output; min-width: 360px; } }
                             Row { FieldLabel { text: root.t.field-music; } ComboBox { model: root.audio-devices; current-index <=> root.music-output; min-width: 360px; } }
                             Hint { text: root.t.audio-hint; }
-                            Row { FieldLabel { text: root.t.audio-mode; } ComboBox { model: [root.t.audio-mode-normal, root.t.audio-mode-stream]; current-index <=> root.audio-mode-index; min-width: 360px; } }
+                            Row { FieldLabel { text: root.t.audio-mode; } ComboBox { model: [root.t.audio-mode-normal, root.t.audio-mode-stream, root.t.audio-mode-auto]; current-index <=> root.audio-mode-index; min-width: 360px; } }
                             Hint { text: root.t.audio-mode-hint; }
                         }
                     }

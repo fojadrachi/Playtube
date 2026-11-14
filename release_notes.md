@@ -1,4 +1,11 @@
-## Playtube 2.10.0
+## Playtube 2.11.0
+
+- **Tonausgabe „Automatisch“ (neuer Standard):** Sobald du in Discord in einem Sprachkanal bist – nur von dort aus
+  kann man streamen –, schaltet Playtube von selbst auf „Für Discord-Streams“: Zuschauer hören die Musik, wenn du
+  das Playtube-Fenster teilst. Verlässt du den Kanal, gibt es wieder die normale Tonausgabe in bester Qualität.
+  Einstellbar unter Einstellungen › Audioausgabe › Tonausgabe (Normal / Für Discord-Streams / Automatisch).
+
+Neu in 2.10.0:
 
 - **Host abgeben:** Als Host kannst du die Rolle im Jam an jemand anderen übergeben – in der Liste „Dabei“ auf den
   Stern neben dem Namen klicken und zur Bestätigung noch einmal. Das geht auch auf Android und im Browser.
@@ -81,12 +88,19 @@ Neu in 2.6.0:
 
 Alles Weitere wie in 2.5.2 (Tonausgabe Normal/Discord, Fixes).
 
-**Installieren:** `Playtube-Setup-2.10.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
+**Installieren:** `Playtube-Setup-2.11.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
 aktualisiert sich auch von selbst.
 
 ---
 
-## Playtube 2.10.0
+## Playtube 2.11.0
+
+- **Sound output "Automatic" (new default):** as soon as you are in a Discord voice channel – the only place you can
+  stream from – Playtube switches to "For Discord streams" by itself, so viewers hear the music when you share the
+  Playtube window. When you leave the channel, you get the normal best-quality output again. Settings › Audio
+  output › Sound output (Normal / For Discord streams / Automatic).
+
+New in 2.10.0:
 
 - **Hand over host:** as host you can pass the role in a jam to someone else – click the star next to their name in
   the "Listening" list and once more to confirm. Works on Android and in the browser too.
@@ -168,4 +182,4 @@ New in 2.6.0:
 
 Everything else as in 2.5.2 (sound output Normal/Discord, fixes).
 
-**Install:** run `Playtube-Setup-2.10.0.exe` – it replaces any older Playtube. Playtube also updates itself.
+**Install:** run `Playtube-Setup-2.11.0.exe` – it replaces any older Playtube. Playtube also updates itself.

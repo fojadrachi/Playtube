@@ -103,6 +103,8 @@ struct App {
     music_login: Cell<bool>,
     /// Playtube-Ton je Tab (YouTube, YouTube Music)
     relays: RefCell<[Option<relay::Relay>; 2]>,
+    /// Discord ist gerade in einem Sprachkanal (für Tonausgabe "Automatisch").
+    discord_voice: Cell<bool>,
 }
 
 struct Events;
@@ -133,7 +135,7 @@ impl TabEvents for Events {
                 let _ = slint::invoke_from_event_loop(|| with_app(|app| app.music_page_loaded()));
             }
             // Playtube-Ton nach jedem Seitenaufbau auf die aktuelle Einstellung bringen.
-            let on = app.config.borrow().audio.stream_mode;
+            let on = app.stream_active();
             app.tabs[tab].eval(&scripts::audio_tap_enable(on));
         });
     }
@@ -454,6 +456,27 @@ impl App {
         !config.audio.youtube_output.is_empty() || !config.audio.music_output.is_empty()
     }
 
+    /// Ton gerade über Playtube.exe ("Für Discord-Streams", oder "Automatisch" im Discord-Sprachkanal)?
+    fn stream_active(&self) -> bool {
+        let audio = &self.config.borrow().audio;
+        audio.stream_mode || (audio.stream_auto && self.discord_voice.get())
+    }
+
+    /// Ergebnis der Discord-Erkennung (alle paar Sekunden aus einem eigenen Thread).
+    fn on_discord_voice(&self, in_voice: bool) {
+        if self.discord_voice.replace(in_voice) == in_voice {
+            return;
+        }
+        if self.config.borrow().audio.stream_auto {
+            log::line(if in_voice {
+                "audio: Discord-Sprachkanal erkannt - Ton über Playtube (Discord-Modus)"
+            } else {
+                "audio: Discord-Sprachkanal verlassen - normale Tonausgabe"
+            });
+            self.apply_audio();
+        }
+    }
+
     fn apply_audio(&self) {
         let wanted = self.audio_routing_wanted();
         for tab in &self.tabs {
@@ -463,7 +486,9 @@ impl App {
         self.tabs[0].set_audio_output(&config.audio.youtube_output);
         self.tabs[1].set_audio_output(&config.audio.music_output);
         // Playtube-Ton: an/aus und Ausgabegerät je Tab
-        let on = config.audio.stream_mode;
+        drop(config);
+        let on = self.stream_active();
+        let config = self.config.borrow();
         let outputs = [config.audio.youtube_output.clone(), config.audio.music_output.clone()];
         drop(config);
         let mut relays = self.relays.borrow_mut();
@@ -479,7 +504,7 @@ impl App {
 
     /// Ton aus der Seite (js/audio_tap.js) über Playtube.exe ausgeben.
     fn on_tab_ipc(&self, tab: usize, body: &str) {
-        if tab > 1 || !self.config.borrow().audio.stream_mode {
+        if tab > 1 || !self.stream_active() {
             return;
         }
         let Some((rate, samples)) = relay::parse_message(body) else { return };
@@ -756,7 +781,7 @@ impl App {
         ui.set_updates_auto(config.updates.auto_install);
         ui.set_phone_enabled(config.lan_remote.enabled);
         ui.set_diag_enabled(config.diagnostics.enabled);
-        ui.set_audio_mode_index(if config.audio.stream_mode { 1 } else { 0 });
+        ui.set_audio_mode_index(if config.audio.stream_mode { 1 } else if config.audio.stream_auto { 2 } else { 0 });
         ui.set_start_tab_index(if config.start_tab == "music" { 1 } else { 0 });
         ui.set_music_view_index(if config.music_view { 0 } else { 1 });
         ui.set_media_keys(config.media_keys);
@@ -784,6 +809,7 @@ impl App {
             config.lan_remote.enabled = ui.get_phone_enabled();
             config.diagnostics.enabled = ui.get_diag_enabled();
             config.audio.stream_mode = ui.get_audio_mode_index() == 1;
+            config.audio.stream_auto = ui.get_audio_mode_index() == 2;
             config.start_tab = if ui.get_start_tab_index() == 1 { "music" } else { "youtube" }.into();
             config.music_view = ui.get_music_view_index() == 0;
             config.media_keys = ui.get_media_keys();
@@ -930,6 +956,7 @@ fn apply_texts(ui: &AppWindow) {
         audio_mode: tr("audio.mode").into(),
         audio_mode_normal: tr("audio.mode.normal").into(),
         audio_mode_stream: tr("audio.mode.stream").into(),
+        audio_mode_auto: tr("audio.mode.auto").into(),
         audio_mode_hint: tr("audio.mode.hint").into(),
         phone_enabled: tr("phone.enabled").into(),
         phone_hint: trf("phone.hint", &app).into(),
@@ -1001,6 +1028,7 @@ fn build_app(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config) -
         music_timer: slint::Timer::default(),
         music_login: Cell::new(false),
         relays: RefCell::new([None, None]),
+        discord_voice: Cell::new(false),
     }))
 }
 
@@ -1028,6 +1056,21 @@ fn start(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config, jam_c
     app.build_tray();
     app.setup_update_timer();
     app.jam_init_ui();
+    // Tonausgabe "Automatisch": alle 4 s schauen, ob Discord in einem Sprachkanal ist.
+    std::thread::Builder::new()
+        .name("discord-voice".into())
+        .spawn(|| {
+            let mut last = None;
+            loop {
+                let in_voice = audio::discord_in_voice(&audio::active_capture_apps());
+                if last != Some(in_voice) {
+                    last = Some(in_voice);
+                    on_ui(move |app| app.on_discord_voice(in_voice));
+                }
+                std::thread::sleep(Duration::from_secs(4));
+            }
+        })
+        .ok();
     // Eintrag mit dem aktuellen Pfad auffrischen; vom Autostart gestartet: auf Wunsch nur im Tray.
     let (autostart_on, tray_only) = {
         let config = app.config.borrow();
