@@ -30,6 +30,8 @@ pub enum Target {
     Library,
     Search(String),
     Browse { id: String, params: Option<String>, page: PageType },
+    /// Eigener Verlauf (lokal), optional gefiltert
+    History(String),
 }
 
 #[derive(Default)]
@@ -87,6 +89,14 @@ fn texts() -> MusicTexts {
         search_placeholder: tr("music.search_placeholder").into(),
         jam_add: tr("music.jam_add").into(),
         jam_queue: tr("music.jam_queue").into(),
+        history: tr("music.history").into(),
+        history_placeholder: tr("music.history_placeholder").into(),
+        history_empty: tr("music.history_empty").into(),
+        sleep: tr("sleep.title").into(),
+        sleep_off: tr("sleep.off").into(),
+        sleep_end: tr("sleep.end").into(),
+        minutes: tr("sleep.minutes").into(),
+        mini: tr("mini.open").into(),
     }
 }
 
@@ -99,6 +109,9 @@ pub fn wire(ui: &AppWindow) {
     let music = ui.global::<Music>();
     music.on_open_home(|| with_app(|app| app.music_go(Target::Home)));
     music.on_open_library(|| with_app(|app| app.music_go(Target::Library)));
+    music.on_open_history(|| with_app(|app| app.music_go(Target::History(String::new()))));
+    music.on_set_sleep(|minutes| with_app(|app| app.sleep_set(minutes)));
+    music.on_mini_player(|| with_app(|app| app.mini_toggle()));
     music.on_search(|q| with_app(|app| app.music_search(q.as_str())));
     music.on_open_card(|id| with_app(|app| app.music_open_card(id as usize, false)));
     music.on_play_card(|id| with_app(|app| app.music_open_card(id as usize, true)));
@@ -334,8 +347,28 @@ impl App {
 
     pub fn music_search(&self, query: &str) {
         let query = query.trim();
+        // Auf der Verlaufsseite durchsucht die Suchleiste den Verlauf.
+        if matches!(self.music_target(), Some(Target::History(_))) {
+            self.music_go(Target::History(query.to_string()));
+            return;
+        }
         if !query.is_empty() {
             self.music_go(Target::Search(query.to_string()));
+        }
+    }
+
+    /// Die gerade gezeigte Seite.
+    pub fn music_target(&self) -> Option<Target> {
+        let music = self.music.borrow();
+        music.history.get(music.position).cloned()
+    }
+
+    /// Verlauf neu zeichnen, falls er gerade offen ist (neuer Song gezählt).
+    pub fn music_refresh_history(&self) {
+        if let Some(target @ Target::History(_)) = self.music_target() {
+            let scroll = self.ui.global::<Music>().get_scroll_y();
+            self.music_load(target);
+            self.ui.global::<Music>().set_scroll_y(scroll);
         }
     }
 
@@ -372,6 +405,17 @@ impl App {
     }
 
     fn music_load(&self, target: Target) {
+        if let Target::History(query) = &target {
+            // Lokal, ohne Anfrage an YouTube.
+            self.music().generation += 1;
+            let ui = self.ui.global::<Music>();
+            ui.set_loading(false);
+            ui.set_error(SharedString::new());
+            ui.set_section(4);
+            let page = self.history_page(query);
+            self.music_show(page, &target);
+            return;
+        }
         let Some(auth) = self.music.borrow().auth.clone() else {
             self.music_refresh_auth(target);
             return;
@@ -389,6 +433,7 @@ impl App {
             Target::Search(_) => 1,
             Target::Library => 2,
             Target::Browse { .. } => 3,
+            Target::History(_) => 4,
         });
         self.runtime.spawn(async move {
             let result = match &target {
@@ -396,6 +441,7 @@ impl App {
                 Target::Library => ytm::browse(&auth, ytm::LIBRARY_PLAYLISTS, None).await,
                 Target::Search(q) => ytm::search(&auth, q).await,
                 Target::Browse { id, params, .. } => ytm::browse(&auth, id, params.as_deref()).await,
+                Target::History(_) => unreachable!("Verlauf wird lokal gezeigt"),
             };
             on_ui(move |app| {
                 if app.music.borrow().generation != generation {
@@ -883,11 +929,11 @@ impl App {
 
     // ------------------------------------------------------------------ Bilder
 
-    fn music_cached(&self, url: &str) -> Option<Image> {
+    pub(crate) fn music_cached(&self, url: &str) -> Option<Image> {
         self.music.borrow().images.get(url).map(|buffer| Image::from_rgba8(buffer.clone()))
     }
 
-    fn music_fetch_image(&self, url: String) {
+    pub(crate) fn music_fetch_image(&self, url: String) {
         {
             let mut music = self.music();
             if music.images.contains_key(&url) || !music.loading.insert(url.clone()) {
@@ -938,6 +984,8 @@ impl App {
             ui.set_now_image(image);
             ui.set_now_has_image(true);
         }
+        drop(music);
+        self.mini_render();
     }
 }
 

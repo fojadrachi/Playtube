@@ -157,6 +157,8 @@ pub struct Config {
     pub start_tab: String,
     /// Mit Windows starten
     pub autostart: bool,
+    /// Gehörte Songs im Verlauf speichern (src/history.rs)
+    pub history: bool,
     /// Beim Autostart nur im Tray starten (kein Fenster)
     pub autostart_tray: bool,
     /// "de", "en" oder leer (= Windows-Sprache)
@@ -181,6 +183,7 @@ impl Default for Config {
             media_keys: true,
             start_tab: "youtube".into(),
             autostart: false,
+            history: true,
             autostart_tray: true,
             language: String::new(),
             home_youtube: "https://www.youtube.com/".into(),
@@ -260,6 +263,7 @@ mod tests {
         // Diagnose ist Opt-out: ohne Eintrag an.
         assert!(config.diagnostics.enabled);
         assert!(config.media_keys);
+        assert!(config.history);
         assert!(config.diagnostics.install_id.is_empty());
     }
 }

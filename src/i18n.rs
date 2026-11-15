@@ -54,6 +54,22 @@ pub fn trf(key: &str, args: &[(&str, &str)]) -> String {
 }
 
 const STRINGS: &[(&str, &str, &str)] = &[
+    // Verlauf, Schlaf-Timer, Mini-Player (src/extras.rs)
+    ("music.history", "Verlauf", "History"),
+    ("music.history_placeholder", "Im Verlauf suchen …", "Search your history …"),
+    ("music.history_empty", "Noch nichts gehört – Songs erscheinen hier nach 30 Sekunden.", "Nothing played yet – songs show up here after 30 seconds."),
+    ("history.today", "Heute", "Today"),
+    ("history.yesterday", "Gestern", "Yesterday"),
+    ("history.clear", "Verlauf löschen", "Clear history"),
+    ("history.cleared", "Verlauf gelöscht", "History cleared"),
+    ("field.history", "Gehörte Songs im Verlauf speichern", "Keep a history of played songs"),
+    ("sleep.title", "Schlaf-Timer", "Sleep timer"),
+    ("sleep.off", "Aus", "Off"),
+    ("sleep.end", "Ende des Songs", "End of song"),
+    ("sleep.end_short", "Songende", "End of song"),
+    ("sleep.minutes", "Minuten", "minutes"),
+    ("mini.open", "Mini-Player", "Mini player"),
+    ("mini.idle", "Gerade läuft nichts", "Nothing playing"),
     // Hauptfenster / Tray
     ("tab.settings", "Einstellungen", "Settings"),
     ("url.placeholder", "Suche oder URL eingeben …", "Search or enter URL …"),

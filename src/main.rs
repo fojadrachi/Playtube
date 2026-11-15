@@ -12,6 +12,8 @@ mod browser;
 mod config;
 mod diag;
 mod discord;
+mod extras;
+mod history;
 mod i18n;
 mod instance;
 mod jam;
@@ -23,6 +25,7 @@ mod media_keys;
 mod relay;
 mod remote;
 mod scripts;
+mod sleep;
 mod updater;
 mod ytm;
 
@@ -37,7 +40,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
 slint::include_modules!();
@@ -105,6 +108,14 @@ struct App {
     relays: RefCell<[Option<relay::Relay>; 2]>,
     /// Discord ist gerade in einem Sprachkanal (für Tonausgabe "Automatisch").
     discord_voice: Cell<bool>,
+    /// Gehörte Songs (src/history.rs)
+    history: RefCell<history::History>,
+    /// Schlaf-Timer (src/sleep.rs); beim Ausblenden: (Tab, ursprüngliche Lautstärke)
+    sleep: RefCell<Option<sleep::SleepTimer>>,
+    sleep_fade: Cell<Option<(usize, f64)>>,
+    sleep_ticker: slint::Timer,
+    /// Offener Mini-Player
+    mini: RefCell<Option<MiniWindow>>,
 }
 
 struct Events;
@@ -250,6 +261,10 @@ impl App {
     fn quit(&self) {
         self.music_timer.stop();
         self.jam_timer.stop();
+        self.sleep_ticker.stop();
+        if let Some(mini) = self.mini.borrow_mut().take() {
+            let _ = mini.hide();
+        }
         self.jam.borrow_mut().take();
         self.lan.borrow_mut().take();
         *self.relays.borrow_mut() = [None, None];
@@ -291,6 +306,8 @@ impl App {
             None => APP_NAME.into(),
         });
         self.update_presence();
+        self.history_observe();
+        self.mini_render();
     }
 
     /// Der Tab, der gerade abspielt, sonst der sichtbare.
@@ -385,7 +402,9 @@ impl App {
         match action {
             Action::Status => {
                 let media = self.media.borrow().clone();
-                reply(remote::build_state(VERSION, self.visible_name(), &[media[0].as_ref(), media[1].as_ref()]));
+                let mut state = remote::build_state(VERSION, self.visible_name(), &[media[0].as_ref(), media[1].as_ref()]);
+                state["sleepTimer"] = self.sleep_status();
+                reply(state);
             }
             Action::Show => {
                 self.show_window();
@@ -446,6 +465,20 @@ impl App {
                 });
                 self.timers.borrow_mut().push(timer);
                 self.timers.borrow_mut().retain(|t| t.running());
+                reply(Value::Null);
+            }
+            Action::SleepTimer(minutes) => {
+                self.sleep_set(minutes);
+                reply(Value::Null);
+            }
+            Action::History(limit) => reply(self.history_json(limit)),
+            Action::PlayVideo(id) => {
+                // ID ist geprüft (nur Buchstaben, Ziffern, _ und -).
+                self.tabs[music::TAB_MUSIC].load(&format!("https://music.youtube.com/watch?v={id}"));
+                reply(Value::Null);
+            }
+            Action::MiniPlayer => {
+                self.mini_toggle();
                 reply(Value::Null);
             }
         }
@@ -795,6 +828,7 @@ impl App {
         ui.set_media_keys(config.media_keys);
         ui.set_autostart(config.autostart);
         ui.set_autostart_tray(config.autostart_tray);
+        ui.set_history_enabled(config.history);
         let language = i18n::current();
         ui.set_language_index(i18n::LANGUAGES.iter().position(|(code, _)| *code == language).unwrap_or(0) as i32);
         drop(config);
@@ -823,6 +857,7 @@ impl App {
             config.media_keys = ui.get_media_keys();
             config.autostart = ui.get_autostart();
             config.autostart_tray = ui.get_autostart_tray();
+            config.history = ui.get_history_enabled();
             config.language = i18n::LANGUAGES.get(ui.get_language_index() as usize).map(|(c, _)| c.to_string()).unwrap_or_default();
             config::save(&config);
         }
@@ -856,11 +891,24 @@ impl App {
             quit: "quit".into(),
         };
         let menu = Menu::new();
+        let sleep_items: Vec<MenuItem> = extras::sleep_choices()
+            .into_iter()
+            .map(|(minutes, label)| MenuItem::with_id(format!("sleep:{minutes}"), label, true, None))
+            .collect();
+        let sleep_refs: Vec<&dyn tray_icon::menu::IsMenuItem> =
+            sleep_items.iter().map(|i| i as &dyn tray_icon::menu::IsMenuItem).collect();
+        let sleep_menu = Submenu::with_items(tr("sleep.title"), true, &sleep_refs).ok();
         let _ = menu.append_items(&[
             &MenuItem::with_id(ids.show.clone(), tr("tray.show"), true, None),
+            &MenuItem::with_id("mini", tr("mini.open"), true, None),
             &MenuItem::with_id(ids.play_pause.clone(), tr("tray.play_pause"), true, None),
             &MenuItem::with_id(ids.next.clone(), tr("tray.next"), true, None),
             &MenuItem::with_id(ids.previous.clone(), tr("tray.previous"), true, None),
+        ]);
+        if let Some(sleep_menu) = &sleep_menu {
+            let _ = menu.append(sleep_menu);
+        }
+        let _ = menu.append_items(&[
             &PredefinedMenuItem::separator(),
             &MenuItem::with_id(ids.quit.clone(), tr("tray.quit"), true, None),
         ]);
@@ -885,6 +933,14 @@ impl App {
 
     fn poll_tray(&self) {
         while let Ok(event) = MenuEvent::receiver().try_recv() {
+            if let Some(minutes) = event.id.0.strip_prefix("sleep:").and_then(|m| m.parse::<i32>().ok()) {
+                self.sleep_set(minutes);
+                continue;
+            }
+            if event.id.0 == "mini" {
+                self.mini_toggle();
+                continue;
+            }
             let action = {
                 let tray = self.tray.borrow();
                 let Some((_, _, ids)) = tray.as_ref() else { continue };
@@ -974,7 +1030,10 @@ fn apply_texts(ui: &AppWindow) {
         diag_enabled: tr("diag.enabled").into(),
         diag_hint: tr("diag.hint").into(),
         diag_send_now: tr("diag.send_now").into(),
+        field_history: tr("field.history").into(),
+        history_clear: tr("history.clear").into(),
     });
+    extras::apply_extras_texts(ui);
     jam_ui::apply_jam_texts(ui);
     music::apply_music_texts(ui);
 }
@@ -1037,6 +1096,11 @@ fn build_app(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config) -
         music_login: Cell::new(false),
         relays: RefCell::new([None, None]),
         discord_voice: Cell::new(false),
+        history: RefCell::new(extras::load_history()),
+        sleep: RefCell::new(None),
+        sleep_fade: Cell::new(None),
+        sleep_ticker: slint::Timer::default(),
+        mini: RefCell::new(None),
     }))
 }
 
@@ -1186,6 +1250,7 @@ fn main() {
     ui.on_pair_phone(|| with_app(|app| app.pair_phone()));
     ui.on_forget_phones(|| with_app(|app| app.pairing.forget_all()));
     ui.on_send_diagnostics(|| with_app(|app| app.send_diagnostics(true)));
+    ui.on_clear_history(|| with_app(|app| app.history_clear()));
     jam_ui::wire(&ui);
     music::wire(&ui);
 

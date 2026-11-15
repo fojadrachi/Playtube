@@ -3,8 +3,8 @@
 // (content-top bis Fensterende).
 
 import { Button, LineEdit, CheckBox, ComboBox, SpinBox, ScrollView, ProgressIndicator, GroupBox, Slider } from "std-widgets.slint";
-import { Music, MusicView, PlayerBar, MusicCard, MusicShelf, MusicTexts } from "music.slint";
-export { Music, MusicCard, MusicShelf, MusicTexts }
+import { Music, MusicView, PlayerBar, MusicCard, MusicShelf, MusicTexts, SleepChoice, IconButton as MusicIconButton, Cover } from "music.slint";
+export { Music, MusicCard, MusicShelf, MusicTexts, SleepChoice }
 
 // Playtube Jam (src/jam.rs)
 export struct JamTexts {
@@ -101,6 +101,8 @@ export struct Texts {
     diag-enabled: string,
     diag-hint: string,
     diag-send-now: string,
+    field-history: string,
+    history-clear: string,
 }
 
 component TabButton inherits Rectangle {
@@ -257,6 +259,7 @@ export component AppWindow inherits Window {
     in-out property <bool> media-keys: true;
     in-out property <bool> autostart;
     in-out property <bool> autostart-tray: true;
+    in-out property <bool> history-enabled: true;
     in property <string> saved-text;
     in-out property <bool> diag-enabled: true;
     in property <string> diag-status;
@@ -276,6 +279,7 @@ export component AppWindow inherits Window {
     callback pair-phone();
     callback forget-phones();
     callback send-diagnostics();
+    callback clear-history();
 
     // Playtube-Ansicht für YouTube Music (src/music.rs)
     in property <bool> music-view;
@@ -478,6 +482,10 @@ export component AppWindow inherits Window {
                             CheckBox { text: root.t.field-media-keys; checked <=> root.media-keys; }
                             CheckBox { text: root.t.field-autostart; checked <=> root.autostart; }
                             CheckBox { text: root.t.field-autostart-tray; checked <=> root.autostart-tray; enabled: root.autostart; }
+                            Row {
+                                CheckBox { text: root.t.field-history; checked <=> root.history-enabled; }
+                                Button { text: root.t.history-clear; clicked => { root.clear-history(); } }
+                            }
                         }
                     }
 
@@ -750,6 +758,65 @@ export component AppWindow inherits Window {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+// Mini-Player: kleines Fenster, das über allen anderen bleibt (src/extras.rs).
+export component MiniWindow inherits Window {
+    title: "Playtube";
+    icon: @image-url("../assets/icon.png");
+    always-on-top: true;
+    background: #121216;
+    min-width: 300px;
+    preferred-width: 380px;
+    max-width: 640px;
+    height: 104px;
+
+    in property <string> song-title;
+    in property <string> artist;
+    in property <image> cover;
+    in property <bool> has-cover;
+    in property <bool> playing;
+    in property <float> progress;
+    in property <bool> liked;
+    in property <string> sleep-text;
+    in property <string> idle-text;
+    callback media(string);
+    callback expand();
+
+    VerticalLayout {
+        HorizontalLayout {
+            padding: 12px;
+            padding-bottom: 8px;
+            spacing: 12px;
+            Cover { width: 72px; height: 72px; source: root.cover; has-image: root.has-cover; }
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 1;
+                spacing: 2px;
+                Text { text: root.song-title != "" ? root.song-title : root.idle-text; color: #ffffff; font-size: 14px; font-weight: 600; overflow: elide; }
+                Text { text: root.artist; color: #a7a7b0; font-size: 12px; overflow: elide; }
+                if root.sleep-text != "": Text { text: "\u{263E} " + root.sleep-text; color: #ec4899; font-size: 11px; }
+            }
+            HorizontalLayout {
+                spacing: 2px;
+                alignment: center;
+                MusicIconButton { y: (parent.height - self.height) / 2; icon: root.liked ? "\u{EB52}" : "\u{EB51}"; active: root.liked; clicked => { root.media("like"); } }
+                MusicIconButton { y: (parent.height - self.height) / 2; icon: "\u{E892}"; clicked => { root.media("previous"); } }
+                MusicIconButton { icon: root.playing ? "\u{E769}" : "\u{E768}"; size: 40px; primary: true; clicked => { root.media("play_pause"); } }
+                MusicIconButton { y: (parent.height - self.height) / 2; icon: "\u{E893}"; clicked => { root.media("next"); } }
+                MusicIconButton { y: (parent.height - self.height) / 2; icon: "\u{E740}"; clicked => { root.expand(); } }
+            }
+        }
+        Rectangle {
+            height: 4px;
+            background: #2a2a33;
+            Rectangle {
+                x: 0;
+                width: parent.width * clamp(root.progress, 0, 1);
+                background: @linear-gradient(90deg, #7c3aed 0%, #ec4899 100%);
             }
         }
     }

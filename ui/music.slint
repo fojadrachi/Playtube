@@ -4,6 +4,12 @@
 
 import { ScrollView, LineEdit, Slider } from "std-widgets.slint";
 
+// Auswahl des Schlaf-Timers (Minuten; -1 = Ende des Songs, 0 = aus)
+export struct SleepChoice {
+    minutes: int,
+    label: string,
+}
+
 export struct MusicCard {
     id: int,
     title: string,
@@ -39,6 +45,14 @@ export struct MusicTexts {
     search-placeholder: string,
     jam-add: string,
     jam-queue: string,
+    history: string,
+    history-placeholder: string,
+    history-empty: string,
+    sleep: string,
+    sleep-off: string,
+    sleep-end: string,
+    minutes: string,
+    mini: string,
 }
 
 export global Music {
@@ -86,7 +100,16 @@ export global Music {
     in-out property <bool> queue-open;
     in property <[MusicCard]> queue;
 
+    // Schlaf-Timer
+    in property <bool> sleep-active;
+    // Restzeit ("12:34") bzw. "Songende"
+    in property <string> sleep-text;
+    in property <[SleepChoice]> sleep-choices;
+
     callback open-home();
+    callback open-history();
+    callback set-sleep(int);
+    callback mini-player();
     callback open-library();
     callback search(string);
     callback open-card(int);
@@ -110,7 +133,7 @@ component Icon inherits Text {
     vertical-alignment: center;
 }
 
-component IconButton inherits Rectangle {
+export component IconButton inherits Rectangle {
     in property <string> icon;
     in property <length> size: 32px;
     in property <bool> active;
@@ -131,7 +154,7 @@ component IconButton inherits Rectangle {
     touch := TouchArea { enabled: root.enabled; clicked => { root.clicked(); } }
 }
 
-component Cover inherits Rectangle {
+export component Cover inherits Rectangle {
     in property <image> source;
     in property <bool> has-image;
     in property <bool> round;
@@ -306,11 +329,12 @@ export component MusicView inherits Rectangle {
             Rectangle {
                 background: #121216;
                 border-radius: 8px;
-                height: 104px;
+                height: 144px;
                 VerticalLayout {
                     padding: 12px;
                     NavItem { icon: "\u{E80F}"; text: Music.t.home; active: Music.section == 0; clicked => { Music.open-home(); } }
                     NavItem { icon: "\u{E721}"; text: Music.t.search; active: Music.section == 1; clicked => { search-field.focus(); } }
+                    NavItem { icon: "\u{E81C}"; text: Music.t.history; active: Music.section == 4; clicked => { Music.open-history(); } }
                 }
             }
             Rectangle {
@@ -348,7 +372,7 @@ export component MusicView inherits Rectangle {
                         spacing: 12px;
                         search-field := LineEdit {
                             max-width: 420px;
-                            placeholder-text: Music.t.search-placeholder;
+                            placeholder-text: Music.section == 4 ? Music.t.history-placeholder : Music.t.search-placeholder;
                             accepted(text) => { Music.search(text); }
                         }
                         Rectangle { horizontal-stretch: 1; }
@@ -432,7 +456,7 @@ export component MusicView inherits Rectangle {
 
                         if !Music.loading && Music.shelves.length == 0 && Music.error == "": Rectangle {
                             height: 80px;
-                            Text { text: Music.t.nothing; color: #a7a7b0; }
+                            Text { text: Music.section == 4 ? Music.t.history-empty : Music.t.nothing; color: #a7a7b0; }
                         }
 
                         for shelf in Music.shelves: VerticalLayout {
@@ -586,6 +610,48 @@ export component PlayerBar inherits Rectangle {
             width: 30%;
             alignment: end;
             spacing: 8px;
+            if Music.sleep-active: Text {
+                text: Music.sleep-text;
+                color: #ec4899;
+                font-size: 12px;
+                vertical-alignment: center;
+            }
+            sleep-button := IconButton {
+                icon: "\u{E708}";
+                active: Music.sleep-active;
+                y: (parent.height - self.height) / 2;
+                clicked => { sleep-menu.show(); }
+            }
+            sleep-menu := PopupWindow {
+                x: sleep-button.x - 120px;
+                y: -(Music.sleep-choices.length * 34px + 52px);
+                width: 180px;
+                Rectangle {
+                    background: #24242c;
+                    border-radius: 8px;
+                    drop-shadow-blur: 16px;
+                    drop-shadow-color: #00000099;
+                    VerticalLayout {
+                        padding: 6px;
+                        Text { text: Music.t.sleep; color: #a7a7b0; font-size: 12px; height: 28px; vertical-alignment: center; x: 10px; }
+                        for choice in Music.sleep-choices: Rectangle {
+                            height: 34px;
+                            border-radius: 6px;
+                            background: choice-touch.has-hover ? #34343e : transparent;
+                            Text {
+                                text: choice.label;
+                                color: #ffffff;
+                                font-size: 13px;
+                                x: 10px;
+                                vertical-alignment: center;
+                                height: 100%;
+                            }
+                            choice-touch := TouchArea { clicked => { Music.set-sleep(choice.minutes); } }
+                        }
+                    }
+                }
+            }
+            IconButton { icon: "\u{E73F}"; y: (parent.height - self.height) / 2; clicked => { Music.mini-player(); } }
             IconButton { icon: "\u{E8FD}"; active: Music.queue-open; y: (parent.height - self.height) / 2; clicked => { Music.toggle-queue(); } }
             IconButton { icon: "\u{E767}"; y: (parent.height - self.height) / 2; clicked => { Music.media("mute_toggle"); } }
             Slider {

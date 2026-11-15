@@ -1,4 +1,17 @@
-## Playtube 2.13.0
+## Playtube 2.14.0
+
+- **Verlauf:** In der Playtube-Ansicht gibt es links „Verlauf“ – alle Songs, die du gehört hast, nach Tagen
+  sortiert und durchsuchbar (die Suchleiste sucht dort im Verlauf). Ein Song zählt, wenn er 30 Sekunden lief. Der
+  Verlauf bleibt nur auf deinem PC; abschalten oder löschen unter Einstellungen › Allgemein.
+- **Schlaf-Timer:** Mond-Knopf unten rechts in der Playtube-Ansicht oder im Tray-Menü: nach 15 bis 120 Minuten oder
+  am Ende des Songs pausieren. Vorher wird die Musik 15 Sekunden lang leiser. Im Jam verlässt du dabei nur den Jam,
+  für die anderen läuft er weiter.
+- **Mini-Player:** Kleines Fenster mit Cover, Titel und Steuerung, das über allen anderen Fenstern bleibt. Öffnen
+  über den Knopf in der Player-Leiste oder im Tray-Menü; mit dem Pfeil geht es zurück zum großen Fenster.
+- **Fernsteuerung (Handy, Stream Dock):** neue Befehle `sleep_timer`, `history`, `play_video` und `mini_player`;
+  der Status enthält jetzt `sleepTimer` (Restsekunden, -1 = Songende).
+
+Neu in 2.13.0:
 
 - **Jam-Songs zu deinen Lieblingssongs:** In der Jam-Ansicht hat der laufende Song und jeder Song in der
   Warteschlange ein Herz. Ein Klick legt ihn in deine eigenen YouTube-Music-Lieblingssongs (oder nimmt ihn wieder
@@ -101,12 +114,25 @@ Neu in 2.6.0:
 
 Alles Weitere wie in 2.5.2 (Tonausgabe Normal/Discord, Fixes).
 
-**Installieren:** `Playtube-Setup-2.13.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
+**Installieren:** `Playtube-Setup-2.14.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
 aktualisiert sich auch von selbst.
 
 ---
 
-## Playtube 2.13.0
+## Playtube 2.14.0
+
+- **History:** the Playtube view has a new "History" entry on the left – every song you played, grouped by day and
+  searchable (the search bar searches your history there). A song counts once it has played for 30 seconds. The
+  history stays on your PC; turn it off or clear it under Settings › General.
+- **Sleep timer:** moon button at the bottom right of the Playtube view or in the tray menu: pause after 15 to 120
+  minutes or at the end of the song. The music fades out over the last 15 seconds. In a jam you only leave the jam;
+  it keeps going for everyone else.
+- **Mini player:** a small always-on-top window with cover, title and controls. Open it from the player bar or the
+  tray menu; the arrow brings back the big window.
+- **Remote control (phone, Stream Dock):** new commands `sleep_timer`, `history`, `play_video` and `mini_player`;
+  the status now includes `sleepTimer` (seconds left, -1 = end of song).
+
+New in 2.13.0:
 
 - **Jam songs to your liked songs:** in the jam view the current song and every song in the queue has a heart. One
   click adds it to your own YouTube Music liked songs (or removes it) – with your login, independently of the others.
@@ -206,4 +232,4 @@ New in 2.6.0:
 
 Everything else as in 2.5.2 (sound output Normal/Discord, fixes).
 
-**Install:** run `Playtube-Setup-2.13.0.exe` – it replaces any older Playtube. Playtube also updates itself.
+**Install:** run `Playtube-Setup-2.14.0.exe` – it replaces any older Playtube. Playtube also updates itself.

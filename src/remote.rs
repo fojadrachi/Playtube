@@ -22,7 +22,10 @@ const MAX_CLIENTS: usize = 8;
 
 pub const TAB_NAMES: [&str; 2] = ["youtube", "music"];
 const APP_COMMANDS: &[&str] =
-    &["status", "show", "switch_tab", "list_playlists", "play_playlist", "playlist_cover", "queue", "play_queue_item"];
+    &["status", "show", "switch_tab", "list_playlists", "play_playlist", "playlist_cover", "queue", "play_queue_item",
+      "sleep_timer", "history", "mini_player", "play_video"];
+/// Höchstzahl Einträge für "history".
+pub const MAX_HISTORY: usize = 200;
 const MAX_PLAYLISTS: usize = 100;
 const MAX_PLAYLIST_TITLE: usize = 100;
 const MAX_QUEUE: usize = 200;
@@ -41,6 +44,7 @@ pub struct Request {
     pub target: String,
     pub value: f64,
     pub playlist: Option<String>,
+    pub video: Option<String>,
 }
 
 /// Was die App für eine Anfrage tun soll (läuft im UI-Thread, siehe main.rs).
@@ -55,11 +59,23 @@ pub enum Action {
     PlaylistCover(String),
     Queue(String),
     PlayQueueItem { target: String, index: u32 },
+    /// Minuten; 0 = aus, -1 = am Ende des Songs
+    SleepTimer(i32),
+    /// Die letzten n gehörten Songs
+    History(usize),
+    /// Mini-Player ein/aus
+    MiniPlayer,
+    /// Einen Song (Video-ID) in YouTube Music abspielen
+    PlayVideo(String),
 }
 
 pub type Reply = Box<dyn FnOnce(Value) + Send>;
 /// Übergibt eine Aktion an die App; die Antwort (Status, Playlists oder null) kommt über `Reply`.
 pub type Dispatch = Arc<dyn Fn(Action, Reply) + Send + Sync>;
+
+pub fn is_video_id(id: &str) -> bool {
+    (6..=20).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
 
 pub fn is_playlist_id(id: &str) -> bool {
     (2..=64).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
@@ -90,11 +106,21 @@ pub fn parse_request(line: &str) -> Result<Request, String> {
     } else {
         None
     };
+    let video = if command == "play_video" {
+        match obj.get("video").and_then(Value::as_str) {
+            Some(v) if is_video_id(v) => Some(v.to_string()),
+            _ => return Err("play_video braucht eine gueltige Video-ID".into()),
+        }
+    } else {
+        None
+    };
     let range = match command {
         "seek" => Some((-3600.0, 3600.0)),
         "volume_change" => Some((-100.0, 100.0)),
         "set_volume" => Some((0.0, 100.0)),
         "play_queue_item" => Some((0.0, (MAX_QUEUE - 1) as f64)),
+        "sleep_timer" => Some((-1.0, crate::sleep::MAX_MINUTES as f64)),
+        "history" if obj.contains_key("value") => Some((1.0, MAX_HISTORY as f64)),
         _ => None,
     };
     let value = match range {
@@ -105,13 +131,15 @@ pub fn parse_request(line: &str) -> Result<Request, String> {
             if !(low..=high).contains(&raw) {
                 return Err(format!("{command}: Wert muss zwischen {low} und {high} liegen"));
             }
-            if command == "play_queue_item" && raw.fract() != 0.0 {
-                return Err("play_queue_item braucht eine ganze Zahl".into());
+            if matches!(command, "play_queue_item" | "sleep_timer" | "history") && raw.fract() != 0.0 {
+                return Err(format!("{command} braucht eine ganze Zahl"));
             }
             raw
         }
     };
-    Ok(Request { id, command: command.to_string(), target: target.to_string(), value, playlist })
+    // "history" ohne Wert: die letzten 50.
+    let value = if command == "history" && value == 0.0 { 50.0 } else { value };
+    Ok(Request { id, command: command.to_string(), target: target.to_string(), value, playlist, video })
 }
 
 pub fn action_for(request: &Request) -> Action {
@@ -124,6 +152,10 @@ pub fn action_for(request: &Request) -> Action {
         "playlist_cover" => Action::PlaylistCover(request.playlist.clone().unwrap_or_default()),
         "queue" => Action::Queue(request.target.clone()),
         "play_queue_item" => Action::PlayQueueItem { target: request.target.clone(), index: request.value as u32 },
+        "sleep_timer" => Action::SleepTimer(request.value as i32),
+        "history" => Action::History(request.value as usize),
+        "mini_player" => Action::MiniPlayer,
+        "play_video" => Action::PlayVideo(request.video.clone().unwrap_or_default()),
         _ => Action::Media { target: request.target.clone(), command: request.command.clone(), value: request.value },
     }
 }
@@ -274,6 +306,10 @@ pub async fn process_line(line: &str, dispatch: &Dispatch) -> Vec<u8> {
             map.insert("ok".into(), Value::Bool(true));
             map.insert("queue".into(), Value::Array(sanitize_queue(&raw)));
         }
+        ("history", Ok(Ok(list))) => {
+            map.insert("ok".into(), Value::Bool(true));
+            map.insert("history".into(), if list.is_array() { list } else { Value::Array(Vec::new()) });
+        }
         ("playlist_cover", Ok(Ok(raw))) => {
             map.insert("ok".into(), Value::Bool(true));
             map.insert("cover".into(), sanitize_cover(&raw).map(Value::String).unwrap_or(Value::Null));
@@ -415,6 +451,35 @@ mod tests {
                     json!("https://i.ytimg.com/x\".jpg"), Value::Null, json!(5)] {
             assert_eq!(sanitize_cover(&bad), None, "{bad}");
         }
+    }
+
+    #[test]
+    fn parses_sleep_timer_history_and_mini_player() {
+        let action = |line: &str| action_for(&parse_request(line).unwrap());
+        assert_eq!(action(r#"{"cmd": "sleep_timer", "value": 30}"#), Action::SleepTimer(30));
+        assert_eq!(action(r#"{"cmd": "sleep_timer", "value": -1}"#), Action::SleepTimer(-1));
+        assert_eq!(action(r#"{"cmd": "sleep_timer", "value": 0}"#), Action::SleepTimer(0));
+        assert_eq!(action(r#"{"cmd": "history"}"#), Action::History(50));
+        assert_eq!(action(r#"{"cmd": "history", "value": 10}"#), Action::History(10));
+        assert_eq!(action(r#"{"cmd": "mini_player"}"#), Action::MiniPlayer);
+        assert_eq!(action(r#"{"cmd": "play_video", "video": "dQw4w9WgXcQ"}"#), Action::PlayVideo("dQw4w9WgXcQ".into()));
+        for bad in [r#"{"cmd": "play_video"}"#, r#"{"cmd": "play_video", "video": "a&b=c1234"}"#, r#"{"cmd": "play_video", "video": "x"}"#] {
+            assert!(parse_request(bad).is_err(), "{bad}");
+        }
+        for bad in [r#"{"cmd": "sleep_timer"}"#, r#"{"cmd": "sleep_timer", "value": 2.5}"#,
+                    r#"{"cmd": "sleep_timer", "value": -5}"#, r#"{"cmd": "sleep_timer", "value": 99999}"#,
+                    r#"{"cmd": "history", "value": 0}"#, r#"{"cmd": "history", "value": 500}"#] {
+            assert!(parse_request(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[tokio::test]
+    async fn history_reply_contains_the_list() {
+        let dispatch: Dispatch = Arc::new(|_action, reply| reply(json!([{"title": "Lied"}])));
+        let line = process_line(r#"{"id": 3, "cmd": "history"}"#, &dispatch).await;
+        let reply: Value = serde_json::from_slice(&line).unwrap();
+        assert_eq!(reply["ok"], json!(true));
+        assert_eq!(reply["history"][0]["title"], json!("Lied"));
     }
 
     #[tokio::test]
