@@ -231,6 +231,69 @@ impl App {
         }
     }
 
+    // ------------------------------------------------------------------ Discord-Bot im Jam
+
+    /// Ein Discord-Bot im Jam bittet um den Ton (Nachricht "audioRequest" vom Jam-Server).
+    pub fn bot_audio_request(&self, value: &Value) {
+        if !self.config.borrow().jam.bot_audio {
+            log::line("bot: Ton-Anfrage abgelehnt (in den Einstellungen aus)");
+            return;
+        }
+        let Some(request) = botaudio::parse_request(value) else {
+            log::line("bot: ungültige Ton-Anfrage");
+            return;
+        };
+        let name = {
+            let config = self.config.borrow();
+            if config.jam.name.trim().is_empty() { APP_NAME.to_string() } else { config.jam.name.clone() }
+        };
+        let bot = request.bot.clone();
+        // Vorherige Übertragung ersetzen (z. B. der Bot hat neu gefragt).
+        self.bot_audio.borrow_mut().take();
+        let id = botaudio::next_id();
+        let stream = botaudio::Stream::start(
+            self.runtime.handle(),
+            id,
+            request,
+            name,
+            move || on_ui(move |app| app.bot_audio_started(&bot)),
+            move |end| on_ui(move |app| app.bot_audio_ended(id, end)),
+        );
+        *self.bot_audio.borrow_mut() = Some(stream);
+        // Ton-Abgriff einschalten (der Ton läuft dann über Playtube.exe).
+        self.apply_audio();
+    }
+
+    fn bot_audio_started(&self, bot: &str) {
+        log::line("bot: Ton geht an einen Discord-Bot");
+        self.jam_set_status(trf("bot.listening", &[("bot", bot)]));
+    }
+
+    fn bot_audio_ended(&self, id: u64, end: botaudio::Ended) {
+        // Nur die laufende Übertragung zählt (eine ersetzte meldet ihr Ende auch).
+        if self.bot_audio.borrow().as_ref().is_none_or(|s| s.id != id) {
+            return;
+        }
+        match &end {
+            botaudio::Ended::Refused => log::line("bot: Bot hat abgelehnt (anderer PC oder Ticket abgelaufen)"),
+            botaudio::Ended::Failed(e) => log::line(&format!("bot: Verbindung zum Bot fehlgeschlagen: {e}")),
+            botaudio::Ended::Closed => log::line("bot: Bot hat beendet"),
+        }
+        let was_streaming = self.bot_audio.borrow_mut().take().is_some();
+        if was_streaming {
+            self.apply_audio();
+            if !matches!(end, botaudio::Ended::Refused) && self.jam.borrow().is_some() {
+                self.jam_set_status(tr("bot.stopped").to_string());
+            }
+        }
+    }
+
+    pub fn bot_audio_stop(&self) {
+        if self.bot_audio.borrow_mut().take().is_some() {
+            self.apply_audio();
+        }
+    }
+
     // ------------------------------------------------------------------ Mini-Player
 
     pub fn mini_toggle(&self) {

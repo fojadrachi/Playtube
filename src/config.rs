@@ -100,11 +100,19 @@ pub struct Jam {
     /// Teilnehmer (bzw. Host) weiter.
     pub last_code: String,
     pub last_token: String,
+    /// Ein Discord-Bot im Jam darf den Playtube-Ton bekommen (src/botaudio.rs)
+    pub bot_audio: bool,
 }
 
 impl Default for Jam {
     fn default() -> Self {
-        Self { name: String::new(), server: crate::jam::DEFAULT_SERVER.into(), last_code: String::new(), last_token: String::new() }
+        Self {
+            name: String::new(),
+            server: crate::jam::DEFAULT_SERVER.into(),
+            last_code: String::new(),
+            last_token: String::new(),
+            bot_audio: true,
+        }
     }
 }
 
@@ -264,6 +272,7 @@ mod tests {
         assert!(config.diagnostics.enabled);
         assert!(config.media_keys);
         assert!(config.history);
+        assert!(config.jam.bot_audio);
         assert!(config.diagnostics.install_id.is_empty());
     }
 }

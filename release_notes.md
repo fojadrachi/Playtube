@@ -1,4 +1,11 @@
-## Playtube 2.14.0
+## Playtube 2.15.0
+
+- **Discord-Bot im Jam:** Ein Discord-Bot kann deinen Jam im Sprachkanal abspielen. Im Discord holst du ihn mit
+  `/vc join` in deinen Sprachkanal und verbindest ihn mit `/jam connect <Code>`. Den Ton schickt Playtube von deinem
+  PC an den Bot (der Bot lädt selbst nichts von YouTube); solange das läuft, kommt der Ton über Playtube.exe.
+  Abschaltbar unter Einstellungen › Audioausgabe.
+
+Neu in 2.14.0:
 
 - **Verlauf:** In der Playtube-Ansicht gibt es links „Verlauf“ – alle Songs, die du gehört hast, nach Tagen
   sortiert und durchsuchbar (die Suchleiste sucht dort im Verlauf). Ein Song zählt, wenn er 30 Sekunden lief. Der
@@ -114,12 +121,19 @@ Neu in 2.6.0:
 
 Alles Weitere wie in 2.5.2 (Tonausgabe Normal/Discord, Fixes).
 
-**Installieren:** `Playtube-Setup-2.14.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
+**Installieren:** `Playtube-Setup-2.15.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
 aktualisiert sich auch von selbst.
 
 ---
 
-## Playtube 2.14.0
+## Playtube 2.15.0
+
+- **Discord bot in the jam:** a Discord bot can play your jam in a voice channel. In Discord, bring it into your voice
+  channel with `/vc join` and connect it with `/jam connect <code>`. Playtube sends the sound from your PC to the bot
+  (the bot never downloads anything from YouTube itself); while it does, the sound comes through Playtube.exe. Can be
+  turned off under Settings › Audio output.
+
+New in 2.14.0:
 
 - **History:** the Playtube view has a new "History" entry on the left – every song you played, grouped by day and
   searchable (the search bar searches your history there). A song counts once it has played for 30 seconds. The
@@ -232,4 +246,4 @@ New in 2.6.0:
 
 Everything else as in 2.5.2 (sound output Normal/Discord, fixes).
 
-**Install:** run `Playtube-Setup-2.14.0.exe` – it replaces any older Playtube. Playtube also updates itself.
+**Install:** run `Playtube-Setup-2.15.0.exe` – it replaces any older Playtube. Playtube also updates itself.

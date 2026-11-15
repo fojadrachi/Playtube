@@ -8,6 +8,7 @@
 
 mod audio;
 mod autostart;
+mod botaudio;
 mod browser;
 mod config;
 mod diag;
@@ -116,6 +117,8 @@ struct App {
     sleep_ticker: slint::Timer,
     /// Offener Mini-Player
     mini: RefCell<Option<MiniWindow>>,
+    /// Ton an einen Discord-Bot im Jam (src/botaudio.rs)
+    bot_audio: RefCell<Option<botaudio::Stream>>,
 }
 
 struct Events;
@@ -262,6 +265,7 @@ impl App {
         self.music_timer.stop();
         self.jam_timer.stop();
         self.sleep_ticker.stop();
+        self.bot_audio.borrow_mut().take();
         if let Some(mini) = self.mini.borrow_mut().take() {
             let _ = mini.hide();
         }
@@ -500,7 +504,8 @@ impl App {
     /// Ton gerade über Playtube.exe ("Für Discord-Streams", oder "Automatisch" im Discord-Sprachkanal)?
     fn stream_active(&self) -> bool {
         let audio = &self.config.borrow().audio;
-        audio.stream_mode || (audio.stream_auto && self.discord_voice.get())
+        // Auch solange ein Discord-Bot den Ton bekommt: der Ton läuft dann über Playtube.exe.
+        audio.stream_mode || (audio.stream_auto && self.discord_voice.get()) || self.bot_audio.borrow().is_some()
     }
 
     /// Ergebnis der Discord-Erkennung (alle paar Sekunden aus einem eigenen Thread).
@@ -549,6 +554,11 @@ impl App {
             return;
         }
         let Some((rate, samples)) = relay::parse_message(body) else { return };
+        if tab == music::TAB_MUSIC {
+            if let Some(stream) = self.bot_audio.borrow().as_ref() {
+                stream.push(&botaudio::resample(rate, &samples));
+            }
+        }
         let mut relays = self.relays.borrow_mut();
         let relay = relays[tab].get_or_insert_with(|| {
             let config = self.config.borrow();
@@ -829,6 +839,7 @@ impl App {
         ui.set_autostart(config.autostart);
         ui.set_autostart_tray(config.autostart_tray);
         ui.set_history_enabled(config.history);
+        ui.set_bot_audio(config.jam.bot_audio);
         let language = i18n::current();
         ui.set_language_index(i18n::LANGUAGES.iter().position(|(code, _)| *code == language).unwrap_or(0) as i32);
         drop(config);
@@ -858,6 +869,7 @@ impl App {
             config.autostart = ui.get_autostart();
             config.autostart_tray = ui.get_autostart_tray();
             config.history = ui.get_history_enabled();
+            config.jam.bot_audio = ui.get_bot_audio();
             config.language = i18n::LANGUAGES.get(ui.get_language_index() as usize).map(|(c, _)| c.to_string()).unwrap_or_default();
             config::save(&config);
         }
@@ -1031,6 +1043,8 @@ fn apply_texts(ui: &AppWindow) {
         diag_hint: tr("diag.hint").into(),
         diag_send_now: tr("diag.send_now").into(),
         field_history: tr("field.history").into(),
+        bot_audio: tr("bot.setting").into(),
+        bot_audio_hint: tr("bot.setting_hint").into(),
         history_clear: tr("history.clear").into(),
     });
     extras::apply_extras_texts(ui);
@@ -1101,6 +1115,7 @@ fn build_app(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config) -
         sleep_fade: Cell::new(None),
         sleep_ticker: slint::Timer::default(),
         mini: RefCell::new(None),
+        bot_audio: RefCell::new(None),
     }))
 }
 

@@ -354,6 +354,7 @@ impl App {
         }
         self.jam_timer.stop();
         self.jam.borrow_mut().take();
+        self.bot_audio_stop();
         self.ui.set_jam_active(false);
         self.ui.set_jam_busy(false);
         self.jam_set_status(status);
@@ -472,6 +473,7 @@ impl App {
                 self.media_command(JAM_TAB, "pause", 0.0);
             }
             jam::Event::Error(error) => self.jam_set_status(error_text(&error)),
+            jam::Event::AudioRequest(value) => self.bot_audio_request(&value),
         }
     }
 

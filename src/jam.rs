@@ -536,6 +536,8 @@ pub enum Event {
     Pong { c: f64, s: f64, r: f64 },
     /// Jam vorbei: "host_ended", "host_left", "expired", "kicked", "left", "not_found"
     Ended(String),
+    /// Ein Discord-Bot im Jam bittet um den Ton (src/botaudio.rs prüft den Inhalt)
+    AudioRequest(Value),
     Error(String),
 }
 
@@ -623,6 +625,7 @@ async fn run(
                                         on_event(Event::State(Box::new(state)));
                                     }
                                 }
+                                "audioRequest" => on_event(Event::AudioRequest(value)),
                                 "ended" => {
                                     on_event(Event::Ended(value["reason"].as_str().unwrap_or("ended").to_string()));
                                     break true;

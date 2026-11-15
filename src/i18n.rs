@@ -70,6 +70,11 @@ const STRINGS: &[(&str, &str, &str)] = &[
     ("sleep.minutes", "Minuten", "minutes"),
     ("mini.open", "Mini-Player", "Mini player"),
     ("mini.idle", "Gerade läuft nichts", "Nothing playing"),
+    // Discord-Bot im Jam (src/botaudio.rs)
+    ("bot.listening", "🎧 {bot} spielt den Jam im Discord-Sprachkanal (Ton von diesem PC)", "🎧 {bot} is playing the jam in a Discord voice channel (sound from this PC)"),
+    ("bot.stopped", "Discord-Bot bekommt keinen Ton mehr", "Discord bot no longer receives sound"),
+    ("bot.setting", "Discord-Bot im Jam darf den Ton von diesem PC bekommen", "A Discord bot in the jam may receive the sound from this PC"),
+    ("bot.setting_hint", "Mit /jam connect <Code> spielt ein Discord-Bot den Jam im Sprachkanal ab. Den Ton schickt Playtube von hier – solange das läuft, kommt er über Playtube.exe (wie beim Modus „Für Discord-Streams“).", "With /jam connect <code> a Discord bot plays the jam in a voice channel. Playtube sends the sound from here – while it does, the sound comes through Playtube.exe (like the \"For Discord streams\" mode)."),
     // Hauptfenster / Tray
     ("tab.settings", "Einstellungen", "Settings"),
     ("url.placeholder", "Suche oder URL eingeben …", "Search or enter URL …"),

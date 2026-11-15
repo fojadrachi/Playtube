@@ -103,6 +103,8 @@ export struct Texts {
     diag-send-now: string,
     field-history: string,
     history-clear: string,
+    bot-audio: string,
+    bot-audio-hint: string,
 }
 
 component TabButton inherits Rectangle {
@@ -260,6 +262,7 @@ export component AppWindow inherits Window {
     in-out property <bool> autostart;
     in-out property <bool> autostart-tray: true;
     in-out property <bool> history-enabled: true;
+    in-out property <bool> bot-audio: true;
     in property <string> saved-text;
     in-out property <bool> diag-enabled: true;
     in property <string> diag-status;
@@ -453,6 +456,8 @@ export component AppWindow inherits Window {
                             Hint { text: root.t.audio-hint; }
                             Row { FieldLabel { text: root.t.audio-mode; } ComboBox { model: [root.t.audio-mode-normal, root.t.audio-mode-stream, root.t.audio-mode-auto]; current-index <=> root.audio-mode-index; min-width: 360px; } }
                             Hint { text: root.t.audio-mode-hint; }
+                            CheckBox { text: root.t.bot-audio; checked <=> root.bot-audio; }
+                            Hint { text: root.t.bot-audio-hint; }
                         }
                     }
 
