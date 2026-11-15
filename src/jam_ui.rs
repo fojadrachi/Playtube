@@ -134,6 +134,7 @@ pub fn apply_jam_texts(ui: &AppWindow) {
         hint: tr("jam.hint").into(),
         kick: tr("jam.kick").into(),
         make_host: tr("jam.make_host").into(),
+        like: tr("jam.like").into(),
         play_now: tr("jam.play_now").into(),
         remove: tr("jam.remove").into(),
         add_next: tr("jam.add_next").into(),
@@ -157,6 +158,7 @@ pub fn wire(ui: &AppWindow) {
     ui.on_jam_add_result(|index, next| with_app(|app| app.jam_add_result(index as usize, next)));
     ui.on_jam_remove(|id| with_app(|app| app.jam_send(json!({ "t": "remove", "itemId": id.as_str() }))));
     ui.on_jam_jump(|id| with_app(|app| app.jam_send(json!({ "t": "jump", "itemId": id.as_str() }))));
+    ui.on_jam_like(|id| with_app(|app| app.jam_like(id.as_str())));
     ui.on_jam_make_host(|id| with_app(|app| app.jam_make_host(id.to_string())));
     ui.on_jam_kick(|id| with_app(|app| app.jam_send(json!({ "t": "kick", "memberId": id.as_str() }))));
     ui.on_jam_set_all_control(|on| with_app(|app| app.jam_send(json!({ "t": "settings", "allControl": on }))));
@@ -176,7 +178,7 @@ impl App {
         self.config.borrow().jam.server.clone()
     }
 
-    fn jam_set_status(&self, text: impl Into<SharedString>) {
+    pub(crate) fn jam_set_status(&self, text: impl Into<SharedString>) {
         self.ui.set_jam_status(text.into());
     }
 
@@ -392,6 +394,27 @@ impl App {
         self.jam_set_status(trf("jam.make_host_done", &[("name", &name)]));
     }
 
+    /// Herz-Knopf im Jam: Song in die eigenen Lieblingssongs oder wieder heraus. `item_id` leer =
+    /// der laufende Song, sonst ein Eintrag der Warteschlange.
+    fn jam_like(&self, item_id: &str) {
+        let Some(state) = self.jam_state() else { return };
+        let video_id = if item_id.is_empty() {
+            state.current.as_ref().map(|i| i.video_id.clone())
+        } else {
+            state.queue.iter().find(|q| q.id == item_id).map(|q| q.video_id.clone())
+        };
+        if let Some(video_id) = video_id.filter(|v| !v.is_empty()) {
+            self.music_toggle_like(video_id);
+        }
+    }
+
+    /// Herz-Anzeige im Jam neu zeichnen (nach dem Laden der Lieblingssongs oder einem Klick).
+    pub fn jam_refresh_liked(&self) {
+        if self.jam.borrow().as_ref().and_then(|s| s.state.as_ref()).is_some() {
+            self.jam_render();
+        }
+    }
+
     pub fn jam_leave(&self) {
         if self.jam.borrow().is_none() {
             return;
@@ -540,6 +563,7 @@ impl App {
                             subtitle: r.artist.clone().into(),
                             can_jump: false,
                             can_remove: false,
+                            liked: false,
                         })
                         .collect();
                     app.ui.set_jam_results(ModelRc::new(VecModel::from(rows)));
@@ -603,6 +627,7 @@ impl App {
         if let Some(item) = &state.current {
             self.ui.set_jam_now_title(item.title.clone().into());
             self.ui.set_jam_now_artist(item_subtitle(item).into());
+            self.ui.set_jam_now_liked(self.music_is_liked(&item.video_id));
         }
         let members: Vec<JamMember> = state
             .members
@@ -646,6 +671,7 @@ impl App {
                 subtitle: item_subtitle(q).into(),
                 can_jump: state.can_control,
                 can_remove: state.can_control || q.by == state.you,
+                liked: self.music_is_liked(&q.video_id),
             })
             .collect();
         self.ui.set_jam_queue(ModelRc::new(VecModel::from(queue)));

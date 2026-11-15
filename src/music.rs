@@ -52,6 +52,9 @@ pub struct MusicState {
     queue_urls: Vec<Option<String>>,
     /// Im Jam: Jam-Eintrag je Zeile der Warteschlange (nur kommende Songs sind anklickbar).
     jam_queue: Vec<Option<String>>,
+    /// Video-IDs in den eigenen Lieblingssongs (für die Herz-Anzeige im Jam).
+    liked: HashSet<String>,
+    liked_loaded: bool,
     page_url: Option<String>,
     now_url: Option<String>,
     images: HashMap<String, SharedPixelBuffer<Rgba8Pixel>>,
@@ -235,6 +238,64 @@ impl App {
         self.tabs[TAB_MUSIC].cookies_async(ytm::ORIGIN, |cookies| with_app(|app| app.music_auth_cookies(cookies)));
     }
 
+    /// Lieblingssongs einmal laden (für die Herz-Anzeige im Jam), sobald man angemeldet ist.
+    fn music_load_liked(&self) {
+        {
+            let mut music = self.music();
+            if music.liked_loaded || music.auth.as_ref().is_none_or(|a| !a.logged_in()) {
+                return;
+            }
+            music.liked_loaded = true;
+        }
+        let Some(auth) = self.music.borrow().auth.clone() else { return };
+        self.runtime.spawn(async move {
+            if let Ok(ids) = ytm::liked_video_ids(&auth).await {
+                on_ui(move |app| {
+                    app.music().liked = ids;
+                    app.jam_refresh_liked();
+                });
+            }
+        });
+    }
+
+    /// Ist diese Video-ID in den eigenen Lieblingssongs?
+    pub fn music_is_liked(&self, video_id: &str) -> bool {
+        self.music.borrow().liked.contains(video_id)
+    }
+
+    /// Song in die Lieblingssongs legen bzw. herausnehmen; schaltet die Herz-Anzeige sofort um.
+    pub fn music_toggle_like(&self, video_id: String) {
+        let Some(auth) = self.music.borrow().auth.clone().filter(|a| a.logged_in()) else {
+            self.jam_set_status(tr("jam.like_need_login"));
+            return;
+        };
+        let like = !self.music.borrow().liked.contains(&video_id);
+        {
+            let mut music = self.music();
+            if like {
+                music.liked.insert(video_id.clone());
+            } else {
+                music.liked.remove(&video_id);
+            }
+        }
+        self.jam_refresh_liked();
+        let vid = video_id.clone();
+        self.runtime.spawn(async move {
+            let result = ytm::set_like(&auth, &vid, like).await;
+            on_ui(move |app| {
+                if let Err(e) = result {
+                    log::line(&format!("ytm: Lieblingssong setzen fehlgeschlagen: {e:#}"));
+                    // Zurücknehmen und melden.
+                    let mut music = app.music();
+                    if like { music.liked.remove(&vid); } else { music.liked.insert(vid.clone()); }
+                    drop(music);
+                    app.jam_refresh_liked();
+                    app.jam_set_status(tr("jam.like_failed"));
+                }
+            });
+        });
+    }
+
     fn music_auth_cookies(&self, cookies: Vec<(String, String)>) {
         self.tabs[TAB_MUSIC].eval_with(YTCFG_JS, move |cfg| {
             let cfg = cfg.unwrap_or(Value::Null);
@@ -253,6 +314,7 @@ impl App {
                 if !app.music.borrow().sidebar_loaded {
                     app.music_load_sidebar();
                 }
+                app.music_load_liked();
             });
         });
     }

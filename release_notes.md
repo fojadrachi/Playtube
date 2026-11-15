@@ -1,4 +1,11 @@
-## Playtube 2.12.0
+## Playtube 2.13.0
+
+- **Jam-Songs zu deinen Lieblingssongs:** In der Jam-Ansicht hat der laufende Song und jeder Song in der
+  Warteschlange ein Herz. Ein Klick legt ihn in deine eigenen YouTube-Music-Lieblingssongs (oder nimmt ihn wieder
+  heraus) – mit deinem Login, unabhängig von den anderen. Schon gelikte Songs sind am ausgefüllten Herz zu erkennen.
+  Dafür musst du in Playtube bei YouTube Music angemeldet sein.
+
+Neu in 2.12.0:
 
 - **Stream Dock: Playlist-Tasten zeigen das Cover.** Playtube liefert dem Stream-Dock-Plugin (ab 1.1.0) jetzt das Bild
   einer Playlist – auch bei privaten Playlists, denn es wird mit deinem Login geholt. Neuer Fernsteuerbefehl
@@ -94,12 +101,18 @@ Neu in 2.6.0:
 
 Alles Weitere wie in 2.5.2 (Tonausgabe Normal/Discord, Fixes).
 
-**Installieren:** `Playtube-Setup-2.11.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
+**Installieren:** `Playtube-Setup-2.13.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
 aktualisiert sich auch von selbst.
 
 ---
 
-## Playtube 2.12.0
+## Playtube 2.13.0
+
+- **Jam songs to your liked songs:** in the jam view the current song and every song in the queue has a heart. One
+  click adds it to your own YouTube Music liked songs (or removes it) – with your login, independently of the others.
+  Songs you already liked show a filled heart. You need to be signed in to YouTube Music in Playtube for this.
+
+New in 2.12.0:
 
 - **Stream Dock: playlist keys show the cover.** Playtube now gives the Stream Dock plugin (1.1.0+) a playlist's
   artwork – private playlists included, since it is fetched with your login. New remote command `playlist_cover`.
@@ -193,4 +206,4 @@ New in 2.6.0:
 
 Everything else as in 2.5.2 (sound output Normal/Discord, fixes).
 
-**Install:** run `Playtube-Setup-2.11.0.exe` – it replaces any older Playtube. Playtube also updates itself.
+**Install:** run `Playtube-Setup-2.13.0.exe` – it replaces any older Playtube. Playtube also updates itself.

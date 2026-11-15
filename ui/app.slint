@@ -31,6 +31,7 @@ export struct JamTexts {
     hint: string,
     kick: string,
     make-host: string,
+    like: string,
     play-now: string,
     remove: string,
     add-next: string,
@@ -54,6 +55,8 @@ export struct JamItem {
     subtitle: string,
     can-jump: bool,
     can-remove: bool,
+    // In den eigenen Lieblingssongs (YouTube Music)
+    liked: bool,
 }
 
 export struct Texts {
@@ -169,6 +172,7 @@ component IconButton inherits Rectangle {
     in property <string> icon;
     in property <bool> enabled: true;
     in property <bool> primary: false;
+    in property <bool> active: false;
     in property <length> size: 36px;
     in property <string> tooltip;
     callback clicked();
@@ -179,7 +183,7 @@ component IconButton inherits Rectangle {
         : (touch.has-hover && root.enabled ? #2a2a33 : transparent);
     Text {
         text: root.icon;
-        color: root.enabled ? #f2f2f6 : #5a5a64;
+        color: root.active ? #ec4899 : (root.enabled ? #f2f2f6 : #5a5a64);
         font-family: "Segoe MDL2 Assets";
         font-size: root.size * 0.4;
         horizontal-alignment: center;
@@ -294,6 +298,7 @@ export component AppWindow inherits Window {
     in property <bool> jam-can-control;
     in-out property <bool> jam-all-control;
     in property <string> jam-now-title;
+    in property <bool> jam-now-liked;
     in property <string> jam-now-artist;
     in property <string> jam-time;
     in property <string> jam-duration;
@@ -322,6 +327,8 @@ export component AppWindow inherits Window {
     callback jam-add-result(int, bool);
     callback jam-remove(string);
     callback jam-jump(string);
+    // Song in die eigenen Lieblingssongs (bzw. wieder heraus); "" = der laufende Song
+    callback jam-like(string);
     callback jam-kick(string);
     callback jam-make-host(string);
     callback jam-set-all-control(bool);
@@ -549,12 +556,24 @@ export component AppWindow inherits Window {
                                 VerticalLayout {
                                     padding: 16px;
                                     spacing: 8px;
-                                    Text {
-                                        text: root.jam-has-current ? root.jam-now-title : root.jt.nothing;
-                                        font-size: 18px;
-                                        font-weight: 600;
-                                        color: #ffffff;
-                                        overflow: elide;
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        Text {
+                                            text: root.jam-has-current ? root.jam-now-title : root.jt.nothing;
+                                            font-size: 18px;
+                                            font-weight: 600;
+                                            color: #ffffff;
+                                            overflow: elide;
+                                            horizontal-stretch: 1;
+                                            vertical-alignment: center;
+                                        }
+                                        if root.jam-has-current: IconButton {
+                                            icon: root.jam-now-liked ? "\u{EB52}" : "\u{EB51}";
+                                            active: root.jam-now-liked;
+                                            size: 32px;
+                                            tooltip: root.jt.like;
+                                            clicked => { root.jam-like(""); }
+                                        }
                                     }
                                     if root.jam-has-current: Hint { text: root.jam-now-artist; wrap: no-wrap; overflow: elide; }
                                     if root.jam-cant-play: Text { text: root.jt.cant-play-here; color: #fca5a5; font-size: 12px; wrap: word-wrap; }
@@ -632,6 +651,7 @@ export component AppWindow inherits Window {
                                             Text { text: item.title; color: #f2f2f6; overflow: elide; }
                                             Hint { text: item.subtitle; wrap: no-wrap; overflow: elide; }
                                         }
+                                        IconButton { icon: item.liked ? "\u{EB52}" : "\u{EB51}"; active: item.liked; size: 30px; tooltip: root.jt.like; clicked => { root.jam-like(item.id); } }
                                         if item.can-jump: IconButton { icon: "\u{E768}"; size: 30px; clicked => { root.jam-jump(item.id); } }
                                         if item.can-remove: IconButton { icon: "\u{E711}"; size: 30px; clicked => { root.jam-remove(item.id); } }
                                     }

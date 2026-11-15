@@ -514,6 +514,27 @@ pub async fn call(auth: &Auth, endpoint: &str, mut body: Value) -> anyhow::Resul
     Ok(value)
 }
 
+/// Song in die eigenen Lieblingssongs legen (`like`) oder wieder heraus (`removelike`).
+pub async fn set_like(auth: &Auth, video_id: &str, like: bool) -> anyhow::Result<()> {
+    let endpoint = if like { "like/like" } else { "like/removelike" };
+    call(auth, endpoint, json!({ "target": { "videoId": video_id } })).await?;
+    Ok(())
+}
+
+/// Video-IDs der eigenen Lieblingssongs (Liked Music), um sie als "schon geliked" zu zeigen.
+pub async fn liked_video_ids(auth: &Auth) -> anyhow::Result<std::collections::HashSet<String>> {
+    let page = browse(auth, LIKED_SONGS, None).await?;
+    let mut ids = std::collections::HashSet::new();
+    for shelf in &page.shelves {
+        for entry in &shelf.entries {
+            if let Some(Nav::Play { video_id: Some(v), .. }) = entry.play.as_ref().or(entry.open.as_ref()) {
+                ids.insert(v.clone());
+            }
+        }
+    }
+    Ok(ids)
+}
+
 pub async fn browse(auth: &Auth, browse_id: &str, params: Option<&str>) -> anyhow::Result<Page> {
     let mut body = json!({ "browseId": browse_id });
     if let Some(p) = params {
