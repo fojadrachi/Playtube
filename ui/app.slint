@@ -1,10 +1,12 @@
 // Playtube-Fenster: Tab-Leiste, Navigationsleiste und Einstellungen. YouTube und YouTube Music
-// sind WebView2-Kindfenster (src/browser.rs), die Rust über den Inhaltsbereich legt
+// sind Browser-Kindfenster (src/browser.rs: WebView2 bzw. WebKitGTK), die Rust über den Inhaltsbereich legt
 // (content-top bis Fensterende).
 
 import { Button, LineEdit, CheckBox, ComboBox, SpinBox, ScrollView, ProgressIndicator, GroupBox, Slider } from "std-widgets.slint";
 import { Music, MusicView, PlayerBar, MusicCard, MusicShelf, MusicTexts, SleepChoice, IconButton as MusicIconButton, Cover } from "music.slint";
 export { Music, MusicCard, MusicShelf, MusicTexts, SleepChoice }
+import { Fonts } from "fonts.slint";
+export { Fonts }
 
 // Playtube Jam (src/jam.rs)
 export struct JamTexts {
@@ -145,8 +147,8 @@ component NavButton inherits Rectangle {
     Text {
         text: root.text;
         color: root.enabled ? #e8e8ee : #5a5a64;
-        // Windows-Symbolschrift (Windows 10/11): Zurück, Vor, Neu laden, Start.
-        font-family: "Segoe MDL2 Assets";
+        // Symbolschrift (Fonts.icons): Zurück, Vor, Neu laden, Start.
+        font-family: Fonts.icons;
         font-size: 14px;
         horizontal-alignment: center;
         vertical-alignment: center;
@@ -188,7 +190,7 @@ component IconButton inherits Rectangle {
     Text {
         text: root.icon;
         color: root.active ? #ec4899 : (root.enabled ? #f2f2f6 : #5a5a64);
-        font-family: "Segoe MDL2 Assets";
+        font-family: Fonts.icons;
         font-size: root.size * 0.4;
         horizontal-alignment: center;
         vertical-alignment: center;

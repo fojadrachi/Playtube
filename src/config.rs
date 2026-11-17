@@ -201,19 +201,33 @@ impl Default for Config {
     }
 }
 
-/// %APPDATA%\Playtube (bzw. PLAYTUBE_DATA_DIR zum Testen).
+/// Windows: %APPDATA%\Playtube; Linux: $XDG_CONFIG_HOME/Playtube (meist ~/.config/Playtube).
+/// PLAYTUBE_DATA_DIR setzt den Ordner zum Testen.
 pub fn data_dir() -> PathBuf {
-    let dir = std::env::var_os("PLAYTUBE_DATA_DIR").map(PathBuf::from).unwrap_or_else(|| {
-        let base = std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
-        base.join(APP_NAME)
-    });
+    let dir = std::env::var_os("PLAYTUBE_DATA_DIR").map(PathBuf::from).unwrap_or_else(|| default_base().join(APP_NAME));
     let _ = std::fs::create_dir_all(&dir);
     dir
 }
 
-/// WebView2-Profil (Login, Cookies) - derselbe Ordner wie bei der Python-Version.
+#[cfg(windows)]
+fn default_base() -> PathBuf {
+    std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
+}
+
+#[cfg(not(windows))]
+fn default_base() -> PathBuf {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// Browser-Profil (Login, Cookies). Windows: WebView2 - derselbe Ordner wie bei der
+/// Python-Version; Linux: WebKitGTK.
 pub fn webview_dir() -> PathBuf {
-    let dir = data_dir().join("webprofile").join("webview2");
+    let engine = if cfg!(windows) { "webview2" } else { "webkitgtk" };
+    let dir = data_dir().join("webprofile").join(engine);
     let _ = std::fs::create_dir_all(&dir);
     dir
 }

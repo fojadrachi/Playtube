@@ -1,23 +1,31 @@
-//! Ein WebView2-Tab (YouTube oder YouTube Music) als Kindfenster des Playtube-Fensters, mit
+//! Ein Browser-Tab (YouTube oder YouTube Music) als Kindfenster des Playtube-Fensters, mit
 //! eigenem dauerhaftem Profil (Login), Audio-Ausgabe pro Tab und Vollbild-Unterstützung.
+//! Windows: WebView2 (Edge-Engine). Linux: WebKitGTK (über wry, als X11-Kindfenster).
 
 use crate::scripts;
 use std::cell::RefCell;
 use std::rc::Rc;
+#[cfg(windows)]
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     ICoreWebView2, ICoreWebView2Profile4, ICoreWebView2_13, COREWEBVIEW2_PERMISSION_KIND_MICROPHONE,
     COREWEBVIEW2_PERMISSION_STATE_ALLOW, COREWEBVIEW2_PERMISSION_STATE_DEFAULT,
 };
+#[cfg(windows)]
 use webview2_com::{
     AddScriptToExecuteOnDocumentCreatedCompletedHandler, ContainsFullScreenElementChangedEventHandler,
     SetPermissionStateCompletedHandler,
 };
+#[cfg(windows)]
 use windows::core::{Interface, HSTRING};
 use wry::dpi::{LogicalPosition, LogicalSize};
-use wry::{BackgroundThrottlingPolicy, NewWindowResponse, PageLoadEvent, Rect, WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows, WebViewExtWindows};
+use wry::{BackgroundThrottlingPolicy, NewWindowResponse, PageLoadEvent, Rect, WebContext, WebView, WebViewBuilder};
+#[cfg(windows)]
+use wry::{WebViewBuilderExtWindows, WebViewExtWindows};
 
+#[cfg(windows)]
 const YOUTUBE_ORIGINS: [&str; 2] = ["https://www.youtube.com", "https://music.youtube.com"];
 
+#[cfg(windows)]
 /// Argumente für die Edge-Engine (WebView2), siehe `Tab::new`.
 const BROWSER_ARGS: &str = "--disable-features=HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,BackgroundVideoPauseOptimization,BackgroundVideoTrackOptimization     --autoplay-policy=no-user-gesture-required --disable-background-media-suspend --disable-renderer-backgrounding     --disable-background-timer-throttling";
 
@@ -32,11 +40,18 @@ pub trait TabEvents: 'static {
     fn ipc(&self, tab: usize, body: String);
 }
 
+/// Linux: Vollbild meldet die Seite selbst (WebKitGTK hat dafür kein Ereignis in wry).
+#[cfg(not(windows))]
+const FULLSCREEN_WATCH: &str = "(function(){if(window.__playtubeFs){return;}window.__playtubeFs=true;document.addEventListener('fullscreenchange',function(){try{window.ipc.postMessage('playtube-fullscreen:'+(document.fullscreenElement?1:0));}catch(e){}});})();";
+#[cfg(not(windows))]
+const FULLSCREEN_PREFIX: &str = "playtube-fullscreen:";
+
 pub struct Tab {
     pub index: usize,
     pub home: String,
     pub webview: WebView,
     pub url: RefCell<String>,
+    #[cfg_attr(not(windows), allow(dead_code))]
     router_script_id: Rc<RefCell<Option<String>>>,
     audio_device: RefCell<String>,
 }
@@ -54,16 +69,22 @@ impl Tab {
         let page_events = events.clone();
         let window_events = events.clone();
         let ipc_events = events.clone();
-        let webview = WebViewBuilder::new_with_web_context(context)
+        let builder = WebViewBuilder::new_with_web_context(context)
             .with_url(home)
             .with_bounds(bounds)
-            .with_autoplay(true)
-            // Eigene Browser-Argumente ersetzen die von wry (deshalb dessen Standard + Autoplay mit
-            // angeben). Zusätzlich: Medien im Hintergrund nie anhalten. Chromium pausiert sonst
-            // ein verstecktes Video, das (für die Engine) stumm ist - das passiert im Modus
-            // "Für Discord-Streams", weil der Ton über Playtube läuft, und führte zu ständigem
-            // Play/Pause, sobald ein anderer Tab (Einstellungen, Jam) offen war.
-            .with_additional_browser_args(BROWSER_ARGS)
+            .with_autoplay(true);
+        // Eigene Browser-Argumente ersetzen die von wry (deshalb dessen Standard + Autoplay mit
+        // angeben). Zusätzlich: Medien im Hintergrund nie anhalten. Chromium pausiert sonst
+        // ein verstecktes Video, das (für die Engine) stumm ist - das passiert im Modus
+        // "Für Discord-Streams", weil der Ton über Playtube läuft, und führte zu ständigem
+        // Play/Pause, sobald ein anderer Tab (Einstellungen, Jam) offen war.
+        #[cfg(windows)]
+        let builder = builder.with_additional_browser_args(BROWSER_ARGS);
+        #[cfg(not(windows))]
+        let builder = builder.with_initialization_script(FULLSCREEN_WATCH);
+        #[cfg(not(windows))]
+        let fullscreen_events = events.clone();
+        let webview = builder
             .with_devtools(cfg!(debug_assertions))
             // Musik soll auch bei minimiertem/verstecktem Fenster ungebremst weiterlaufen.
             .with_background_throttling(BackgroundThrottlingPolicy::Disabled)
@@ -72,7 +93,15 @@ impl Tab {
             .with_initialization_script(scripts::NO_LEAVE_PROMPT)
             // Playtube-Ton (src/relay.rs): Ton der Seite abgreifen und über Playtube.exe ausgeben.
             .with_initialization_script(scripts::audio_tap(audio_tap))
-            .with_ipc_handler(move |request| ipc_events.ipc(index, request.into_body()))
+            .with_ipc_handler(move |request| {
+                let body = request.into_body();
+                #[cfg(not(windows))]
+                if let Some(state) = body.strip_prefix(FULLSCREEN_PREFIX) {
+                    fullscreen_events.fullscreen_changed(index, state == "1");
+                    return;
+                }
+                ipc_events.ipc(index, body)
+            })
             // Links mit target=_blank im selben Tab öffnen statt in einem neuen Fenster.
             .with_new_window_req_handler(move |url, _features| {
                 window_events.open_url(index, url);
@@ -95,10 +124,16 @@ impl Tab {
             router_script_id: Rc::new(RefCell::new(None)),
             audio_device: RefCell::new(String::new()),
         });
+        #[cfg(windows)]
         tab.watch_fullscreen(events);
+        #[cfg(not(windows))]
+        drop(events);
         Ok(tab)
     }
+}
 
+#[cfg(windows)]
+impl Tab {
     fn core(&self) -> ICoreWebView2 {
         self.webview.webview()
     }
@@ -119,6 +154,9 @@ impl Tab {
         }
     }
 
+}
+
+impl Tab {
     pub fn set_bounds(&self, x: f64, y: f64, width: f64, height: f64) {
         let _ = self.webview.set_bounds(Rect {
             position: LogicalPosition::new(x, y).into(),
@@ -139,6 +177,29 @@ impl Tab {
         let _ = self.webview.evaluate_script_with_callback(js, move |raw| callback(scripts::decode_result(&raw)));
     }
 
+    pub fn load(&self, url: &str) {
+        let _ = self.webview.load_url(url);
+    }
+
+    pub fn back(&self) {
+        let _ = self.webview.go_back();
+    }
+
+    pub fn forward(&self) {
+        let _ = self.webview.go_forward();
+    }
+
+    pub fn reload(&self) {
+        let _ = self.webview.reload();
+    }
+
+    pub fn go_home(&self) {
+        self.load(&self.home.clone());
+    }
+}
+
+#[cfg(windows)]
+impl Tab {
     /// Cookies für `url` lesen, ohne zu warten: `done` wird später im UI-Thread aufgerufen.
     /// (wry's `cookies_for_url` wartet blockierend - innerhalb einer WebView2-Meldung kommt die
     /// Antwort dann nie an und Playtube hängt.)
@@ -180,26 +241,6 @@ impl Tab {
                 done(Vec::new());
             }
         }
-    }
-
-    pub fn load(&self, url: &str) {
-        let _ = self.webview.load_url(url);
-    }
-
-    pub fn back(&self) {
-        let _ = self.webview.go_back();
-    }
-
-    pub fn forward(&self) {
-        let _ = self.webview.go_forward();
-    }
-
-    pub fn reload(&self) {
-        let _ = self.webview.reload();
-    }
-
-    pub fn go_home(&self) {
-        self.load(&self.home.clone());
     }
 
     /// Legt den Ton dieses Tabs auf `device` (leer = Systemstandard): sofort auf der offenen
@@ -247,4 +288,30 @@ impl Tab {
             }
         }
     }
+}
+
+#[cfg(not(windows))]
+impl Tab {
+    /// Cookies für `url` (WebKitGTK: wry wartet kurz und dreht dabei die GTK-Schleife weiter).
+    pub fn cookies_async(&self, url: &str, done: impl FnOnce(Vec<(String, String)>) + 'static) {
+        let cookies = self
+            .webview
+            .cookies_for_url(url)
+            .map(|list| list.into_iter().map(|c| (c.name().to_string(), c.value().to_string())).collect())
+            .unwrap_or_default();
+        done(cookies);
+    }
+
+    /// Ton dieses Tabs auf `device`: nur auf der offenen Seite (WebKitGTK kann Skripte nicht
+    /// wieder entfernen; beim nächsten Seitenaufbau setzt Playtube das Gerät erneut).
+    pub fn set_audio_output(&self, device: &str) {
+        if *self.audio_device.borrow() == device {
+            return;
+        }
+        *self.audio_device.borrow_mut() = device.to_string();
+        self.eval(&scripts::audio_router(device));
+    }
+
+    /// Linux: Gerätenamen braucht es nicht (es gibt nur die Systemausgabe), nichts zu tun.
+    pub fn set_device_names_allowed(&self, _allowed: bool) {}
 }

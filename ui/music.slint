@@ -3,6 +3,7 @@
 // `Music`; abgespielt wird im (versteckten) echten YouTube-Music-Player.
 
 import { ScrollView, LineEdit, Slider } from "std-widgets.slint";
+import { Fonts } from "fonts.slint";
 
 // Auswahl des Schlaf-Timers (Minuten; -1 = Ende des Songs, 0 = aus)
 export struct SleepChoice {
@@ -128,7 +129,7 @@ export global Music {
 }
 
 component Icon inherits Text {
-    font-family: "Segoe MDL2 Assets";
+    font-family: Fonts.icons;
     horizontal-alignment: center;
     vertical-alignment: center;
 }
@@ -282,7 +283,7 @@ component Row inherits Rectangle {
             width: 28px;
             if !root.hovered: Text {
                 text: root.card.playing ? "\u{E995}" : root.number;
-                font-family: root.card.playing ? "Segoe MDL2 Assets" : "Segoe UI";
+                font-family: root.card.playing ? Fonts.icons : "Segoe UI";
                 color: root.card.playing ? #ec4899 : #a7a7b0;
                 horizontal-alignment: center;
                 vertical-alignment: center;

@@ -1,11 +1,55 @@
 //! Namen der Audio-Ausgabegeräte (für "Audioausgabe pro Tab"). Die Seite sucht das Gerät über
 //! genau diesen Namen (src/js/audio_router.js), denn WebView2 vergibt pro Website eigene IDs.
+//!
+//! Linux: WebKitGTK kann den Ton nicht pro Tab auf ein Gerät legen - es gibt dort nur die
+//! Systemausgabe (umstellen über die Lautstärkeregelung der Arbeitsumgebung, z. B. pavucontrol).
 
+#[cfg(windows)]
 use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
+#[cfg(windows)]
 use windows::Win32::Media::Audio::{eRender, IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATE_ACTIVE};
+#[cfg(windows)]
 use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_APARTMENTTHREADED, STGM_READ};
 
+#[cfg(not(windows))]
+pub fn output_devices() -> Vec<String> {
+    Vec::new()
+}
+
+/// Linux: Programme, die gerade aufnehmen (PulseAudio/PipeWire: `pactl list source-outputs`).
+#[cfg(not(windows))]
+pub fn active_capture_apps() -> Vec<String> {
+    let Ok(out) = std::process::Command::new("pactl")
+        .args(["list", "source-outputs"])
+        .env("LC_ALL", "C")
+        .stderr(std::process::Stdio::null())
+        .output()
+    else {
+        return Vec::new();
+    };
+    capture_apps_from_pactl(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Programmnamen (klein) aus der Ausgabe von `pactl list source-outputs`.
+#[cfg_attr(windows, allow(dead_code))]
+pub fn capture_apps_from_pactl(text: &str) -> Vec<String> {
+    let mut apps = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        let value = ["application.process.binary = ", "application.name = "]
+            .iter()
+            .find_map(|key| line.strip_prefix(key));
+        let Some(value) = value else { continue };
+        let name = value.trim().trim_matches('"').to_lowercase();
+        if !name.is_empty() && !apps.contains(&name) {
+            apps.push(name);
+        }
+    }
+    apps
+}
+
 /// Aktive Ausgabegeräte in der Reihenfolge des Systems, ohne Doppelte.
+#[cfg(windows)]
 pub fn output_devices() -> Vec<String> {
     unsafe {
         // Im UI-Thread ist COM schon (als STA) initialisiert; ein zweiter Aufruf schadet nicht.
@@ -31,6 +75,7 @@ pub fn output_devices() -> Vec<String> {
 
 /// Programme, die gerade ein Aufnahmegerät (Mikrofon) aktiv nutzen - Dateiname klein, z. B.
 /// "discord.exe". Ein Programm taucht nur auf, solange es wirklich aufnimmt.
+#[cfg(windows)]
 pub fn active_capture_apps() -> Vec<String> {
     use windows::core::Interface;
     use windows::Win32::Foundation::CloseHandle;
@@ -92,6 +137,15 @@ mod tests {
         assert!(discord_in_voice(&["discordcanary.exe".into()]));
         assert!(!discord_in_voice(&["chrome.exe".into(), "obs64.exe".into()]));
         assert!(!discord_in_voice(&[]));
+    }
+
+    #[test]
+    fn reads_pactl_source_outputs() {
+        let text = "Source Output #42\n\tProperties:\n\t\tapplication.name = \"WEBRTC VoiceEngine\"\n\t\tapplication.process.binary = \"Discord\"\n";
+        let apps = capture_apps_from_pactl(text);
+        assert_eq!(apps, vec!["webrtc voiceengine".to_string(), "discord".to_string()]);
+        assert!(discord_in_voice(&apps));
+        assert!(capture_apps_from_pactl("").is_empty());
     }
 
     /// Echte Geräte: listet, wer gerade aufnimmt (cargo test -- --ignored --nocapture).

@@ -7,6 +7,9 @@
 //! eingebaute Medientasten-Behandlung von Chromium ist abgeschaltet (src/browser.rs), damit ein
 //! Tastendruck nicht doppelt ankommt, wenn das Playtube-Fenster vorne ist.
 
+// Unter Linux gibt es (noch) keinen Hook - die Tastenzuordnung bleibt für Windows.
+#![cfg_attr(not(windows), allow(dead_code))]
+
 use serde_json::Value;
 use std::sync::OnceLock;
 
@@ -36,11 +39,14 @@ pub fn should_handle(tabs: &[Option<&Value>; 2]) -> bool {
     })
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
 type Handler = Box<dyn Fn(&'static str) + Send + Sync>;
+#[cfg_attr(not(windows), allow(dead_code))]
 static HANDLER: OnceLock<Handler> = OnceLock::new();
 
 /// Hook-Thread starten; `handler` bekommt "play_pause", "next", "previous" oder "pause"
 /// (aus dem Hook-Thread heraus – also schnell weiterreichen, z. B. per invoke_from_event_loop).
+#[cfg(windows)]
 pub fn start(handler: impl Fn(&'static str) + Send + Sync + 'static) {
     if HANDLER.set(Box::new(handler)).is_err() {
         return; // läuft schon
@@ -51,6 +57,14 @@ pub fn start(handler: impl Fn(&'static str) + Send + Sync + 'static) {
     }
 }
 
+/// Linux: Medientasten verteilt die Arbeitsumgebung (MPRIS) - ein globaler Tastatur-Hook wie unter
+/// Windows ist dort nicht möglich. Bis Playtube MPRIS spricht, bleibt das hier aus.
+#[cfg(not(windows))]
+pub fn start(_handler: impl Fn(&'static str) + Send + Sync + 'static) {
+    crate::log::line("medientasten: unter Linux noch nicht unterstützt");
+}
+
+#[cfg(windows)]
 unsafe fn run_hook() {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::UI::WindowsAndMessaging::{GetMessageW, SetWindowsHookExW, MSG, WH_KEYBOARD_LL};
@@ -65,8 +79,10 @@ unsafe fn run_hook() {
     while unsafe { GetMessageW(&mut msg, None, 0, 0) }.0 > 0 {}
 }
 
+#[cfg(windows)]
 static DOWN: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
+#[cfg(windows)]
 unsafe extern "system" fn keyboard_proc(
     code: i32,
     wparam: windows::Win32::Foundation::WPARAM,
@@ -110,6 +126,7 @@ mod tests {
 
     /// Echter Hook: F24 per SendInput drücken (stört keine anderen Player).
     /// `cargo test hook_sees_injected_key -- --ignored`
+    #[cfg(windows)]
     #[test]
     #[ignore]
     fn hook_sees_injected_key() {

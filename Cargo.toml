@@ -1,8 +1,8 @@
 [package]
 name = "playtube"
-version = "2.15.0"
+version = "2.16.0"
 edition = "2024"
-description = "Playtube – YouTube und YouTube Music als eigene Desktop-App"
+description = "Playtube – YouTube und YouTube Music als eigene Desktop-App (Windows und Linux)"
 license = "UNLICENSED"
 publish = false
 
@@ -31,6 +31,9 @@ socket2 = "0.6"
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
 tokio-tungstenite = { version = "0.28", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
 tray-icon = "0.26.1"
+wry = "0.57.1"
+
+[target.'cfg(windows)'.dependencies]
 webview2-com = "0.39.1"
 windows = { version = "0.62", features = [
     "Win32_Foundation",
@@ -50,7 +53,11 @@ windows = { version = "0.62", features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_System_Time",
 ] }
-wry = "0.57.1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# gleiche Version wie in wry/tray-icon (WebKitGTK, GTK-Ereignisschleife, Zwischenablage)
+gtk = "0.18"
+libc = "0.2"
 
 [build-dependencies]
 slint-build = "1.18"

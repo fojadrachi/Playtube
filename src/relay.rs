@@ -4,6 +4,9 @@
 //! Sonar zeigen Playtube statt msedgewebview2 an.
 //!
 //! Pro Tab ein Relay mit eigenem Puffer und eigenem Ausgabegerät (Einstellung "Audioausgabe").
+//!
+//! Linux: Ausgabe über `pacat` (PulseAudio bzw. PipeWire-Pulse) als Stream "Playtube"; `pacat`
+//! holt den Ton im Takt der Soundkarte ab, das Schreiben in seine Eingabe gibt damit das Tempo vor.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -96,6 +99,114 @@ pub fn parse_message(text: &str) -> Option<(u32, Vec<i16>)> {
     Some((rate, bytes.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()))
 }
 
+#[cfg(not(windows))]
+fn render_loop(shared: Arc<Shared>) {
+    while !shared.stop.load(Ordering::Relaxed) {
+        shared.reopen.store(false, Ordering::Relaxed);
+        let device = shared.device.lock().unwrap().clone();
+        if let Err(e) = play_pacat(&shared, &device) {
+            crate::log::line(&format!("relay: Ausgabe über pacat fehlgeschlagen: {e}"));
+            std::thread::sleep(Duration::from_secs(1));
+        }
+    }
+}
+
+/// Spielt über einen `pacat`-Prozess, bis das Gerät gewechselt/geschlossen werden soll.
+#[cfg(not(windows))]
+fn play_pacat(shared: &Shared, device: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let rate = shared.rate.load(Ordering::Relaxed);
+    let mut command = std::process::Command::new("pacat");
+    command.args([
+        "--playback",
+        "--format=s16le",
+        "--channels=2",
+        &format!("--rate={rate}"),
+        "--latency-msec=60",
+        "--client-name=Playtube",
+        "--stream-name=Playtube",
+        "--property=application.icon_name=playtube",
+    ]);
+    if !device.is_empty() {
+        command.arg(format!("--device={device}"));
+    }
+    let mut child = command
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()?;
+    let mut stdin = child.stdin.take().ok_or_else(|| std::io::Error::other("pacat ohne Eingabe"))?;
+    // Stücke von 10 ms; ohne Ton Stille, damit der Stream gleichmäßig weiterläuft.
+    let frames = (rate / 100) as usize;
+    let mut out = vec![0i16; frames * 2];
+    let mut fader = Fader::default();
+    let result = loop {
+        if shared.stop.load(Ordering::Relaxed) || shared.reopen.load(Ordering::Relaxed) {
+            break Ok(());
+        }
+        fader.fill(shared, rate, &mut out);
+        let bytes: Vec<u8> = out.iter().flat_map(|s| s.to_le_bytes()).collect();
+        if let Err(e) = stdin.write_all(&bytes) {
+            break Err(e);
+        }
+    };
+    drop(stdin);
+    let _ = child.kill();
+    let _ = child.wait();
+    result
+}
+
+/// Füllt Ausgabepuffer aus dem Relay-Puffer: erst nach genug Vorlauf losspielen, nach Pausen
+/// sanft ein- und bei Aussetzern sanft ausblenden (gegen Knacken).
+#[cfg(not(windows))]
+#[derive(Default)]
+struct Fader {
+    last: [i16; 2],
+    fade_in: usize,
+}
+
+#[cfg(not(windows))]
+impl Fader {
+    fn fill(&mut self, shared: &Shared, rate: u32, out: &mut [i16]) {
+        let target = (rate * TARGET_MS / 1000 * 2) as usize;
+        let mut buffer = shared.buffer.lock().unwrap();
+        if !shared.primed.load(Ordering::Relaxed) && buffer.len() >= target {
+            shared.primed.store(true, Ordering::Relaxed);
+        }
+        let mut written = 0;
+        if shared.primed.load(Ordering::Relaxed) {
+            for frame in out.chunks_exact_mut(2) {
+                if buffer.len() < 2 {
+                    break;
+                }
+                let gain = if self.fade_in < FADE_FRAMES { self.fade_in as f32 / FADE_FRAMES as f32 } else { 1.0 };
+                self.fade_in = self.fade_in.saturating_add(1);
+                for slot in frame.iter_mut() {
+                    let sample = buffer.pop_front().unwrap_or(0);
+                    *slot = (sample as f32 * gain) as i16;
+                }
+                self.last = [frame[0], frame[1]];
+                written += 2;
+            }
+            if buffer.len() < 2 {
+                shared.primed.store(false, Ordering::Relaxed);
+            }
+        }
+        drop(buffer);
+        let rest = &mut out[written..];
+        for (i, frame) in rest.chunks_exact_mut(2).enumerate() {
+            let gain = if i < FADE_FRAMES { 1.0 - (i + 1) as f32 / FADE_FRAMES as f32 } else { 0.0 };
+            frame[0] = (self.last[0] as f32 * gain) as i16;
+            frame[1] = (self.last[1] as f32 * gain) as i16;
+        }
+        if written < out.len() {
+            self.last = [0, 0];
+            self.fade_in = 0;
+        }
+    }
+}
+
+#[cfg(windows)]
 fn render_loop(shared: Arc<Shared>) {
     use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
     unsafe {
@@ -111,6 +222,7 @@ fn render_loop(shared: Arc<Shared>) {
     }
 }
 
+#[cfg(windows)]
 unsafe fn find_device(name: &str) -> windows::core::Result<windows::Win32::Media::Audio::IMMDevice> {
     use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
     use windows::Win32::Media::Audio::*;
@@ -136,6 +248,7 @@ unsafe fn find_device(name: &str) -> windows::core::Result<windows::Win32::Media
 }
 
 /// Spielt, bis das Gerät gewechselt/geschlossen werden soll.
+#[cfg(windows)]
 unsafe fn play(shared: &Shared, device_name: &str) -> windows::core::Result<()> {
     use windows::Win32::Media::Audio::*;
     use windows::Win32::System::Com::CLSCTX_ALL;

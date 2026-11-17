@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Playtube
+GenericName=YouTube Music Player
+Comment=YouTube und YouTube Music als eigene Desktop-App
+Comment[en]=YouTube and YouTube Music as a desktop app
+Exec=playtube %u
+Icon=playtube
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+MimeType=x-scheme-handler/playtube;
+Keywords=YouTube;Music;Jam;

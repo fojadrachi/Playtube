@@ -205,7 +205,7 @@ pub fn report(install_id: &str, lines: &[String], note: &str) -> serde_json::Val
         "app": "pc",
         "version": crate::config::VERSION,
         "platform": format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
-        "os": windows_version(),
+        "os": os_version(),
         "installId": install_id,
         "lines": lines,
         "errors": errors,
@@ -214,8 +214,21 @@ pub fn report(install_id: &str, lines: &[String], note: &str) -> serde_json::Val
     })
 }
 
+/// z. B. "Linux: Ubuntu 24.04.1 LTS" aus /etc/os-release.
+#[cfg(not(windows))]
+fn os_version() -> String {
+    let text = std::fs::read_to_string("/etc/os-release").unwrap_or_default();
+    let name = text
+        .lines()
+        .find_map(|l| l.strip_prefix("PRETTY_NAME="))
+        .map(|v| v.trim_matches('"').to_string())
+        .unwrap_or_default();
+    if name.is_empty() { "Linux".into() } else { format!("Linux: {name}") }
+}
+
 /// z. B. "Windows 10.0.26300 (25H2)" aus HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion.
-fn windows_version() -> String {
+#[cfg(windows)]
+fn os_version() -> String {
     let build = registry_string("CurrentBuild").unwrap_or_default();
     let display = registry_string("DisplayVersion").unwrap_or_default();
     match (build.is_empty(), display.is_empty()) {
@@ -225,6 +238,7 @@ fn windows_version() -> String {
     }
 }
 
+#[cfg(windows)]
 fn registry_string(name: &str) -> Option<String> {
     use windows::core::HSTRING;
     use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ};

@@ -16,6 +16,18 @@ pub fn resolve(code: &str) -> &'static str {
     }
 }
 
+#[cfg(not(windows))]
+fn system_language() -> &'static str {
+    // Wie gettext: LC_ALL, dann LC_MESSAGES, dann LANG (z. B. "de_DE.UTF-8").
+    let value = ["LC_ALL", "LC_MESSAGES", "LANG"]
+        .iter()
+        .filter_map(|k| std::env::var(k).ok())
+        .find(|v| !v.is_empty())
+        .unwrap_or_default();
+    if value.starts_with("de") { "de" } else { "en" }
+}
+
+#[cfg(windows)]
 fn system_language() -> &'static str {
     use windows::Win32::Globalization::GetUserDefaultUILanguage;
     // Primäre Sprach-ID 0x07 = Deutsch.
@@ -116,6 +128,7 @@ const STRINGS: &[(&str, &str, &str)] = &[
      "Medientasten der Tastatur steuern Playtube (Play/Pause, Weiter, Zurück – auch im Hintergrund)",
      "Keyboard media keys control Playtube (play/pause, next, previous – also in the background)"),
     ("field.autostart", "Mit Windows starten", "Start with Windows"),
+    ("field.autostart.linux", "Mit dem System starten", "Start with the system"),
     ("field.autostart_tray", "Dabei nur im Tray starten (ohne Fenster)", "Start in the tray only (no window)"),
     ("field.music_view.playtube", "Playtube-Ansicht", "Playtube view"),
     ("field.music_view.original", "Original YouTube Music", "Original YouTube Music"),

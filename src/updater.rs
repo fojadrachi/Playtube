@@ -5,6 +5,10 @@
 //! `Playtube-<Version>-win64.exe`. Sie wird im Hintergrund geladen, geprüft und neben die laufende
 //! Datei gelegt; Windows erlaubt, eine laufende .exe umzubenennen. Playtube läuft ungestört weiter,
 //! die neue Version gilt ab dem nächsten Start (oder sofort über „Jetzt neu starten“).
+//!
+//! Linux: Selbst aktualisieren kann sich nur das AppImage (`Playtube-<Version>-x86_64.AppImage`,
+//! Pfad aus `$APPIMAGE`) - genauso durch Austauschen der Datei. Eine per .deb installierte Playtube
+//! bekommt nur den Hinweis und die Release-Seite (Updates kommen dort über das Paket).
 
 use crate::config::VERSION;
 use anyhow::{bail, Result};
@@ -14,12 +18,18 @@ use std::io::Write;
 
 const LATEST: &str = "https://api.github.com/repos/fojadrachi/Playtube/releases/latest";
 const SETUP_PREFIX: &str = "Playtube-Setup-";
+#[cfg(windows)]
 const EXE_SUFFIX: &str = "-win64.exe";
+#[cfg(not(windows))]
+const EXE_SUFFIX: &str = "-x86_64.AppImage";
 /// Registry-Schlüssel des Setups (AppId aus installer/Playtube.iss) – für die angezeigte Version.
+#[cfg(windows)]
 const UNINSTALL_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\{87FBA502-2B84-4C42-A66B-2F03F490912D}_is1";
 pub const RELEASES_PAGE: &str = "https://github.com/fojadrachi/Playtube/releases";
 
 #[derive(Clone, Debug, Default)]
+// Linux nutzt das Setup (url/size/sha256) nicht.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub struct UpdateInfo {
     pub available: bool,
     pub latest: String,
@@ -56,8 +66,10 @@ pub fn from_release(release: &serde_json::Value, current: &str) -> UpdateInfo {
         name.starts_with("Playtube-") && !name.starts_with(SETUP_PREFIX) && name.ends_with(EXE_SUFFIX)
     });
     let newer = parse_version(tag) > parse_version(current);
+    // Windows: über das Setup; Linux: nur mit AppImage im Release.
+    let installable = if cfg!(windows) { asset.is_some() } else { exe.is_some() };
     UpdateInfo {
-        available: newer && asset.is_some(),
+        available: newer && installable,
         latest: tag.trim_start_matches(['v', 'V']).to_string(),
         url: asset.and_then(|a| a["browser_download_url"].as_str()).unwrap_or_default().to_string(),
         size: asset.and_then(|a| a["size"].as_u64()).unwrap_or(0),
@@ -113,18 +125,40 @@ pub async fn install_in_place(info: &UpdateInfo) -> Result<()> {
     if !is_minor(info, VERSION) {
         bail!("Kein kleines Update");
     }
-    let current = std::env::current_exe()?;
-    let new = current.with_extension("exe.new");
+    let current = self_path()?;
+    let new = with_suffix(&current, ".new");
     download(&info.exe_url, &new, 0, info.exe_sha256.as_deref(), |_| {}).await?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&new, std::fs::Permissions::from_mode(0o755))?;
+    }
     swap_in(&current, &new)?;
+    #[cfg(windows)]
     set_registered_version(&info.latest);
     Ok(())
+}
+
+/// Die Datei, die beim Update getauscht wird: die .exe bzw. unter Linux das AppImage.
+fn self_path() -> Result<std::path::PathBuf> {
+    #[cfg(not(windows))]
+    if let Some(appimage) = std::env::var_os("APPIMAGE") {
+        return Ok(appimage.into());
+    }
+    Ok(std::env::current_exe()?)
+}
+
+/// `Playtube.exe` + `.old` -> `Playtube.exe.old`.
+fn with_suffix(path: &std::path::Path, suffix: &str) -> std::path::PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(suffix);
+    name.into()
 }
 
 /// Tauscht `current` (darf laufen) gegen `new`: alte Datei wird zu `<name>.old`, neue an ihre Stelle.
 /// Geht der zweite Schritt schief, kommt die alte Datei zurück.
 pub fn swap_in(current: &std::path::Path, new: &std::path::Path) -> Result<()> {
-    let old = current.with_extension("exe.old");
+    let old = with_suffix(current, ".old");
     let _ = std::fs::remove_file(&old);
     std::fs::rename(current, &old)?;
     if let Err(e) = std::fs::rename(new, current) {
@@ -137,13 +171,14 @@ pub fn swap_in(current: &std::path::Path, new: &std::path::Path) -> Result<()> {
 
 /// Reste eines Updates aufräumen (die alte Datei läuft nach dem Neustart nicht mehr).
 pub fn cleanup() {
-    if let Ok(current) = std::env::current_exe() {
-        let _ = std::fs::remove_file(current.with_extension("exe.old"));
-        let _ = std::fs::remove_file(current.with_extension("exe.new"));
+    if let Ok(current) = self_path() {
+        let _ = std::fs::remove_file(with_suffix(&current, ".old"));
+        let _ = std::fs::remove_file(with_suffix(&current, ".new"));
     }
 }
 
 /// Version in „Apps & Features“ nachziehen (sonst stünde dort weiter die alte).
+#[cfg(windows)]
 fn set_registered_version(version: &str) {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -155,7 +190,7 @@ fn set_registered_version(version: &str) {
 
 /// Neu starten: neue Instanz, die wartet, bis diese beendet ist (sonst gäbe sie an uns ab).
 pub fn relaunch() -> Result<()> {
-    let exe = std::env::current_exe()?;
+    let exe = self_path()?;
     std::process::Command::new(exe).args(["--wait-pid", &std::process::id().to_string()]).spawn()?;
     Ok(())
 }
@@ -165,6 +200,11 @@ pub fn wait_for_previous(args: &[String]) {
     let Some(pid) = args.iter().position(|a| a == "--wait-pid").and_then(|i| args.get(i + 1)).and_then(|p| p.parse::<u32>().ok()) else {
         return;
     };
+    wait_for_pid(pid);
+}
+
+#[cfg(windows)]
+fn wait_for_pid(pid: u32) {
     use windows::Win32::Foundation::CloseHandle;
     use windows::Win32::System::Threading::{OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE};
     unsafe {
@@ -172,6 +212,17 @@ pub fn wait_for_previous(args: &[String]) {
             WaitForSingleObject(handle, 15_000);
             let _ = CloseHandle(handle);
         }
+    }
+}
+
+#[cfg(not(windows))]
+fn wait_for_pid(pid: u32) {
+    let proc = std::path::PathBuf::from(format!("/proc/{pid}"));
+    for _ in 0..150 {
+        if !proc.exists() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
     }
 }
 
@@ -184,8 +235,18 @@ pub async fn check() -> Result<UpdateInfo> {
     Ok(from_release(&release, VERSION))
 }
 
+/// Linux (AppImage): neue Datei laden, tauschen und neu starten. Danach muss sich die App beenden.
+#[cfg(not(windows))]
+pub async fn install(info: &UpdateInfo, progress: impl Fn(i32)) -> Result<()> {
+    progress(0);
+    install_in_place(info).await?;
+    progress(100);
+    relaunch()
+}
+
 /// Lädt das Setup (Fortschritt 0-100 über `progress`), prüft es und startet die stille
 /// Installation. Danach muss sich die App beenden.
+#[cfg(windows)]
 pub async fn install(info: &UpdateInfo, progress: impl Fn(i32)) -> Result<()> {
     if !info.available || !info.url.starts_with("https://github.com/") {
         bail!("Kein gültiges Update verfügbar");
@@ -204,8 +265,15 @@ pub async fn install(info: &UpdateInfo, progress: impl Fn(i32)) -> Result<()> {
     Ok(())
 }
 
+/// Linux: als AppImage gestartet - nur dann kann sich Playtube selbst aktualisieren.
+#[cfg(not(windows))]
+pub fn is_installed() -> bool {
+    std::env::var_os("APPIMAGE").is_some()
+}
+
 /// Per Setup installiert (in %LOCALAPPDATA%\Programs) - nur dann kann sich die App selbst
 /// aktualisieren.
+#[cfg(windows)]
 pub fn is_installed() -> bool {
     let local = std::env::var("LOCALAPPDATA").unwrap_or_default().to_lowercase();
     std::env::current_exe()
@@ -218,6 +286,26 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    #[cfg(not(windows))]
+    #[test]
+    fn linux_updates_use_the_appimage() {
+        let release = json!({
+            "tag_name": "v2.16.0",
+            "assets": [
+                {"name": "Playtube-Setup-2.16.0.exe", "browser_download_url": "https://github.com/x/Setup.exe", "size": 9, "digest": "sha256:AA"},
+                {"name": "Playtube-2.16.0-x86_64.AppImage", "browser_download_url": "https://github.com/x/Playtube.AppImage", "size": 8, "digest": "sha256:CC"}
+            ]
+        });
+        let info = from_release(&release, "2.15.0");
+        assert!(info.available);
+        assert_eq!(info.exe_url, "https://github.com/x/Playtube.AppImage");
+        assert!(is_minor(&info, "2.15.0"));
+        // Nur ein Windows-Setup im Release: unter Linux kein Update.
+        let windows_only = json!({"tag_name": "v2.16.0", "assets": [release["assets"][0]]});
+        assert!(!from_release(&windows_only, "2.15.0").available);
+    }
+
+    #[cfg(windows)]
     #[test]
     fn finds_the_plain_exe_for_minor_updates() {
         let release = serde_json::json!({
@@ -263,6 +351,7 @@ mod tests {
         assert_eq!(parse_version("v1.0.0-edge"), (1, 0, 0));
     }
 
+    #[cfg(windows)]
     #[test]
     fn picks_setup_asset_and_digest() {
         let release = json!({

@@ -312,6 +312,8 @@ impl App {
                 return;
             }
         };
+        #[cfg(target_os = "linux")]
+        slint::ComponentHandle::global::<crate::Fonts>(&mini).set_icons(crate::linux::ICON_FONT.into());
         mini.set_idle_text(tr("mini.idle").into());
         mini.on_media(|command| with_app(|app| app.tray_command(command.as_str())));
         mini.on_expand(|| with_app(|app| app.mini_close(true)));

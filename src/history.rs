@@ -171,6 +171,18 @@ pub fn unix_now() -> i64 {
 }
 
 /// Lokales Datum und Uhrzeit (Jahr, Monat, Tag, Stunde, Minute) zu Unix-Sekunden.
+#[cfg(not(windows))]
+pub fn local_time(unix: i64) -> (i32, u32, u32, u32, u32) {
+    let time = unix as libc::time_t;
+    // SAFETY: localtime_r schreibt nur in `tm`.
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    if unsafe { libc::localtime_r(&time, &mut tm) }.is_null() {
+        return (1970, 1, 1, 0, 0);
+    }
+    (tm.tm_year + 1900, (tm.tm_mon + 1) as u32, tm.tm_mday as u32, tm.tm_hour as u32, tm.tm_min as u32)
+}
+
+#[cfg(windows)]
 pub fn local_time(unix: i64) -> (i32, u32, u32, u32, u32) {
     use windows::Win32::Foundation::{FILETIME, SYSTEMTIME};
     use windows::Win32::System::Time::{FileTimeToSystemTime, SystemTimeToTzSpecificLocalTime};

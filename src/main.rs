@@ -1,7 +1,7 @@
-//! Playtube - eigenständige Desktop-App für YouTube und YouTube Music (Windows).
+//! Playtube - eigenständige Desktop-App für YouTube und YouTube Music (Windows und Linux).
 //!
-//! Aufbau: Slint-Fenster (Tab-Leiste, Navigation, Einstellungen) mit zwei WebView2-Kindfenstern
-//! (browser.rs). Netzwerk-/Pipe-Server, Updates und Discord laufen im Hintergrund; alles, was
+//! Aufbau: Slint-Fenster (Tab-Leiste, Navigation, Einstellungen) mit zwei Browser-Kindfenstern
+//! (browser.rs: WebView2 unter Windows, WebKitGTK unter Linux). Netzwerk-/Pipe-Server, Updates und Discord laufen im Hintergrund; alles, was
 //! Fenster oder WebViews anfasst, läuft im UI-Thread (über `with_app`).
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -20,6 +20,8 @@ mod instance;
 mod jam;
 mod jam_ui;
 mod lan;
+#[cfg(target_os = "linux")]
+mod linux;
 mod music;
 mod log;
 mod media_keys;
@@ -924,7 +926,7 @@ impl App {
             &PredefinedMenuItem::separator(),
             &MenuItem::with_id(ids.quit.clone(), tr("tray.quit"), true, None),
         ]);
-        let icon = tray_icon::Icon::from_resource(1, None).ok();
+        let icon = tray_icon_image();
         let mut builder = TrayIconBuilder::new()
             .with_tooltip(APP_NAME)
             .with_menu(Box::new(menu.clone()))
@@ -1019,7 +1021,7 @@ fn apply_texts(ui: &AppWindow) {
         field_language: tr("field.language").into(),
         field_music_view: tr("field.music_view").into(),
         field_media_keys: tr("field.media_keys").into(),
-        field_autostart: tr("field.autostart").into(),
+        field_autostart: tr(if cfg!(windows) { "field.autostart" } else { "field.autostart.linux" }).into(),
         field_autostart_tray: tr("field.autostart_tray").into(),
         music_view_playtube: tr("field.music_view.playtube").into(),
         music_view_original: tr("field.music_view.original").into(),
@@ -1052,6 +1054,34 @@ fn apply_texts(ui: &AppWindow) {
     music::apply_music_texts(ui);
 }
 
+/// Icon für das Tray: unter Windows aus der Ressource der .exe, sonst aus assets/icon.png.
+#[cfg(windows)]
+fn tray_icon_image() -> Option<tray_icon::Icon> {
+    tray_icon::Icon::from_resource(1, None).ok()
+}
+
+#[cfg(not(windows))]
+fn tray_icon_image() -> Option<tray_icon::Icon> {
+    let image = image::load_from_memory(include_bytes!("../assets/icon.png")).ok()?;
+    let image = image.resize(64, 64, image::imageops::FilterType::Triangle).into_rgba8();
+    let (width, height) = image.dimensions();
+    tray_icon::Icon::from_rgba(image.into_raw(), width, height).ok()
+}
+
+#[cfg(not(windows))]
+fn show_error(message: &str) {
+    eprintln!("{APP_NAME}: {message}");
+    // Ein Hinweisfenster, falls zenity oder kdialog da ist (sonst bleibt es beim Log).
+    let shown = std::process::Command::new("zenity")
+        .args(["--error", "--title", APP_NAME, "--text", message])
+        .status()
+        .is_ok_and(|s| s.success());
+    if !shown {
+        let _ = std::process::Command::new("kdialog").args(["--title", APP_NAME, "--error", message]).status();
+    }
+}
+
+#[cfg(windows)]
 fn show_error(message: &str) {
     use windows::core::HSTRING;
     use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
@@ -1186,8 +1216,7 @@ fn start(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config, jam_c
     // Stream-Dock-Plugin: eigener Pipe-Name pro Datenordner.
     media_keys::start(|command| on_ui(move |app| app.media_key(command)));
     if remote_enabled {
-        let folder = config::data_dir().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-        app.runtime.spawn(remote::run_pipe_server(format!("{}{folder}", remote::PIPE_PREFIX), app.dispatch.clone()));
+        app.runtime.spawn(remote::run_local_server(remote::local_endpoint(), app.dispatch.clone()));
     }
 
     let media_timer = slint::Timer::default();
@@ -1217,6 +1246,8 @@ fn start(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config, jam_c
 
 fn main() {
     std::panic::set_hook(Box::new(|info| log::line(&format!("PANIC: {info}"))));
+    #[cfg(target_os = "linux")]
+    linux::prepare();
 
     let args: Vec<String> = std::env::args().collect();
     // Neustart nach einem Update: erst warten, bis die alte Instanz weg ist.
@@ -1244,6 +1275,8 @@ fn main() {
             return;
         }
     };
+    #[cfg(target_os = "linux")]
+    ui.global::<Fonts>().set_icons(linux::ICON_FONT.into());
     apply_texts(&ui);
     ui.set_languages(ModelRc::new(VecModel::from(
         i18n::LANGUAGES.iter().map(|(_, name)| SharedString::from(*name)).collect::<Vec<_>>(),
@@ -1276,6 +1309,9 @@ fn main() {
         show_error(&format!("{e}"));
         return;
     }
+    // Linux: WebKitGTK und das Tray-Menü laufen über GTK - deren Ereignisse mitverarbeiten.
+    #[cfg(target_os = "linux")]
+    let _gtk_pump = linux::start_gtk_pump();
     // Die WebViews brauchen das native Fenster. Slint legt es erst an, wenn die Ereignisschleife
     // läuft - deshalb kurz warten, bis es ein gültiges Handle gibt.
     let ui_handle = ui.as_weak();

@@ -4,9 +4,10 @@
 
 # Playtube (Deutsch)
 
-Eigenständige Desktop-App für YouTube & YouTube Music unter Windows. Seit Version 2.0.0 in
-**Rust** (Oberfläche mit [Slint](https://slint.dev)); die Seiten zeigt die **Microsoft-Edge-Engine
-(WebView2)** – damit laufen auch selbst hochgeladene Songs in YouTube Music.
+Eigenständige Desktop-App für YouTube & YouTube Music unter **Windows** und – seit 2.16.0 – **Linux**.
+Seit Version 2.0.0 in **Rust** (Oberfläche mit [Slint](https://slint.dev)); die Seiten zeigt unter
+Windows die **Microsoft-Edge-Engine (WebView2)** – damit laufen auch selbst hochgeladene Songs in
+YouTube Music –, unter Linux **WebKitGTK**.
 
 - **Zwei Tabs** – YouTube und YouTube Music parallel, Musik spielt im Hintergrund weiter.
 - **Playtube-Ansicht** – YouTube Music mit eigener Oberfläche im Spotify-Stil (Startseite, Suche, Bibliothek, Player-Leiste, Warteschlange); Premium bleibt erhalten.
@@ -15,7 +16,7 @@ Eigenständige Desktop-App für YouTube & YouTube Music unter Windows. Seit Vers
 - **Audioausgabe pro Tab** – YouTube und YouTube Music auf verschiedene Geräte (z. B. Sonar-Kanäle).
 - **Steuerung vom Handy** – mit Playtube für Android im selben WLAN, wie Spotify Connect.
 - **Playtube Jam** – gemeinsam hören wie bei Spotify Jam: Freunde per Link/QR einladen, jeder hört synchron auf dem eigenen Gerät.
-- **Fernsteuerung** – lokal per Named Pipe, z. B. über das Stream-Dock-Plugin.
+- **Fernsteuerung** – lokal per Named Pipe (Linux: Unix-Socket), z. B. über das Stream-Dock-Plugin.
 - **System-Tray** – Schließen versteckt nur das Fenster, Play/Pause/Skip und Beenden im Tray-Menü.
 - **Sprache** – Deutsch oder Englisch (US), im Einstellungen-Tab umschaltbar.
 - **Automatische Updates** über die [GitHub Releases](https://github.com/fojadrachi/Playtube/releases).
@@ -27,6 +28,33 @@ laden und starten. Voraussetzung: Windows 10/11 mit WebView2-Runtime (unter Wind
 Das Setup installiert pro Benutzer nach `%LOCALAPPDATA%\Programs\Playtube` (keine Adminrechte) und
 ersetzt jede ältere Playtube – auch die früheren Python-Versionen. Einstellungen und Login bleiben
 erhalten.
+
+## Linux
+
+Ab 2.16.0 enthält jedes Release zusätzlich eine Linux-Version (x86_64):
+
+- **`playtube_<Version>_amd64.deb`** für Debian/Ubuntu/Mint (ab Ubuntu 22.04):
+  `sudo apt install ./playtube_<Version>_amd64.deb` – zieht WebKitGTK 4.1 und GTK 3 mit, legt Playtube
+  ins Startmenü und meldet `playtube://`-Links (Jam-Einladungen) an.
+- **`Playtube-<Version>-x86_64.AppImage`** für andere Distributionen: ausführbar machen
+  (`chmod +x`) und starten. Das AppImage bringt nur Playtube selbst mit; WebKitGTK 4.1 und GTK 3
+  müssen installiert sein (z. B. Fedora `webkit2gtk4.1`, Arch `webkit2gtk-4.1`). Es aktualisiert
+  sich selbst wie die Windows-Version.
+
+Unterschiede zu Windows:
+
+- Daten und Login liegen in `~/.config/Playtube` (bzw. `$XDG_CONFIG_HOME/Playtube`).
+- Playtube läuft unter X11; in einer Wayland-Sitzung automatisch über XWayland (wry kann die
+  Browseransicht nur unter X11 in das Fenster einbetten).
+- Tray-Symbol über AppIndicator (`libayatana-appindicator3-1`); unter GNOME braucht es dafür die
+  Erweiterung „AppIndicator and KStatusNotifierItem Support“.
+- „Mit dem System starten“ legt `~/.config/autostart/playtube.desktop` an (nur beim installierten
+  Paket bzw. AppImage).
+- Der Playtube-Ton (Discord-Bot im Jam, „Für Discord-Streams“) läuft über `pacat`
+  (PulseAudio/PipeWire, Paket `pulseaudio-utils`); „Automatisch“ erkennt Discord im Sprachkanal über
+  `pactl`. Eine Audioausgabe pro Tab gibt es unter Linux nicht – nur die Systemausgabe.
+- Noch nicht unter Linux: globale Medientasten (folgt über MPRIS). Das .deb aktualisiert sich nicht
+  selbst – Playtube zeigt neue Versionen an und öffnet die Release-Seite.
 
 ## Updates
 
@@ -112,7 +140,8 @@ abgeschaltet, damit nichts doppelt ankommt).
 
 ## Fernsteuerung (Stream Dock)
 
-Named Pipe `\\.\pipe\Playtube.Remote.Playtube`, eine JSON-Nachricht pro Zeile, z. B.
+Named Pipe `\\.\pipe\Playtube.Remote.Playtube` (Linux: Unix-Socket
+`$XDG_RUNTIME_DIR/Playtube.Remote.Playtube.sock`), eine JSON-Nachricht pro Zeile, z. B.
 `{"id":1,"cmd":"play_pause","target":"auto"}`. Befehle: `status`, `show`, `switch_tab`, `play_pause`,
 `play`, `pause`, `next`, `previous`, `seek`, `volume_change`, `set_volume`, `mute_toggle`, `like`,
 `dislike`, `shuffle`, `repeat`, `list_playlists`, `play_playlist`, `playlist_cover` (Cover einer Playlist, z. B. für die Stream-Dock-Tasten), `queue` (Warteschlange als Liste), `play_queue_item` (Titel per Index 0–199 abspielen), `sleep_timer` (Minuten, 0 = aus, -1 = Songende), `history` (zuletzt gehörte Songs), `play_video` (Song per Video-ID), `mini_player` (feste Whitelist, siehe
@@ -126,15 +155,28 @@ cargo test                      # Unit-Tests (Protokoll, Kopplung, Pipe, TCP, Up
 .\build-release.ps1             # dist\Playtube-Setup-<v>.exe (braucht Inno Setup 6)
 ```
 
+Linux (Debian/Ubuntu):
+
+```bash
+sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libfontconfig1-dev libxkbcommon-dev
+cargo test
+./build-linux.sh                # dist/playtube_<v>_amd64.deb und dist/Playtube-<v>-x86_64.AppImage
+```
+
+Die Symbole der Oberfläche zeichnet Windows mit „Segoe MDL2 Assets“; unter Linux nimmt Playtube die
+eingebettete Schrift `assets/PlaytubeIcons.ttf` (Material Icons, Apache 2.0, gleiche Zeichencodes;
+neu bauen mit `assets/linux/make-icon-font.py`).
+
 Mit `PLAYTUBE_DATA_DIR=<Ordner>` nutzt Playtube einen eigenen Datenordner (getrennt von der
 installierten App, auch eigene Pipe-Namen) – zum Testen. Diagnose-Log: `<Datenordner>\logs\playtube.log`.
 
 | Datei | Aufgabe |
 |---|---|
 | `src/main.rs` | Fenster, Tabs, Tray, Einstellungen, Verbindung aller Teile |
-| `src/browser.rs` | WebView2-Tab (Profil, Vollbild, Audio-Ausgabe, Gerätenamen-Freigabe) |
+| `src/browser.rs` | Browser-Tab: WebView2 bzw. WebKitGTK (Profil, Vollbild, Audio-Ausgabe, Gerätenamen-Freigabe) |
+| `src/linux.rs` | Linux: X11 erzwingen, GTK-Ereignisse in der Slint-Schleife abarbeiten |
 | `src/scripts.rs`, `src/js/` | JavaScript für Wiedergabestand, Steuerung, Playlists, Audio |
-| `src/remote.rs` | Fernsteuerungsprotokoll + Named Pipe |
+| `src/remote.rs` | Fernsteuerungsprotokoll + Named Pipe bzw. Unix-Socket |
 | `src/media_keys.rs` | Medientasten der Tastatur (Tastatur-Hook) |
 | `src/lan.rs` | Steuerung vom Handy (Kopplung, TCP, UDP-Suche) |
 | `src/discord.rs` | Discord Rich Presence |
@@ -146,8 +188,8 @@ installierten App, auch eigene Pipe-Namen) – zum Testen. Diagnose-Log: `<Daten
 ## Eine neue Version veröffentlichen
 
 Version in `Cargo.toml` erhöhen, `release_notes.md` anpassen, committen, Tag `vX.Y.Z` pushen.
-[.github/workflows/release.yml](.github/workflows/release.yml) testet, baut das Setup und
-veröffentlicht es als Release „Playtube vX.Y.Z“.
+[.github/workflows/release.yml](.github/workflows/release.yml) testet unter Windows und Linux, baut
+Setup, `win64.exe`, `.deb` und AppImage und veröffentlicht alles als Release „Playtube vX.Y.Z“.
 
 Playtube ist ein privates Projekt und steht in keiner Verbindung zu Google, YouTube oder Discord.
 
@@ -157,9 +199,10 @@ Playtube ist ein privates Projekt und steht in keiner Verbindung zu Google, YouT
 
 # Playtube (English)
 
-A standalone desktop app for YouTube & YouTube Music on Windows. Since version 2.0.0 written in
-**Rust** (UI with [Slint](https://slint.dev)); pages are rendered by the **Microsoft Edge engine
-(WebView2)** – so your own uploads in YouTube Music play too.
+A standalone desktop app for YouTube & YouTube Music on **Windows** and – since 2.16.0 – **Linux**.
+Since version 2.0.0 written in **Rust** (UI with [Slint](https://slint.dev)); on Windows pages are
+rendered by the **Microsoft Edge engine (WebView2)** – so your own uploads in YouTube Music play too –,
+on Linux by **WebKitGTK**.
 
 - **Two tabs** – YouTube and YouTube Music side by side, music keeps playing in the background.
 - **Login** – its own persistent profile (`%APPDATA%\Playtube`), sign in to Google once.
@@ -168,7 +211,7 @@ A standalone desktop app for YouTube & YouTube Music on Windows. Since version 2
 - **Control from your phone** – with Playtube for Android on the same Wi-Fi, like Spotify Connect.
 - **Playtube view** – YouTube Music with its own Spotify-like interface (home, search, library, player bar, queue); Premium is kept.
 - **Playtube Jam** – listen together like Spotify Jam: invite friends via link/QR, everyone listens in sync on their own device.
-- **Remote control** – local named pipe, e.g. for the Stream Dock plugin.
+- **Remote control** – local named pipe (Linux: Unix socket), e.g. for the Stream Dock plugin.
 - **System tray** – closing only hides the window; play/pause/skip and quit in the tray menu.
 - **Language** – German or English (US), switchable in the Settings tab.
 - **Automatic updates** via [GitHub Releases](https://github.com/fojadrachi/Playtube/releases).
@@ -180,6 +223,32 @@ Download and run `Playtube-Setup-<version>.exe` from the
 WebView2 runtime (included in Windows 11). It installs per user to `%LOCALAPPDATA%\Programs\Playtube`
 (no admin rights) and replaces any older Playtube, including the former Python versions. Settings and
 login are kept.
+
+## Linux
+
+From 2.16.0 on, every release also contains a Linux version (x86_64):
+
+- **`playtube_<version>_amd64.deb`** for Debian/Ubuntu/Mint (Ubuntu 22.04 or newer):
+  `sudo apt install ./playtube_<version>_amd64.deb` – pulls in WebKitGTK 4.1 and GTK 3, adds Playtube to
+  the app menu and registers `playtube://` links (jam invites).
+- **`Playtube-<version>-x86_64.AppImage`** for other distributions: make it executable (`chmod +x`) and
+  run it. The AppImage only contains Playtube itself; WebKitGTK 4.1 and GTK 3 must be installed (e.g.
+  Fedora `webkit2gtk4.1`, Arch `webkit2gtk-4.1`). It updates itself like the Windows version.
+
+Differences to Windows:
+
+- Data and login live in `~/.config/Playtube` (or `$XDG_CONFIG_HOME/Playtube`).
+- Playtube runs on X11; in a Wayland session automatically through XWayland (wry can only embed the
+  browser view into the window on X11).
+- Tray icon via AppIndicator (`libayatana-appindicator3-1`); GNOME needs the "AppIndicator and
+  KStatusNotifierItem Support" extension.
+- "Start with the system" creates `~/.config/autostart/playtube.desktop` (installed package or AppImage
+  only).
+- The Playtube sound (Discord bot in the jam, "For Discord streams") goes through `pacat`
+  (PulseAudio/PipeWire, package `pulseaudio-utils`); "Automatic" detects Discord in a voice channel via
+  `pactl`. There is no per-tab audio output on Linux – only the system output.
+- Not on Linux yet: global media keys (coming via MPRIS). The .deb does not update itself – Playtube
+  shows new versions and opens the releases page.
 
 ## Updates
 
@@ -231,7 +300,8 @@ other programs. In a jam they go to the jam (like the tray). Turn off under *Set
 
 ## Remote control (Stream Dock)
 
-Named pipe `\\.\pipe\Playtube.Remote.Playtube`, one JSON message per line, e.g.
+Named pipe `\\.\pipe\Playtube.Remote.Playtube` (Linux: Unix socket
+`$XDG_RUNTIME_DIR/Playtube.Remote.Playtube.sock`), one JSON message per line, e.g.
 `{"id":1,"cmd":"play_pause","target":"auto"}`. Commands are a fixed whitelist (including `list_playlists`, `play_playlist`, `playlist_cover`, `queue`, `play_queue_item`, `sleep_timer`, `history`, `play_video`, `mini_player`), see
 [src/remote.rs](src/remote.rs). Disable with `"remote_control": {"enabled": false}` in `config.json`.
 
@@ -243,13 +313,25 @@ cargo test                      # unit tests
 .\build-release.ps1             # dist\Playtube-Setup-<v>.exe (needs Inno Setup 6)
 ```
 
+Linux (Debian/Ubuntu):
+
+```bash
+sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libfontconfig1-dev libxkbcommon-dev
+cargo test
+./build-linux.sh                # dist/playtube_<v>_amd64.deb and dist/Playtube-<v>-x86_64.AppImage
+```
+
+On Windows the UI symbols use "Segoe MDL2 Assets"; on Linux Playtube uses the embedded font
+`assets/PlaytubeIcons.ttf` (Material Icons, Apache 2.0, same code points; rebuild with
+`assets/linux/make-icon-font.py`).
+
 `PLAYTUBE_DATA_DIR=<folder>` makes Playtube use its own data folder (and pipe names) for testing.
 Diagnostic log: `<data folder>\logs\playtube.log`.
 
 ## Publishing a new version
 
 Bump the version in `Cargo.toml`, update `release_notes.md`, commit, push tag `vX.Y.Z`.
-[.github/workflows/release.yml](.github/workflows/release.yml) tests, builds the setup
-and publishes it as release “Playtube vX.Y.Z”.
+[.github/workflows/release.yml](.github/workflows/release.yml) tests on Windows and Linux, builds the
+setup, `win64.exe`, `.deb` and AppImage and publishes everything as release “Playtube vX.Y.Z”.
 
 Playtube is a private project and not affiliated with Google, YouTube or Discord.

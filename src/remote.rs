@@ -1,5 +1,7 @@
-//! Fernsteuerung: Protokoll und lokaler Named-Pipe-Server (Stream-Dock-Plugin
-//! com.fojadrachi.playtube.sdPlugin). Dasselbe Protokoll nutzt die Steuerung vom Handy (lan.rs).
+//! Fernsteuerung: Protokoll und lokaler Server (Stream-Dock-Plugin com.fojadrachi.playtube.sdPlugin).
+//! Windows: Named Pipe `\\.\pipe\Playtube.Remote.<Datenordner>`; Linux: Unix-Socket
+//! `$XDG_RUNTIME_DIR/Playtube.Remote.<Datenordner>.sock`. Dasselbe Protokoll nutzt die Steuerung
+//! vom Handy (lan.rs).
 //!
 //! Eine JSON-Nachricht pro Zeile, Verbindung bleibt offen:
 //!   -> {"id": 1, "cmd": "play_pause", "target": "auto"}     <- {"id": 1, "ok": true}
@@ -16,7 +18,8 @@ use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 
 pub const PROTOCOL_VERSION: u32 = 1;
-pub const PIPE_PREFIX: &str = r"\\.\pipe\Playtube.Remote.";
+#[cfg(windows)]
+pub const PIPE_PREFIX: &str =r"\\.\pipe\Playtube.Remote.";
 pub const MAX_LINE_BYTES: usize = 4096;
 const MAX_CLIENTS: usize = 8;
 
@@ -354,7 +357,60 @@ where
     }
 }
 
+/// Name des Datenordners (unterscheidet Test-Instanzen über PLAYTUBE_DATA_DIR).
+fn data_folder_name() -> String {
+    crate::config::data_dir().file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
+}
+
+/// Adresse des lokalen Servers dieser Instanz (Pipe-Name bzw. Socket-Pfad).
+#[cfg(windows)]
+pub fn local_endpoint() -> String {
+    format!("{PIPE_PREFIX}{}", data_folder_name())
+}
+
+#[cfg(target_os = "linux")]
+pub fn local_endpoint() -> String {
+    crate::linux::runtime_dir().join(format!("Playtube.Remote.{}.sock", data_folder_name())).to_string_lossy().to_string()
+}
+
+#[cfg(windows)]
+pub async fn run_local_server(name: String, dispatch: Dispatch) {
+    run_pipe_server(name, dispatch).await
+}
+
+/// Unix-Socket-Server für das Stream-Dock-Plugin (nur für den eigenen Benutzer zugänglich).
+#[cfg(unix)]
+pub async fn run_local_server(path: String, dispatch: Dispatch) {
+    use std::os::unix::fs::PermissionsExt;
+    // Liegt noch ein Socket vom letzten Lauf da (Absturz), ersetzen - es läuft nur eine Instanz
+    // pro Datenordner (instance.rs).
+    let _ = std::fs::remove_file(&path);
+    let listener = match tokio::net::UnixListener::bind(&path) {
+        Ok(l) => l,
+        Err(e) => {
+            crate::log::line(&format!("remote: Socket {path} nicht erstellbar: {e}"));
+            return;
+        }
+    };
+    let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    let slots = Arc::new(tokio::sync::Semaphore::new(MAX_CLIENTS));
+    loop {
+        let Ok((stream, _)) = listener.accept().await else { continue };
+        let Ok(permit) = slots.clone().try_acquire_owned() else { continue };
+        let dispatch = dispatch.clone();
+        tokio::spawn(async move {
+            serve_lines(stream, |line| {
+                let dispatch = dispatch.clone();
+                async move { process_line(&line, &dispatch).await }
+            })
+            .await;
+            drop(permit);
+        });
+    }
+}
+
 /// Named-Pipe-Server für das Stream-Dock-Plugin (nur lokal, keine Netzwerk-Clients).
+#[cfg(windows)]
 pub async fn run_pipe_server(name: String, dispatch: Dispatch) {
     use tokio::net::windows::named_pipe::ServerOptions;
     let slots = Arc::new(tokio::sync::Semaphore::new(MAX_CLIENTS));
@@ -575,6 +631,27 @@ mod tests {
         assert_eq!(log.lock().unwrap()[0], Action::Media { target: "auto".into(), command: "next".into(), value: 0.0 });
     }
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn round_trip_over_unix_socket() {
+        use tokio::io::AsyncWriteExt;
+        let path = std::env::temp_dir().join(format!("Playtube.Remote.Test.{}.sock", std::process::id()));
+        let path = path.to_string_lossy().to_string();
+        let log = Arc::new(std::sync::Mutex::new(Vec::new()));
+        tokio::spawn(run_local_server(path.clone(), fake_dispatch(log.clone())));
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let client = tokio::net::UnixStream::connect(&path).await.unwrap();
+        let (read, mut write) = tokio::io::split(client);
+        write.write_all(b"{\"id\": 1, \"cmd\": \"next\"}\n{\"id\": 2, \"cmd\": \"status\"}\n").await.unwrap();
+        let mut lines = BufReader::new(read).lines();
+        let first: Value = serde_json::from_str(&lines.next_line().await.unwrap().unwrap()).unwrap();
+        let second: Value = serde_json::from_str(&lines.next_line().await.unwrap().unwrap()).unwrap();
+        assert_eq!(first, json!({"id": 1, "ok": true}));
+        assert_eq!(second["state"], json!({"protocol": 1}));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[cfg(windows)]
     #[tokio::test]
     async fn round_trip_over_named_pipe() {
         use tokio::io::AsyncWriteExt;

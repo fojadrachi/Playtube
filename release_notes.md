@@ -1,4 +1,14 @@
-## Playtube 2.15.0
+## Playtube 2.16.0
+
+- **Playtube für Linux:** Neben Windows gibt es Playtube jetzt auch für Linux (x86_64) – als
+  `playtube_2.16.0_amd64.deb` für Debian/Ubuntu (ab 22.04) und als `Playtube-2.16.0-x86_64.AppImage` für andere
+  Distributionen (braucht WebKitGTK 4.1). Es kann alles Wichtige: beide Tabs, Playtube-Ansicht, Jam (auch der
+  Discord-Bot), Discord-Status, Steuerung vom Handy, Stream-Dock-Fernsteuerung (Unix-Socket), Tray, Autostart
+  und Updates (AppImage). Daten liegen in `~/.config/Playtube`. Noch nicht unter Linux: globale Medientasten und
+  eine Audioausgabe pro Tab.
+- Windows: keine Änderungen.
+
+Neu in 2.15.0:
 
 - **Discord-Bot im Jam:** Ein Discord-Bot kann deinen Jam im Sprachkanal abspielen. Im Discord holst du ihn mit
   `/vc join` in deinen Sprachkanal und verbindest ihn mit `/jam connect <Code>`. Den Ton schickt Playtube von deinem
@@ -121,12 +131,23 @@ Neu in 2.6.0:
 
 Alles Weitere wie in 2.5.2 (Tonausgabe Normal/Discord, Fixes).
 
-**Installieren:** `Playtube-Setup-2.15.0.exe` laden und starten – ersetzt jede ältere Playtube. Playtube
-aktualisiert sich auch von selbst.
+**Installieren:** Windows: `Playtube-Setup-2.16.0.exe` laden und starten – ersetzt jede ältere Playtube. Linux:
+`sudo apt install ./playtube_2.16.0_amd64.deb` oder das AppImage ausführbar machen und starten. Playtube
+aktualisiert sich auch von selbst (Windows und AppImage).
 
 ---
 
-## Playtube 2.15.0
+## Playtube 2.16.0
+
+- **Playtube for Linux:** besides Windows, Playtube is now available for Linux (x86_64) – as
+  `playtube_2.16.0_amd64.deb` for Debian/Ubuntu (22.04 or newer) and as `Playtube-2.16.0-x86_64.AppImage` for other
+  distributions (needs WebKitGTK 4.1). It does everything important: both tabs, the Playtube view, jam (including
+  the Discord bot), Discord status, phone control, Stream Dock remote control (Unix socket), tray, autostart and
+  updates (AppImage). Data lives in `~/.config/Playtube`. Not on Linux yet: global media keys and per-tab audio
+  output.
+- Windows: no changes.
+
+New in 2.15.0:
 
 - **Discord bot in the jam:** a Discord bot can play your jam in a voice channel. In Discord, bring it into your voice
   channel with `/vc join` and connect it with `/jam connect <code>`. Playtube sends the sound from your PC to the bot
@@ -246,4 +267,6 @@ New in 2.6.0:
 
 Everything else as in 2.5.2 (sound output Normal/Discord, fixes).
 
-**Install:** run `Playtube-Setup-2.15.0.exe` – it replaces any older Playtube. Playtube also updates itself.
+**Install:** Windows: run `Playtube-Setup-2.16.0.exe` – it replaces any older Playtube. Linux:
+`sudo apt install ./playtube_2.16.0_amd64.deb` or make the AppImage executable and run it. Playtube also updates
+itself (Windows and AppImage).

@@ -80,7 +80,17 @@ pub fn qr_image(text: &str) -> slint::Image {
     slint::Image::from_rgba8(buffer)
 }
 
+/// Text in die Zwischenablage legen (Linux: über GTK, im UI-Thread).
+#[cfg(not(windows))]
+pub fn set_clipboard(text: &str) -> bool {
+    let clipboard = gtk::Clipboard::get(&gtk::gdk::SELECTION_CLIPBOARD);
+    clipboard.set_text(text);
+    clipboard.store();
+    true
+}
+
 /// Text in die Windows-Zwischenablage legen.
+#[cfg(windows)]
 pub fn set_clipboard(text: &str) -> bool {
     use windows::Win32::Foundation::HANDLE;
     use windows::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData};
