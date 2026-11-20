@@ -7,6 +7,9 @@
 # Vorher: Version in Cargo.toml erhöhen, release_notes.md schreiben, alles committen.
 # Der GitHub-Zugang kommt aus der Git-Anmeldung (git credential fill).
 
+# -SkipBuild: nur hochladen (schon gebaut, z. B. nach einem Fehler beim Hochladen).
+param([switch]$SkipBuild)
+
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $repo = "fojadrachi/Playtube"
@@ -23,6 +26,7 @@ $dirty = & git -c safe.directory=* status --porcelain --untracked-files=no
 if ($dirty) { throw "Es gibt nicht committete Änderungen:`n$dirty" }
 
 # 1. Tests
+if (-not $SkipBuild) {
 $ErrorActionPreference = "Continue"
 cargo test --locked 2>&1 | ForEach-Object { "$_" } | Where-Object { $_ -match "^test result|FAILED|panicked|^error" }
 $ErrorActionPreference = "Stop"
@@ -30,6 +34,7 @@ if ($LASTEXITCODE -ne 0) { throw "Tests fehlgeschlagen" }
 
 # 2. Bauen
 & (Join-Path $root "build-release.ps1")
+}
 $files = @("dist\Playtube-Setup-$version.exe", "dist\Playtube-$version-win64.exe") | ForEach-Object { Join-Path $root $_ }
 foreach ($f in $files) { if (-not (Test-Path $f)) { throw "Fehlt: $f" } }
 
@@ -43,7 +48,7 @@ if (-not $existing) {
 }
 
 # 4. Release anlegen (oder das vom Workflow schon angelegte nehmen) und Dateien hochladen
-$token = ("protocol=https`nhost=github.com`n`n" | git credential fill | Where-Object { $_ -like "password=*" }) -replace "^password=", ""
+$token = (@("protocol=https", "host=github.com", "") | git credential fill | Where-Object { $_ -like "password=*" }) -replace "^password=", ""
 if (-not $token) { throw "Kein GitHub-Zugang in der Git-Anmeldung gefunden" }
 $headers = @{ Authorization = "Bearer $token"; Accept = "application/vnd.github+json"; "X-GitHub-Api-Version" = "2022-11-28" }
 $api = "https://api.github.com/repos/$repo"
