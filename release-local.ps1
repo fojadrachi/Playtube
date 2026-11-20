@@ -50,15 +50,11 @@ if (-not $existing) {
 # 4. Release anlegen (oder das vom Workflow schon angelegte nehmen) und Dateien hochladen
 # GitHub-Zugang aus der Git-Anmeldung (direkt über stdin, PowerShell-Pipes stören git hier).
 function Get-GitHubToken {
-    $psi = New-Object System.Diagnostics.ProcessStartInfo "git.exe", "credential fill"
-    $psi.RedirectStandardInput = $true; $psi.RedirectStandardOutput = $true; $psi.UseShellExecute = $false
-    $p = [System.Diagnostics.Process]::Start($psi)
-    # Rohe Bytes: der StreamWriter würde sonst ein BOM voranstellen, und git erkennt „protocol“ nicht.
-    $bytes = [System.Text.Encoding]::ASCII.GetBytes("protocol=https`nhost=github.com`n`n")
-    $p.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
-    $p.StandardInput.BaseStream.Close()
-    $out = $p.StandardOutput.ReadToEnd(); $p.WaitForExit()
-    ($out -split "`n" | Where-Object { $_ -like "password=*" } | Select-Object -First 1) -replace "^password=", ""
+    # Über eine Datei und cmd: PowerShell-Pipes und Process-stdin kommen bei git hier nicht sauber an.
+    $file = Join-Path $env:TEMP "playtube-cred-$PID.txt"
+    [IO.File]::WriteAllBytes($file, [Text.Encoding]::ASCII.GetBytes("protocol=https`nhost=github.com`n`n"))
+    try { $out = cmd /c "git credential fill < `"$file`"" } finally { Remove-Item $file -ErrorAction SilentlyContinue }
+    ($out | Where-Object { $_ -like "password=*" } | Select-Object -First 1) -replace "^password=", ""
 }
 $token = "$(Get-GitHubToken)".Trim()
 if (-not $token) { throw "Kein GitHub-Zugang in der Git-Anmeldung gefunden" }
