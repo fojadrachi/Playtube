@@ -8,18 +8,28 @@ name: Release
 # Der Titel "Playtube vX.Y.Z" lässt auch die alte Python-Version (1.0.0) das Update finden.
 # Linux (x86_64): "playtube_<Version>_amd64.deb" und "Playtube-<Version>-x86_64.AppImage"
 # (build-linux.sh); das AppImage aktualisiert sich darüber selbst.
+#
+# Windows wird normalerweise lokal gebaut (release-local.ps1: Tests, Setup, Tag, Release mit den
+# Windows-Dateien). Dieser Workflow baut dann nur Linux und hängt die Dateien an dasselbe Release.
+# Den Windows-Build hier gibt es weiter als Rückfall: von Hand starten mit „windows“ = true.
 
 on:
   push:
     tags:
       - "v*"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      windows:
+        description: "Windows auch hier bauen (statt lokal mit release-local.ps1)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' && inputs.windows
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -73,6 +83,8 @@ jobs:
 
   release:
     needs: [build, build-linux]
+    # Läuft auch, wenn der Windows-Build hier übersprungen wurde (lokal gebaut).
+    if: always() && needs.build-linux.result == 'success' && needs.build.result != 'failure'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -88,6 +100,13 @@ jobs:
         run: |
           tag="${{ github.ref_name }}"
           version="${tag#v}"
-          gh release delete "$tag" --repo "${{ github.repository }}" --yes 2>/dev/null || true
-          files=("dist/Playtube-Setup-$version.exe" "dist/Playtube-$version-win64.exe" "dist/playtube_${version}_amd64.deb" "dist/Playtube-$version-x86_64.AppImage")
-          gh release create "$tag" "${files[@]}" --repo "${{ github.repository }}" --title "Playtube $tag" --notes-file release_notes.md --latest --verify-tag
+          files=()
+          for f in "dist/Playtube-Setup-$version.exe" "dist/Playtube-$version-win64.exe" "dist/playtube_${version}_amd64.deb" "dist/Playtube-$version-x86_64.AppImage"; do
+            [ -f "$f" ] && files+=("$f")
+          done
+          if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            # Release gibt es schon (Windows lokal veröffentlicht): Dateien anhängen.
+            gh release upload "$tag" "${files[@]}" --repo "${{ github.repository }}" --clobber
+          else
+            gh release create "$tag" "${files[@]}" --repo "${{ github.repository }}" --title "Playtube $tag" --notes-file release_notes.md --latest --verify-tag
+          fi

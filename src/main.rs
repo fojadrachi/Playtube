@@ -558,10 +558,12 @@ impl App {
         let Some((rate, volume, samples)) = relay::parse_message_with_volume(body) else { return };
         if tab == music::TAB_MUSIC {
             if let Some(stream) = self.bot_audio.borrow().as_ref() {
-                // Lautstärke von Playtube herausrechnen: der Bot klingt immer gleich laut.
-                stream.push(&botaudio::resample(rate, &botaudio::undo_volume(&samples, volume)));
+                // Der Bot bekommt den Ton ohne die Lautstärke von Playtube: er klingt immer gleich laut.
+                stream.push(&botaudio::resample(rate, &samples));
             }
         }
+        // Am PC gilt die Lautstärke der Seite (js/audio_tap.js schickt den Ton mit voller Lautstärke).
+        let samples = botaudio::apply_volume(&samples, volume);
         let mut relays = self.relays.borrow_mut();
         let relay = relays[tab].get_or_insert_with(|| {
             let config = self.config.borrow();

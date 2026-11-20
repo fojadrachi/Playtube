@@ -114,14 +114,13 @@ impl Drop for Stream {
     }
 }
 
-/// Ton auf volle Lautstärke zurückrechnen, wenn er schon mit `volume` (0–1, Lautstärke der Seite)
-/// abgeschwächt ist. Unter 2 % ist zu wenig übrig (nur Rauschen) – dann bleibt es leise.
-pub fn undo_volume(samples: &[i16], volume: f32) -> Vec<i16> {
-    if volume >= 0.999 || volume < 0.02 {
+/// Lautstärke (0–1) auf den Ton anwenden – für die Ausgabe am PC; der Bot bekommt den Ton unverändert.
+pub fn apply_volume(samples: &[i16], volume: f32) -> Vec<i16> {
+    if volume >= 0.999 {
         return samples.to_vec();
     }
-    let gain = 1.0 / volume;
-    samples.iter().map(|&s| (s as f32 * gain).round().clamp(i16::MIN as f32, i16::MAX as f32) as i16).collect()
+    let gain = volume.clamp(0.0, 1.0);
+    samples.iter().map(|&s| (s as f32 * gain).round() as i16).collect()
 }
 
 /// TCP-Verbindung zu allen Adressen des Hosts gleichzeitig aufbauen und die erste nehmen, die klappt
@@ -191,11 +190,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn undo_volume_restores_level() {
-        assert_eq!(undo_volume(&[100, -200], 0.25), vec![400, -800]);
-        assert_eq!(undo_volume(&[100, -200], 1.0), vec![100, -200]);
-        assert_eq!(undo_volume(&[20_000], 0.5), vec![i16::MAX]);
-        assert_eq!(undo_volume(&[5], 0.01), vec![5]);
+    fn apply_volume_scales_down() {
+        assert_eq!(apply_volume(&[400, -800], 0.25), vec![100, -200]);
+        assert_eq!(apply_volume(&[100, -200], 1.0), vec![100, -200]);
+        assert_eq!(apply_volume(&[100], 0.0), vec![0]);
     }
 
     /// Echter Netztest (nur von Hand): `cargo test nexo_handshake -- --ignored`.

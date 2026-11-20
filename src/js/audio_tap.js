@@ -39,6 +39,40 @@
         return btoa(text);
     }
 
+    // Lautstärke „virtuell“ machen: Die Seite (YouTube) liest und setzt volume/muted wie gewohnt,
+    // das Element selbst bleibt aber auf 100 % und nicht stumm. Playtube wendet die Lautstärke erst bei
+    // der eigenen Ausgabe an (src/main.rs). So bekommt ein Discord-Bot den Ton unabhängig vom Regler.
+    var PROTO = HTMLMediaElement.prototype;
+    var VOLUME = Object.getOwnPropertyDescriptor(PROTO, 'volume');
+    var MUTED = Object.getOwnPropertyDescriptor(PROTO, 'muted');
+    function virtualize(el) {
+        if (el.__playtubeVolume) { return; }
+        var volume = VOLUME.get.call(el), muted = MUTED.get.call(el);
+        try {
+            Object.defineProperty(el, 'volume', { configurable: true, get: function() { return volume; },
+                set: function(v) {
+                    v = Number(v);
+                    if (!(v >= 0 && v <= 1)) { throw new DOMException('volume außerhalb von 0–1', 'IndexSizeError'); }
+                    if (v !== volume) { volume = v; el.dispatchEvent(new Event('volumechange')); }
+                } });
+            Object.defineProperty(el, 'muted', { configurable: true, get: function() { return muted; },
+                set: function(m) {
+                    m = !!m;
+                    if (m !== muted) { muted = m; el.dispatchEvent(new Event('volumechange')); }
+                } });
+        } catch (e) { return; }
+        VOLUME.set.call(el, 1);
+        MUTED.set.call(el, false);
+        el.__playtubeVolume = {
+            level: function() { return muted ? 0 : volume; },
+            restore: function() {
+                delete el.volume; delete el.muted;
+                VOLUME.set.call(el, volume); MUTED.set.call(el, muted);
+                el.__playtubeVolume = null;
+            }
+        };
+    }
+
     function tap(el) {
         if (el.__playtubeTap || !state.enabled) { return; }
         var ctx = context();
@@ -58,12 +92,13 @@
             var loud = false;
             for (var i = 0; i < left.length; i += 16) { if (left[i] !== 0 || right[i] !== 0) { loud = true; break; } }
             if (!loud) { return; }
-            // Lautstärke/Stumm der Seite wendet Chrome schon vor diesem Knoten an. Die Lautstärke geht
-            // mit, damit Playtube sie für den Discord-Bot wieder herausrechnen kann (src/botaudio.rs).
-            var volume = el.muted ? 0 : el.volume;
-            post('pcm:' + ctx.sampleRate + ':' + volume.toFixed(4) + ':' + encode(left, right, 1));
+            // Der Ton kommt mit voller Lautstärke; die Lautstärke der Seite geht mit und wird erst bei der
+            // Ausgabe am PC angewendet. Klappt das Virtualisieren nicht, hat Chrome sie schon angewendet (1).
+            var level = el.__playtubeVolume ? el.__playtubeVolume.level() : 1;
+            post('pcm:' + ctx.sampleRate + ':' + level.toFixed(4) + ':' + encode(left, right, 1));
         };
-        el.__playtubeTap = { source: source, proc: proc };
+        virtualize(el);
+        el.__playtubeTap = { source: source, proc: proc, el: el };
         state.taps.push(el.__playtubeTap);
         if (ctx.state === 'suspended') { ctx.resume(); }
     }
@@ -89,12 +124,15 @@
             if (state.ctx && state.ctx.setSinkId) { try { state.ctx.setSinkId({ type: 'none' }); } catch (e) {} }
             for (var i = 0; i < state.taps.length; i++) {
                 try { state.taps[i].source.disconnect(); state.taps[i].source.connect(state.taps[i].proc); } catch (e) {}
+                virtualize(state.taps[i].el);
             }
             scan();
         } else if (state.ctx) {
             if (state.ctx.setSinkId) { try { state.ctx.setSinkId(''); } catch (e) {} }
             for (var k = 0; k < state.taps.length; k++) {
                 try { state.taps[k].source.disconnect(); state.taps[k].source.connect(state.ctx.destination); } catch (e) {}
+                // Seite gibt den Ton wieder selbst aus: echte Lautstärke zurück aufs Element.
+                if (state.taps[k].el.__playtubeVolume) { state.taps[k].el.__playtubeVolume.restore(); }
             }
         }
         return state.enabled;

@@ -1,4 +1,10 @@
-## Playtube 2.16.3
+## Playtube 2.16.4
+
+- **Discord-Bot im Jam: Lautstärke jetzt wirklich unabhängig.** Der Regler in Playtube ändert nur noch, wie laut
+  es an deinem PC ist. Der Bot bekommt den Ton immer in voller Stärke und stellt seine Lautstärke selbst ein
+  (`/jam volume`, Standard 15 %). Auch wenn Playtube stumm ist, spielt der Bot weiter.
+
+Neu in 2.16.3:
 
 - **Discord-Bot im Jam: Lautstärke unabhängig vom PC.** Wie laut du Playtube am PC stellst, ändert nichts mehr an
   der Lautstärke im Discord-Sprachkanal. Die stellt man jetzt am Bot ein (`/jam volume`, Standard 15 %). Nur wenn
@@ -155,7 +161,13 @@ aktualisiert sich auch von selbst (Windows und AppImage).
 
 ---
 
-## Playtube 2.16.3
+## Playtube 2.16.4
+
+- **Discord bot in the jam: volume now truly independent.** The volume slider in Playtube only changes how loud it
+  is on your PC. The bot always gets the audio at full strength and sets its own volume (`/jam volume`, default
+  15 %). Even when Playtube is muted, the bot keeps playing.
+
+New in 2.16.3:
 
 - **Discord bot in the jam: volume independent of your PC.** How loud you set Playtube on your PC no longer changes
   the volume in the Discord voice channel. That is now set on the bot (`/jam volume`, default 15 %). Only when
