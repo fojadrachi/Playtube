@@ -53,13 +53,14 @@ function Get-GitHubToken {
     $psi = New-Object System.Diagnostics.ProcessStartInfo "git.exe", "credential fill"
     $psi.RedirectStandardInput = $true; $psi.RedirectStandardOutput = $true; $psi.UseShellExecute = $false
     $p = [System.Diagnostics.Process]::Start($psi)
-    $p.StandardInput.NewLine = "`n"
-    $p.StandardInput.WriteLine("protocol=https"); $p.StandardInput.WriteLine("host=github.com"); $p.StandardInput.WriteLine("")
-    $p.StandardInput.Close()
+    # Rohe Bytes: der StreamWriter würde sonst ein BOM voranstellen, und git erkennt „protocol“ nicht.
+    $bytes = [System.Text.Encoding]::ASCII.GetBytes("protocol=https`nhost=github.com`n`n")
+    $p.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+    $p.StandardInput.BaseStream.Close()
     $out = $p.StandardOutput.ReadToEnd(); $p.WaitForExit()
     ($out -split "`n" | Where-Object { $_ -like "password=*" } | Select-Object -First 1) -replace "^password=", ""
 }
-$token = (Get-GitHubToken).Trim()
+$token = "$(Get-GitHubToken)".Trim()
 if (-not $token) { throw "Kein GitHub-Zugang in der Git-Anmeldung gefunden" }
 $headers = @{ Authorization = "Bearer $token"; Accept = "application/vnd.github+json"; "X-GitHub-Api-Version" = "2022-11-28" }
 $api = "https://api.github.com/repos/$repo"
