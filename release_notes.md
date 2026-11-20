@@ -3,6 +3,8 @@
 - **Discord-Bot im Jam: Lautstärke jetzt wirklich unabhängig.** Der Regler in Playtube ändert nur noch, wie laut
   es an deinem PC ist. Der Bot bekommt den Ton immer in voller Stärke und stellt seine Lautstärke selbst ein
   (`/jam volume`, Standard 15 %). Auch wenn Playtube stumm ist, spielt der Bot weiter.
+- **Discord-Bot im Jam: weniger Knacken.** Der Ton geht ohne Verzögerung durch das Netz an den Bot, statt in
+  Schüben (zusammen mit dem neuen Bot-Puffer: gleichmäßiger Ton ohne Aussetzer).
 
 Neu in 2.16.3:
 
@@ -166,6 +168,8 @@ aktualisiert sich auch von selbst (Windows und AppImage).
 - **Discord bot in the jam: volume now truly independent.** The volume slider in Playtube only changes how loud it
   is on your PC. The bot always gets the audio at full strength and sets its own volume (`/jam volume`, default
   15 %). Even when Playtube is muted, the bot keeps playing.
+- **Discord bot in the jam: less crackling.** Audio goes to the bot over the network without delay instead of in
+  bursts (together with the bot's new buffer: steady audio without dropouts).
 
 New in 2.16.3:
 

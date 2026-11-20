@@ -139,7 +139,11 @@ async fn fast_connect(url: &str) -> Result<tokio::net::TcpStream, String> {
     let mut last = String::from("keine Adresse gefunden");
     while let Some(result) = tries.next().await {
         match result {
-            Ok(stream) => return Ok(stream),
+            Ok(stream) => {
+                // Kleine Ton-Stücke sofort senden, nicht sammeln (sonst kommen sie in Schüben an).
+                let _ = stream.set_nodelay(true);
+                return Ok(stream);
+            }
             Err(e) => last = e.to_string(),
         }
     }
