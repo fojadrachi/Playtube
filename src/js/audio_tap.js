@@ -58,8 +58,10 @@
             var loud = false;
             for (var i = 0; i < left.length; i += 16) { if (left[i] !== 0 || right[i] !== 0) { loud = true; break; } }
             if (!loud) { return; }
-            // Lautstärke/Stumm der Seite wendet Chrome schon vor diesem Knoten an.
-            post('pcm:' + ctx.sampleRate + ':' + encode(left, right, 1));
+            // Lautstärke/Stumm der Seite wendet Chrome schon vor diesem Knoten an. Die Lautstärke geht
+            // mit, damit Playtube sie für den Discord-Bot wieder herausrechnen kann (src/botaudio.rs).
+            var volume = el.muted ? 0 : el.volume;
+            post('pcm:' + ctx.sampleRate + ':' + volume.toFixed(4) + ':' + encode(left, right, 1));
         };
         el.__playtubeTap = { source: source, proc: proc };
         state.taps.push(el.__playtubeTap);

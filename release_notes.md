@@ -1,4 +1,10 @@
-## Playtube 2.16.2
+## Playtube 2.16.3
+
+- **Discord-Bot im Jam: Lautstärke unabhängig vom PC.** Wie laut du Playtube am PC stellst, ändert nichts mehr an
+  der Lautstärke im Discord-Sprachkanal. Die stellt man jetzt am Bot ein (`/jam volume`, Standard 15 %). Nur wenn
+  Playtube ganz stumm ist, bekommt auch der Bot keinen Ton.
+
+Neu in 2.16.2:
 
 - **Discord-Bot im Jam: Ton kommt an.** Hatte die Adresse des Bots einen nicht erreichbaren IPv6-Eintrag, hing die
   Verbindung daran fest und lief nach 10 Sekunden ab („Zeitüberschreitung“). Playtube probiert jetzt alle Adressen
@@ -149,7 +155,13 @@ aktualisiert sich auch von selbst (Windows und AppImage).
 
 ---
 
-## Playtube 2.16.2
+## Playtube 2.16.3
+
+- **Discord bot in the jam: volume independent of your PC.** How loud you set Playtube on your PC no longer changes
+  the volume in the Discord voice channel. That is now set on the bot (`/jam volume`, default 15 %). Only when
+  Playtube is fully muted does the bot get no audio either.
+
+New in 2.16.2:
 
 - **Discord bot in the jam: audio arrives.** If the bot's address had an unreachable IPv6 entry, the connection got
   stuck on it and timed out after 10 seconds. Playtube now tries all addresses at once and uses the first one that

@@ -85,9 +85,19 @@ impl Drop for Relay {
 
 /// Nachricht der Seite `pcm:<rate>:<base64>` -> (Rate, Samples). Fremdes wird verworfen.
 pub fn parse_message(text: &str) -> Option<(u32, Vec<i16>)> {
+    parse_message_with_volume(text).map(|(rate, _, samples)| (rate, samples))
+}
+
+/// Wie `parse_message`, dazu die Lautstärke der Seite (0–1), mit der der Ton schon abgeschwächt ist
+/// (`pcm:<Rate>:<Lautstärke>:<Base64>`; ältere Nachrichten ohne Lautstärke zählen als 1).
+pub fn parse_message_with_volume(text: &str) -> Option<(u32, f32, Vec<i16>)> {
     use base64::Engine;
     let rest = text.strip_prefix("pcm:")?;
-    let (rate, data) = rest.split_once(':')?;
+    let (rate, rest) = rest.split_once(':')?;
+    let (volume, data) = match rest.split_once(':') {
+        Some((volume, data)) => (volume.parse::<f32>().ok().filter(|v| (0.0..=1.0).contains(v))?, data),
+        None => (1.0, rest),
+    };
     let rate: u32 = rate.parse().ok().filter(|r| (8_000..=192_000).contains(r))?;
     if data.len() > 200_000 {
         return None;
@@ -96,7 +106,7 @@ pub fn parse_message(text: &str) -> Option<(u32, Vec<i16>)> {
     if bytes.len() % 4 != 0 {
         return None;
     }
-    Some((rate, bytes.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()))
+    Some((rate, volume, bytes.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()))
 }
 
 #[cfg(not(windows))]
@@ -357,6 +367,11 @@ mod tests {
         assert_eq!(parse_message("hallo"), None);
         assert_eq!(parse_message("pcm:48000:kein base64!"), None);
         assert_eq!(parse_message("pcm:48000:AAA="), None); // keine ganzen Stereo-Frames
+        let data = text.strip_prefix("pcm:48000:").unwrap();
+        let with_volume = format!("pcm:48000:0.2500:{data}");
+        assert_eq!(parse_message_with_volume(&with_volume), Some((48_000, 0.25, samples.to_vec())));
+        assert_eq!(parse_message_with_volume(&text).map(|m| m.1), Some(1.0));
+        assert_eq!(parse_message_with_volume(&format!("pcm:48000:7:{data}")), None);
     }
 
     #[test]
