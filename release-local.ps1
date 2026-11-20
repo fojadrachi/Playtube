@@ -16,7 +16,7 @@ $version = (Select-String -Path "Cargo.toml" -Pattern '^version\s*=\s*"([^"]+)"'
 $tag = "v$version"
 Write-Host "Playtube $version – lokales Windows-Release" -ForegroundColor Yellow
 
-function Git { & git -c safe.directory=* @args; if ($LASTEXITCODE -ne 0) { throw "git $args fehlgeschlagen" } }
+function Invoke-Git { & git.exe -c safe.directory=* @args; if ($LASTEXITCODE -ne 0) { throw "git $args fehlgeschlagen" } }
 
 # Nichts Uncommittetes mitveröffentlichen.
 $dirty = & git -c safe.directory=* status --porcelain --untracked-files=no
@@ -34,12 +34,12 @@ $files = @("dist\Playtube-Setup-$version.exe", "dist\Playtube-$version-win64.exe
 foreach ($f in $files) { if (-not (Test-Path $f)) { throw "Fehlt: $f" } }
 
 # 3. Pushen und taggen (der Tag startet den Linux-Build auf GitHub)
-Git push -q origin HEAD:main
+Invoke-Git push -q origin HEAD:main
 $existing = & git -c safe.directory=* ls-remote --tags origin "refs/tags/$tag"
 if (-not $existing) {
     $local = & git -c safe.directory=* tag -l $tag
-    if (-not $local) { Git tag $tag }
-    Git push -q origin $tag
+    if (-not $local) { Invoke-Git tag $tag }
+    Invoke-Git push -q origin $tag
 }
 
 # 4. Release anlegen (oder das vom Workflow schon angelegte nehmen) und Dateien hochladen
