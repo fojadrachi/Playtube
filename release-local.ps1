@@ -48,7 +48,6 @@ if (-not $existing) {
 }
 
 # 4. Release anlegen (oder das vom Workflow schon angelegte nehmen) und Dateien hochladen
-# GitHub-Zugang aus der Git-Anmeldung (direkt über stdin, PowerShell-Pipes stören git hier).
 function Get-GitHubToken {
     # Über eine Datei und cmd: PowerShell-Pipes und Process-stdin kommen bei git hier nicht sauber an.
     $file = Join-Path $env:TEMP "playtube-cred-$PID.txt"
@@ -64,7 +63,7 @@ $api = "https://api.github.com/repos/$repo"
 $release = $null
 try { $release = Invoke-RestMethod -Headers $headers -Uri "$api/releases/tags/$tag" } catch { }
 if (-not $release) {
-    $notes = Get-Content (Join-Path $root "release_notes.md") -Raw -Encoding utf8
+    $notes = [IO.File]::ReadAllText((Join-Path $root "release_notes.md"), [Text.Encoding]::UTF8)  # reiner String (Get-Content hängt PS-Felder an)
     $body = @{ tag_name = $tag; name = "Playtube $tag"; body = $notes; make_latest = "true" } | ConvertTo-Json
     $release = Invoke-RestMethod -Method Post -Headers $headers -Uri "$api/releases" -Body ([Text.Encoding]::UTF8.GetBytes($body)) -ContentType "application/json; charset=utf-8"
 }
