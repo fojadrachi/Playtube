@@ -1,4 +1,11 @@
-## Playtube 2.16.4
+## Playtube 2.16.5
+
+- **Jam: kein fremder Song mehr zwischen zwei Jam-Songs.** Am Ende eines Songs hat YouTube Music von selbst einen
+  eigenen Vorschlag gestartet (Autoplay), bevor der nächste Jam-Song kam – man hörte kurz den Anfang eines Liedes,
+  das gar nicht in der Jam-Liste war. Im Jam hält Playtube den Song jetzt kurz vor Schluss an und spielt direkt den
+  nächsten Jam-Song. Außerhalb des Jams bleibt Autoplay, wie es ist.
+
+Neu in 2.16.4:
 
 - **Discord-Bot im Jam: Lautstärke jetzt wirklich unabhängig.** Der Regler in Playtube ändert nur noch, wie laut
   es an deinem PC ist. Der Bot bekommt den Ton immer in voller Stärke und stellt seine Lautstärke selbst ein
@@ -163,7 +170,14 @@ aktualisiert sich auch von selbst (Windows und AppImage).
 
 ---
 
-## Playtube 2.16.4
+## Playtube 2.16.5
+
+- **Jam: no more stray song between two jam songs.** At the end of a song YouTube Music started its own suggestion
+  (autoplay) before the next jam song arrived – you briefly heard the start of a song that wasn't in the jam list.
+  In a jam, Playtube now stops the song just before the end and goes straight to the next jam song. Outside a jam,
+  autoplay stays as it is.
+
+New in 2.16.4:
 
 - **Discord bot in the jam: volume now truly independent.** The volume slider in Playtube only changes how loud it
   is on your PC. The bot always gets the audio at full strength and sets its own volume (`/jam volume`, default
