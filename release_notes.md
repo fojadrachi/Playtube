@@ -1,4 +1,10 @@
-## Playtube 2.16.1
+## Playtube 2.16.2
+
+- **Discord-Bot im Jam: Ton kommt an.** Hatte die Adresse des Bots einen nicht erreichbaren IPv6-Eintrag, hing die
+  Verbindung daran fest und lief nach 10 Sekunden ab („Zeitüberschreitung“). Playtube probiert jetzt alle Adressen
+  gleichzeitig und nimmt die erste, die antwortet.
+
+Neu in 2.16.1:
 
 - **Mini-Player zeigt nicht mehr „YouTube“:** Auf der YouTube-Startseite, in der Suche usw. stand im Mini-Player
   (und in der Fernsteuerung) der Seitentitel „YouTube“, obwohl nichts lief. Jetzt steht dort „Gerade läuft nichts“.
@@ -143,7 +149,13 @@ aktualisiert sich auch von selbst (Windows und AppImage).
 
 ---
 
-## Playtube 2.16.1
+## Playtube 2.16.2
+
+- **Discord bot in the jam: audio arrives.** If the bot's address had an unreachable IPv6 entry, the connection got
+  stuck on it and timed out after 10 seconds. Playtube now tries all addresses at once and uses the first one that
+  answers.
+
+New in 2.16.1:
 
 - **Mini player no longer shows "YouTube":** on the YouTube home page, in search etc. the mini player (and the
   remote control) showed the page title "YouTube" although nothing was playing. It now shows "Nothing playing".

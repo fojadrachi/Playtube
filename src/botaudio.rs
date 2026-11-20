@@ -114,11 +114,37 @@ impl Drop for Stream {
     }
 }
 
+/// TCP-Verbindung zu allen Adressen des Hosts gleichzeitig aufbauen und die erste nehmen, die klappt
+/// (wie Browser/curl). Sonst hängt Windows erst ~20 s an einer kaputten IPv6-Adresse (AAAA-Eintrag ohne
+/// erreichbaren Server) und die Zeit ist um, bevor IPv4 drankommt.
+async fn fast_connect(url: &str) -> Result<tokio::net::TcpStream, String> {
+    use futures_util::stream::FuturesUnordered;
+    let uri: tokio_tungstenite::tungstenite::http::Uri = url.parse().map_err(|e| format!("Adresse: {e}"))?;
+    let host = uri.host().ok_or("Adresse ohne Host")?.trim_start_matches('[').trim_end_matches(']').to_string();
+    let port = uri.port_u16().unwrap_or(if uri.scheme_str() == Some("wss") { 443 } else { 80 });
+    let mut addrs: Vec<std::net::SocketAddr> =
+        tokio::net::lookup_host((host.as_str(), port)).await.map_err(|e| format!("DNS: {e}"))?.collect();
+    // IPv4 zuerst starten; die anderen laufen trotzdem parallel mit.
+    addrs.sort_by_key(|a| !a.is_ipv4());
+    let mut tries: FuturesUnordered<_> = addrs.into_iter().map(tokio::net::TcpStream::connect).collect();
+    let mut last = String::from("keine Adresse gefunden");
+    while let Some(result) = tries.next().await {
+        match result {
+            Ok(stream) => return Ok(stream),
+            Err(e) => last = e.to_string(),
+        }
+    }
+    Err(last)
+}
+
 async fn run(request: Request, name: String, mut rx: mpsc::Receiver<Vec<u8>>, on_started: impl FnOnce()) -> Ended {
-    let connect = tokio::time::timeout(Duration::from_secs(10), tokio_tungstenite::connect_async(request.url.as_str()));
+    let connect = tokio::time::timeout(Duration::from_secs(10), async {
+        let tcp = fast_connect(&request.url).await?;
+        tokio_tungstenite::client_async_tls(request.url.as_str(), tcp).await.map_err(|e| e.to_string())
+    });
     let socket = match connect.await {
         Ok(Ok((socket, _))) => socket,
-        Ok(Err(e)) => return Ended::Failed(e.to_string()),
+        Ok(Err(e)) => return Ended::Failed(e),
         Err(_) => return Ended::Failed("Zeitüberschreitung".into()),
     };
     let (mut write, mut read) = socket.split();
@@ -153,6 +179,18 @@ async fn run(request: Request, name: String, mut rx: mpsc::Receiver<Vec<u8>>, on
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Echter Netztest (nur von Hand): `cargo test nexo_handshake -- --ignored`.
+    #[tokio::test]
+    #[ignore]
+    async fn nexo_handshake() {
+        let url = "wss://nexo.fojadrachi.com/playtube-audio/0";
+        let started = std::time::Instant::now();
+        let tcp = fast_connect(url).await.expect("tcp");
+        let (_socket, response) = tokio_tungstenite::client_async_tls(url, tcp).await.expect("ws");
+        assert_eq!(response.status().as_u16(), 101);
+        assert!(started.elapsed() < Duration::from_secs(5), "{:?}", started.elapsed());
+    }
 
     #[test]
     fn checks_requests_from_the_jam() {
