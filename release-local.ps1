@@ -48,6 +48,8 @@ if (-not $existing) {
 }
 
 # 4. Release anlegen (oder das vom Workflow schon angelegte nehmen) und Dateien hochladen
+# Ohne BOM an git übergeben (sonst „credential missing protocol field“).
+$OutputEncoding = New-Object System.Text.UTF8Encoding $false
 $token = (@("protocol=https", "host=github.com", "") | git credential fill | Where-Object { $_ -like "password=*" }) -replace "^password=", ""
 if (-not $token) { throw "Kein GitHub-Zugang in der Git-Anmeldung gefunden" }
 $headers = @{ Authorization = "Bearer $token"; Accept = "application/vnd.github+json"; "X-GitHub-Api-Version" = "2022-11-28" }
