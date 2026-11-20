@@ -1,4 +1,10 @@
-## Playtube 2.16.0
+## Playtube 2.16.1
+
+- **Mini-Player zeigt nicht mehr „YouTube“:** Auf der YouTube-Startseite, in der Suche usw. stand im Mini-Player
+  (und in der Fernsteuerung) der Seitentitel „YouTube“, obwohl nichts lief. Jetzt steht dort „Gerade läuft nichts“.
+- **Mini-Player ohne Maximieren-Knopf:** Das Mini-Player-Fenster lässt sich nicht mehr maximieren.
+
+Neu in 2.16.0:
 
 - **Playtube für Linux:** Neben Windows gibt es Playtube jetzt auch für Linux (x86_64) – als
   `playtube_2.16.0_amd64.deb` für Debian/Ubuntu (ab 22.04) und als `Playtube-2.16.0-x86_64.AppImage` für andere
@@ -137,7 +143,13 @@ aktualisiert sich auch von selbst (Windows und AppImage).
 
 ---
 
-## Playtube 2.16.0
+## Playtube 2.16.1
+
+- **Mini player no longer shows "YouTube":** on the YouTube home page, in search etc. the mini player (and the
+  remote control) showed the page title "YouTube" although nothing was playing. It now shows "Nothing playing".
+- **Mini player without maximize button:** the mini player window can no longer be maximized.
+
+New in 2.16.0:
 
 - **Playtube for Linux:** besides Windows, Playtube is now available for Linux (x86_64) – as
   `playtube_2.16.0_amd64.deb` for Debian/Ubuntu (22.04 or newer) and as `Playtube-2.16.0-x86_64.AppImage` for other

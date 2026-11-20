@@ -344,6 +344,7 @@ impl App {
     /// Mini-Player auf den aktuellen Stand bringen (aus on_media und wenn ein Bild fertig ist).
     pub fn mini_render(&self) {
         let Some(mini) = self.mini.borrow().as_ref().map(|m| m.clone_strong()) else { return };
+        no_maximize(&mini);
         let info = self.active_media().unwrap_or(Value::Null);
         let has_video = info["hasVideo"].as_bool().unwrap_or(false);
         let title = if has_video { info["title"].as_str().unwrap_or("") } else { "" };
@@ -368,4 +369,19 @@ impl App {
             None => mini.set_has_cover(false),
         }
     }
+}
+
+/// Kein Maximieren-Knopf am Mini-Player: das Fenster hat eine feste Höhe und sieht maximiert kaputt aus.
+/// Das native Fenster entsteht erst nach `show()`, deshalb bei jedem Rendern prüfen (kostet nichts,
+/// wenn es schon passt).
+fn no_maximize(mini: &MiniWindow) {
+    use slint::winit_030::{winit::window::WindowButtons, WinitWindowAccessor};
+    mini.window().with_winit_window(|w| {
+        if w.enabled_buttons().contains(WindowButtons::MAXIMIZE) {
+            w.set_enabled_buttons(WindowButtons::CLOSE | WindowButtons::MINIMIZE);
+        }
+        if w.is_maximized() {
+            w.set_maximized(false);
+        }
+    });
 }

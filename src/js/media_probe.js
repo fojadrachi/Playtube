@@ -85,6 +85,7 @@
     function playerApi(fn) { return moviePlayer && typeof moviePlayer[fn] === 'function'; }
     var isMusic = location.hostname.indexOf('music.youtube.com') !== -1;
     var videoId = videoIdFromUrl(location.href);
+    var watchPage = /^\/(watch|shorts\/|live\/|embed\/)/.test(location.pathname);
     var title = null, subtitle = null, thumbnail = null;
 
     // WICHTIG: die Video-ID aus der URL ist die zuverlaessigste Thumbnail-Quelle - sie
@@ -105,7 +106,13 @@
         if (!subtitle && meta && meta.artist) { subtitle = meta.artist; }
         thumbnail = ytThumbnailUrl(videoId) || imgSrc('ytmusic-player-bar img, .image.ytmusic-player-bar img');
     } else {
-        var t = document.title.replace(/ - YouTube$/, '');
+        // Nur auf Video-Seiten ist der Seitentitel der Songtitel. Auf Startseite, Suche usw. heißt
+        // die Seite nur „YouTube“; dann zählt nur, was die MediaSession meldet (z. B. YouTubes
+        // eigener Mini-Player), sonst läuft nichts.
+        var t = watchPage ? document.title.replace(/ - YouTube$/, '') : '';
+        if (t === 'YouTube') { t = ''; }
+        var metaY = navigator.mediaSession ? navigator.mediaSession.metadata : null;
+        if (!t && metaY && metaY.title && video && !video.paused) { t = metaY.title; }
         title = t || null;
         subtitle = txt('ytd-video-owner-renderer #channel-name a')
             || txt('#owner #channel-name a')
@@ -168,7 +175,7 @@
         playing: playing,
         currentTime: currentTime,
         duration: duration,
-        hasVideo: !!video,
+        hasVideo: !!video && (isMusic || watchPage || !!title),
         volume: volume,
         muted: muted,
         likeStatus: likeState(),
