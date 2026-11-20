@@ -319,6 +319,9 @@ pub enum Step {
     Rate(f64),
 }
 
+/// So nah am Titelende (Sekunden) gilt der eigene Player als „fertig“ (siehe [`decide`]).
+pub const END_HOLD_S: f64 = 1.5;
+
 /// Was der eigene Player tun soll, damit er zum Jam passt.
 pub fn decide(want: Option<&Target>, local: &Local, tolerance: f64) -> Vec<Step> {
     let Some(want) = want else {
@@ -347,6 +350,11 @@ pub fn decide(want: Option<&Target>, local: &Local, tolerance: f64) -> Vec<Step>
             steps.push(Step::Seek(0.0));
         }
         return steps;
+    }
+    // Der eigene Player steht schon am Titelende (src/js/jam_guard.js hält ihn dort an, damit YouTube Music
+    // nicht von selbst weiterspielt): nicht wieder starten oder spulen, sondern auf den nächsten Jam-Song warten.
+    if near_end && want.dur.is_some_and(|d| local.pos >= d - END_HOLD_S) && !want.paused {
+        return Vec::new();
     }
     let drift = local.pos - want.pos;
     let seek = drift.abs() > tolerance && !(near_end && local.pos > want.pos);
@@ -827,6 +835,18 @@ mod tests {
             decide(Some(&want(-1.0, false)), &local(None, 0.0, true), TOLERANCE_S),
             vec![Step::Load { video_id: "aaaaaaaaaaa".into(), pos: 0.0 }, Step::Pause]
         );
+    }
+
+    #[test]
+    fn holds_at_the_end_instead_of_restarting() {
+        let id = Some("aaaaaaaaaaa");
+        // Wächter hat kurz vor Schluss angehalten, der Jam läuft noch: nicht wieder starten (sonst Autoplay).
+        assert!(decide(Some(&want(199.8, false)), &local(id, 199.5, true), TOLERANCE_S).is_empty());
+        assert!(decide(Some(&want(203.0, false)), &local(id, 199.5, true), TOLERANCE_S).is_empty());
+        // Mitten im Song angehalten: weiter wie bisher.
+        assert_eq!(decide(Some(&want(30.0, false)), &local(id, 30.2, true), TOLERANCE_S), vec![Step::Play]);
+        // Neu beigetreten, eigener Player steht noch am Ende desselben Songs: zurückspulen.
+        assert!(decide(Some(&want(10.0, false)), &local(id, 199.5, true), TOLERANCE_S).contains(&Step::Play));
     }
 
     #[test]

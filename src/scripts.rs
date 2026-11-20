@@ -80,6 +80,17 @@ pub fn control(command: &str, value: f64) -> Option<String> {
 
 /// Playtube Jam: Stand des Players (Video-ID, Position, Pause, Werbung, Fehler).
 pub const JAM_PROBE: &str = include_str!("js/jam_probe.js");
+const JAM_GUARD: &str = include_str!("js/jam_guard.js");
+
+/// Hält den Jam-Song `video_id` kurz vor dem Ende an, damit YouTube Music nicht von selbst weiterspielt
+/// (`None` schaltet den Wächter ab). Die ID kommt vom Jam-Server: nur Buchstaben, Ziffern, `-`, `_` zulassen.
+pub fn jam_guard(video_id: Option<&str>) -> String {
+    let id = video_id
+        .filter(|id| !id.is_empty() && id.len() <= 32 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+        .map(|id| format!("'{id}'"))
+        .unwrap_or_else(|| "null".into());
+    JAM_GUARD.replace("__ID__", &id)
+}
 
 /// Playtube Jam: an Position `seconds` springen (nur endliche Zahlen).
 pub fn jam_seek(seconds: f64) -> Option<String> {
@@ -221,5 +232,17 @@ mod tests {
         assert_eq!(decode_result(r#""{\"a\":1}""#), Some(serde_json::json!({"a": 1})));
         assert_eq!(decode_result("null"), None);
         assert_eq!(decode_result("kaputt"), None);
+    }
+}
+
+#[cfg(test)]
+mod jam_guard_tests {
+    use super::jam_guard;
+
+    #[test]
+    fn guard_only_takes_clean_ids() {
+        assert!(jam_guard(Some("dQw4w9WgXcQ")).contains("('dQw4w9WgXcQ')"));
+        assert!(jam_guard(Some("x'); alert(1); ('")).contains("(null)"));
+        assert!(jam_guard(None).contains("(null)"));
     }
 }

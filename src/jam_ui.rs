@@ -362,6 +362,7 @@ impl App {
         if let Some(script) = scripts::jam_rate(1.0) {
             self.tabs[JAM_TAB].eval(&script);
         }
+        self.tabs[JAM_TAB].eval(&scripts::jam_guard(None));
         self.jam_timer.stop();
         self.jam.borrow_mut().take();
         self.bot_audio_stop();
@@ -782,6 +783,8 @@ impl App {
                 }
             }
 
+            // Kein YouTube-Autoplay am Titelende (sonst hört man kurz einen Song, der nicht im Jam ist).
+            scripts_to_run.push(scripts::jam_guard(want.as_ref().map(|w| w.video_id.as_str())));
             'sync: {
                 let Some(w) = want.as_ref() else {
                     for step in jam::decide(None, &local, jam::TOLERANCE_S) {
