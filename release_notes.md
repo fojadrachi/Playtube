@@ -1,3 +1,10 @@
+## Playtube 2.17.0
+
+- **„Jam" heißt jetzt „Sync".** Die gemeinsame Hör-Funktion wurde überall in Playtube umbenannt (Tab, Knöpfe,
+  Meldungen). An der Bedienung ändert sich nichts, bestehende Einladungslinks funktionieren weiter.
+
+Neu in 2.16.5:
+
 ## Playtube 2.16.5
 
 - **Jam: kein fremder Song mehr zwischen zwei Jam-Songs.** Am Ende eines Songs hat YouTube Music von selbst einen
@@ -169,6 +176,13 @@ Alles Weitere wie in 2.5.2 (Tonausgabe Normal/Discord, Fixes).
 aktualisiert sich auch von selbst (Windows und AppImage).
 
 ---
+
+## Playtube 2.17.0
+
+- **"Jam" is now called "Sync".** The listen-together feature was renamed throughout Playtube (tab, buttons,
+  messages). Nothing changes about how it works, and existing invite links keep working.
+
+New in 2.16.5:
 
 ## Playtube 2.16.5
 
