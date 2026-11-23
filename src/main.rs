@@ -29,6 +29,8 @@ mod relay;
 mod remote;
 mod scripts;
 mod sleep;
+mod social;
+mod social_ui;
 mod updater;
 mod ytm;
 
@@ -103,6 +105,8 @@ struct App {
     jam: RefCell<Option<jam_ui::JamSession>>,
     jam_timer: slint::Timer,
     jam_results: RefCell<Vec<jam::SearchResult>>,
+    /// Konto und Freunde (Tab "Sozial")
+    social: RefCell<social_ui::SocialState>,
     music: RefCell<music::MusicState>,
     music_timer: slint::Timer,
     /// Google-Anmeldung läuft (YouTube-Music-Tab zeigt kurz die echte Seite)
@@ -312,6 +316,7 @@ impl App {
             None => APP_NAME.into(),
         });
         self.update_presence();
+        self.social_observe_media();
         self.history_observe();
         self.mini_render();
     }
@@ -1054,6 +1059,7 @@ fn apply_texts(ui: &AppWindow) {
     });
     extras::apply_extras_texts(ui);
     jam_ui::apply_jam_texts(ui);
+    social_ui::apply_social_texts(ui);
     music::apply_music_texts(ui);
 }
 
@@ -1137,6 +1143,7 @@ fn build_app(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config) -
         saved_timer: slint::Timer::default(),
         jam: RefCell::new(None),
         jam_timer: slint::Timer::default(),
+        social: RefCell::new(social_ui::SocialState::default()),
         jam_results: RefCell::new(Vec::new()),
         music: RefCell::new(music::MusicState::default()),
         music_timer: slint::Timer::default(),
@@ -1176,6 +1183,7 @@ fn start(ui: &AppWindow, runtime: tokio::runtime::Runtime, config: Config, jam_c
     app.build_tray();
     app.setup_update_timer();
     app.jam_init_ui();
+    app.social_init();
     // Tonausgabe "Automatisch": alle 4 s schauen, ob Discord in einem Sprachkanal ist.
     std::thread::Builder::new()
         .name("discord-voice".into())
@@ -1303,6 +1311,7 @@ fn main() {
     ui.on_send_diagnostics(|| with_app(|app| app.send_diagnostics(true)));
     ui.on_clear_history(|| with_app(|app| app.history_clear()));
     jam_ui::wire(&ui);
+    social_ui::wire(&ui);
     music::wire(&ui);
 
     // Schließen versteckt nur das Fenster (Musik läuft weiter); Beenden über das Tray-Icon.

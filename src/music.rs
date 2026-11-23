@@ -990,7 +990,7 @@ impl App {
 }
 
 /// Bild laden und in Pixel umwandeln (im tokio-Runtime).
-async fn download_image(url: &str) -> Option<SharedPixelBuffer<Rgba8Pixel>> {
+pub(crate) async fn download_image(url: &str) -> Option<SharedPixelBuffer<Rgba8Pixel>> {
     if !url.starts_with("https://") {
         return None;
     }

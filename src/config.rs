@@ -116,6 +116,15 @@ impl Default for Jam {
     }
 }
 
+/// Playtube-Konto (Tab "Sozial", src/social_ui.rs). Freiwillig; leer = nicht angemeldet.
+/// Gespeichert wird nur das Sitzungstoken, nie das Passwort.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Account {
+    pub token: String,
+    pub name: String,
+}
+
 /// Diagnosedaten (src/diag.rs): Standard an, abschaltbar in den Einstellungen.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
@@ -156,6 +165,7 @@ pub struct Config {
     pub remote_control: RemoteControl,
     pub lan_remote: LanRemote,
     pub jam: Jam,
+    pub account: Account,
     pub diagnostics: Diagnostics,
     /// YouTube Music in der Playtube-Ansicht (Spotify-Stil) statt der Original-Seite
     pub music_view: bool,
@@ -186,6 +196,7 @@ impl Default for Config {
             remote_control: RemoteControl::default(),
             lan_remote: LanRemote::default(),
             jam: Jam::default(),
+            account: Account::default(),
             diagnostics: Diagnostics::default(),
             music_view: true,
             media_keys: true,

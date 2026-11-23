@@ -61,6 +61,81 @@ export struct JamItem {
     liked: bool,
 }
 
+// Konten und Freunde, Tab "Sozial" (src/social.rs, src/social_ui.rs)
+export struct SocialTexts {
+    tab: string,
+    title: string,
+    intro: string,
+    login-title: string,
+    register-title: string,
+    reset-title: string,
+    login-field: string,
+    name-field: string,
+    email-field: string,
+    password-field: string,
+    password2-field: string,
+    login: string,
+    register: string,
+    send-reset: string,
+    to-register: string,
+    to-login: string,
+    forgot: string,
+    optional-hint: string,
+    signed-in-as: string,
+    logout: string,
+    share: string,
+    share-hint: string,
+    delete-account: string,
+    delete-confirm: string,
+    delete-hint: string,
+    cancel: string,
+    friends: string,
+    no-friends: string,
+    search-placeholder: string,
+    search: string,
+    add: string,
+    accept: string,
+    decline: string,
+    withdraw: string,
+    remove-friend: string,
+    incoming: string,
+    outgoing: string,
+    invite: string,
+    invite-hint: string,
+    invites: string,
+    join: string,
+    dismiss: string,
+    offline: string,
+    privacy: string,
+}
+
+export struct SocialFriend {
+    id: string,
+    name: string,
+    initial: string,
+    // 0 = offline, 1 = online, 2 = hört gerade
+    status: int,
+    info: string,
+    image: image,
+    has-image: bool,
+    invited: bool,
+}
+
+export struct SocialPerson {
+    id: string,
+    name: string,
+    info: string,
+    // Suchergebnis: Anfrage möglich bzw. Anfrage annehmen
+    can-add: bool,
+    can-accept: bool,
+}
+
+export struct SocialInvite {
+    id: string,
+    text: string,
+    detail: string,
+}
+
 export struct Texts {
     tab-settings: string,
     url-placeholder: string,
@@ -342,6 +417,48 @@ export component AppWindow inherits Window {
     callback jam-make-host(string);
     callback jam-set-all-control(bool);
 
+    // Sozial: Konto und Freunde
+    in property <SocialTexts> st;
+    in property <bool> social-signed-in;
+    in property <bool> social-connected;
+    in property <bool> social-busy;
+    // 0 = anmelden, 1 = registrieren, 2 = Passwort vergessen
+    in-out property <int> social-mode: 0;
+    in-out property <string> social-login-input;
+    in-out property <string> social-name-input;
+    in-out property <string> social-email-input;
+    in-out property <string> social-password-input;
+    in-out property <string> social-password2-input;
+    in-out property <string> social-delete-input;
+    in-out property <string> social-search-input;
+    in property <string> social-status;
+    in property <string> social-friends-status;
+    in property <string> social-user-name;
+    in property <string> social-user-email;
+    in-out property <bool> social-share: true;
+    in property <[SocialFriend]> social-friends;
+    in property <[SocialPerson]> social-incoming;
+    in property <[SocialPerson]> social-outgoing;
+    in property <[SocialPerson]> social-results;
+    in property <[SocialInvite]> social-invites;
+    // Offene Anfragen + Einladungen (Zahl in der Tab-Leiste)
+    in property <int> social-badge;
+
+    callback social-login();
+    callback social-register();
+    callback social-send-reset();
+    callback social-logout();
+    callback social-delete-account();
+    callback social-set-share(bool);
+    callback social-search();
+    callback social-request(string);
+    callback social-accept(string);
+    callback social-remove(string);
+    callback social-invite(string);
+    callback social-join(string);
+    callback social-dismiss(string);
+    callback social-open-privacy();
+
     changed width => { root.geometry-changed(); }
     changed height => { root.geometry-changed(); }
     changed content-top => { root.geometry-changed(); }
@@ -372,7 +489,39 @@ export component AppWindow inherits Window {
                     active: root.current-tab == 3;
                     clicked => { root.tab-selected(3); }
                 }
+                TabButton {
+                    text: root.social-badge > 0 ? root.st.tab + " (" + root.social-badge + ")" : root.st.tab;
+                    active: root.current-tab == 4;
+                    clicked => { root.tab-selected(4); }
+                }
                 Rectangle { horizontal-stretch: 1; }
+                // Einladung eines Freundes: auf jedem Tab sichtbar (die Browser liegen darunter).
+                if root.social-invites.length > 0 && root.current-tab != 4: Rectangle {
+                    width: invite-row.preferred-width;
+                    border-radius: 15px;
+                    background: @linear-gradient(90deg, #7c3aed 0%, #ec4899 100%);
+                    invite-row := HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 4px;
+                        padding-top: 4px;
+                        padding-bottom: 4px;
+                        spacing: 6px;
+                        Text { text: root.social-invites[0].text; color: #ffffff; font-size: 12px; font-weight: 600; vertical-alignment: center; }
+                        Rectangle {
+                            width: join-text.preferred-width + 16px;
+                            border-radius: 12px;
+                            background: join-touch.has-hover ? #ffffff40 : #ffffff26;
+                            join-text := Text { text: root.st.join; color: #ffffff; font-size: 12px; font-weight: 600; }
+                            join-touch := TouchArea { clicked => { root.social-join(root.social-invites[0].id); } }
+                        }
+                        Rectangle {
+                            width: 24px;
+                            Text { text: "\u{E711}"; font-family: Fonts.icons; color: #ffffff; font-size: 10px; }
+                            TouchArea { clicked => { root.social-dismiss(root.social-invites[0].id); } }
+                        }
+                    }
+                }
+                Rectangle { width: 8px; }
             }
         }
         // Navigationsleiste (nicht in der Playtube-Ansicht: die hat eigene Navigation)
@@ -519,6 +668,249 @@ export component AppWindow inherits Window {
             if root.current-tab == 1 && root.music-view: VerticalLayout {
                 MusicView { vertical-stretch: 1; }
                 PlayerBar { }
+            }
+
+            // Sozial: Konto und Freunde (src/social_ui.rs)
+            if root.current-tab == 4: ScrollView {
+                VerticalLayout {
+                    padding: 24px;
+                    padding-left: 32px;
+                    padding-right: 32px;
+                    spacing: 16px;
+                    alignment: start;
+
+                    VerticalLayout {
+                        spacing: 2px;
+                        Text { text: root.st.title; font-size: 22px; font-weight: 600; color: #ffffff; }
+                        Hint { text: root.st.intro; }
+                    }
+
+                    // Nicht angemeldet: Anmelden, Registrieren, Passwort vergessen
+                    if !root.social-signed-in: HorizontalLayout {
+                        alignment: start;
+                        Card {
+                            width: 460px;
+                            VerticalLayout {
+                                padding: 16px;
+                                spacing: 10px;
+                                CardTitle { text: root.social-mode == 0 ? root.st.login-title : root.social-mode == 1 ? root.st.register-title : root.st.reset-title; }
+                                if root.social-mode == 0: LineEdit { text <=> root.social-login-input; placeholder-text: root.st.login-field; }
+                                if root.social-mode == 1: LineEdit { text <=> root.social-name-input; placeholder-text: root.st.name-field; }
+                                if root.social-mode != 0: LineEdit { text <=> root.social-email-input; placeholder-text: root.st.email-field; }
+                                if root.social-mode != 2: LineEdit {
+                                    text <=> root.social-password-input;
+                                    placeholder-text: root.st.password-field;
+                                    input-type: InputType.password;
+                                    accepted(text) => { if root.social-mode == 0 { root.social-login(); } }
+                                }
+                                if root.social-mode == 1: LineEdit {
+                                    text <=> root.social-password2-input;
+                                    placeholder-text: root.st.password2-field;
+                                    input-type: InputType.password;
+                                    accepted(text) => { root.social-register(); }
+                                }
+                                Row {
+                                    if root.social-mode == 0: Button { text: root.st.login; primary: true; enabled: !root.social-busy; clicked => { root.social-login(); } }
+                                    if root.social-mode == 1: Button { text: root.st.register; primary: true; enabled: !root.social-busy; clicked => { root.social-register(); } }
+                                    if root.social-mode == 2: Button { text: root.st.send-reset; primary: true; enabled: !root.social-busy; clicked => { root.social-send-reset(); } }
+                                }
+                                if root.social-status != "": Text { text: root.social-status; color: #fca5a5; font-size: 12px; wrap: word-wrap; }
+                                Row {
+                                    if root.social-mode != 0: Button { text: root.st.to-login; clicked => { root.social-mode = 0; } }
+                                    if root.social-mode != 1: Button { text: root.st.to-register; clicked => { root.social-mode = 1; } }
+                                    if root.social-mode == 0: Button { text: root.st.forgot; clicked => { root.social-mode = 2; } }
+                                }
+                                Hint { text: root.st.optional-hint; }
+                                Text {
+                                    text: root.st.privacy;
+                                    color: #c4b5fd;
+                                    font-size: 12px;
+                                    TouchArea { mouse-cursor: pointer; clicked => { root.social-open-privacy(); } }
+                                }
+                            }
+                        }
+                    }
+
+                    if root.social-signed-in: HorizontalLayout {
+                        spacing: 16px;
+
+                        // Links: Einladungen, Freunde
+                        VerticalLayout {
+                            horizontal-stretch: 2;
+                            spacing: 16px;
+                            alignment: start;
+
+                            if root.social-invites.length > 0: Card {
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 8px;
+                                    CardTitle { text: root.st.invites; }
+                                    for invite in root.social-invites: HorizontalLayout {
+                                        spacing: 8px;
+                                        VerticalLayout {
+                                            horizontal-stretch: 1;
+                                            Text { text: invite.text; color: #f2f2f6; overflow: elide; font-weight: 600; }
+                                            if invite.detail != "": Hint { text: invite.detail; wrap: no-wrap; overflow: elide; }
+                                        }
+                                        Button { text: root.st.join; primary: true; clicked => { root.social-join(invite.id); } }
+                                        IconButton { icon: "\u{E711}"; size: 30px; tooltip: root.st.dismiss; clicked => { root.social-dismiss(invite.id); } }
+                                    }
+                                }
+                            }
+
+                            Card {
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 10px;
+                                    CardTitle { text: root.st.friends; }
+                                    if root.social-friends-status != "": Hint { text: root.social-friends-status; }
+                                    if root.social-friends.length == 0: Hint { text: root.st.no-friends; }
+                                    for friend in root.social-friends: HorizontalLayout {
+                                        spacing: 10px;
+                                        Rectangle {
+                                            width: 44px;
+                                            height: 44px;
+                                            y: (parent.height - self.height) / 2;
+                                            border-radius: 8px;
+                                            clip: true;
+                                            background: friend.status > 0 ? @linear-gradient(135deg, #7c3aed 0%, #ec4899 100%) : #3a3a44;
+                                            if friend.has-image: Image { source: friend.image; width: 100%; height: 100%; image-fit: cover; }
+                                            if !friend.has-image: Text { text: friend.initial; color: #ffffff; font-weight: 700; font-size: 16px; horizontal-alignment: center; vertical-alignment: center; }
+                                        }
+                                        VerticalLayout {
+                                            horizontal-stretch: 1;
+                                            alignment: center;
+                                            HorizontalLayout {
+                                                spacing: 6px;
+                                                Rectangle {
+                                                    width: 8px;
+                                                    height: 8px;
+                                                    y: (parent.height - self.height) / 2;
+                                                    border-radius: 4px;
+                                                    background: friend.status == 2 ? #ec4899 : friend.status == 1 ? #22c55e : #5a5a64;
+                                                }
+                                                Text { text: friend.name; color: friend.status > 0 ? #f2f2f6 : #8a8a94; font-weight: 600; overflow: elide; horizontal-stretch: 1; }
+                                            }
+                                            Hint { text: friend.info; wrap: no-wrap; overflow: elide; }
+                                        }
+                                        VerticalLayout {
+                                            alignment: center;
+                                            Button {
+                                                text: root.st.invite;
+                                                enabled: !friend.invited;
+                                                clicked => { root.social-invite(friend.id); }
+                                            }
+                                        }
+                                        IconButton { icon: "\u{E711}"; size: 30px; y: (parent.height - self.height) / 2; tooltip: root.st.remove-friend; clicked => { root.social-remove(friend.id); } }
+                                    }
+                                    Hint { text: root.st.invite-hint; }
+                                }
+                            }
+                        }
+
+                        // Rechts: Freunde finden, Anfragen, Konto
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            min-width: 280px;
+                            spacing: 16px;
+                            alignment: start;
+
+                            Card {
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 8px;
+                                    CardTitle { text: root.st.search; }
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        LineEdit {
+                                            text <=> root.social-search-input;
+                                            placeholder-text: root.st.search-placeholder;
+                                            accepted(text) => { root.social-search(); }
+                                        }
+                                        IconButton { icon: "\u{E721}"; size: 32px; y: (parent.height - self.height) / 2; clicked => { root.social-search(); } }
+                                    }
+                                    if root.social-status != "": Hint { text: root.social-status; }
+                                    for person in root.social-results: HorizontalLayout {
+                                        spacing: 6px;
+                                        VerticalLayout {
+                                            horizontal-stretch: 1;
+                                            alignment: center;
+                                            Text { text: person.name; color: #f2f2f6; overflow: elide; }
+                                            if person.info != "": Hint { text: person.info; wrap: no-wrap; overflow: elide; }
+                                        }
+                                        if person.can-add: Button { text: root.st.add; clicked => { root.social-request(person.id); } }
+                                        if person.can-accept: Button { text: root.st.accept; primary: true; clicked => { root.social-accept(person.id); } }
+                                    }
+                                }
+                            }
+
+                            if root.social-incoming.length > 0: Card {
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 8px;
+                                    CardTitle { text: root.st.incoming; }
+                                    for person in root.social-incoming: HorizontalLayout {
+                                        spacing: 6px;
+                                        Text { text: person.name; color: #f2f2f6; overflow: elide; horizontal-stretch: 1; vertical-alignment: center; }
+                                        Button { text: root.st.accept; primary: true; clicked => { root.social-accept(person.id); } }
+                                        Button { text: root.st.decline; clicked => { root.social-remove(person.id); } }
+                                    }
+                                }
+                            }
+
+                            if root.social-outgoing.length > 0: Card {
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 8px;
+                                    CardTitle { text: root.st.outgoing; }
+                                    for person in root.social-outgoing: HorizontalLayout {
+                                        spacing: 6px;
+                                        Text { text: person.name; color: #c8c8d0; overflow: elide; horizontal-stretch: 1; vertical-alignment: center; }
+                                        Button { text: root.st.withdraw; clicked => { root.social-remove(person.id); } }
+                                    }
+                                }
+                            }
+
+                            account-card := Card {
+                                property <bool> confirm: false;
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 8px;
+                                    Text { text: root.st.signed-in-as; color: #a8a8b2; font-size: 12px; }
+                                    Text { text: root.social-user-name; font-size: 18px; font-weight: 600; color: #ffffff; overflow: elide; }
+                                    Hint { text: root.social-user-email; wrap: no-wrap; overflow: elide; }
+                                    if !root.social-connected: Hint { text: root.st.offline; }
+                                    CheckBox {
+                                        text: root.st.share;
+                                        checked: root.social-share;
+                                        toggled => { root.social-set-share(self.checked); }
+                                    }
+                                    Hint { text: root.st.share-hint; }
+                                    Row {
+                                        Button { text: root.st.logout; clicked => { root.social-logout(); } }
+                                        if !account-card.confirm: Button { text: root.st.delete-account; clicked => { account-card.confirm = true; } }
+                                    }
+                                    if account-card.confirm: Hint { text: root.st.delete-hint; }
+                                    if account-card.confirm: LineEdit {
+                                        text <=> root.social-delete-input;
+                                        placeholder-text: root.st.password-field;
+                                        input-type: InputType.password;
+                                    }
+                                    if account-card.confirm: Row {
+                                        Button { text: root.st.delete-confirm; enabled: !root.social-busy; clicked => { root.social-delete-account(); } }
+                                        Button { text: root.st.cancel; clicked => { account-card.confirm = false; root.social-delete-input = ""; } }
+                                    }
+                                    Text {
+                                        text: root.st.privacy;
+                                        color: #c4b5fd;
+                                        font-size: 12px;
+                                        TouchArea { mouse-cursor: pointer; clicked => { root.social-open-privacy(); } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // Playtube Jam

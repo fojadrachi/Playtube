@@ -238,7 +238,7 @@ impl App {
         self.jam_join_code(code);
     }
 
-    fn jam_join_code(&self, code: String) {
+    pub(crate) fn jam_join_code(&self, code: String) {
         if let Some(session) = self.jam.borrow().as_ref() {
             if session.code != code {
                 self.jam_set_status(status_text("jam.status.in_other"));
@@ -352,6 +352,13 @@ impl App {
         self.jam_results.borrow_mut().clear();
         self.jam_set_status(status_text("jam.status.joining"));
         self.jam_timer.start(slint::TimerMode::Repeated, SYNC_EVERY, || with_app(|app| app.jam_tick()));
+        // Freunde, die im Tab "Sozial" schon eingeladen werden sollten, jetzt einladen.
+        self.social_jam_started(code);
+    }
+
+    /// Code des Syncs, in dem wir gerade sind.
+    pub(crate) fn jam_code(&self) -> Option<String> {
+        self.jam.borrow().as_ref().map(|s| s.code.clone())
     }
 
     /// Jam lokal beenden (Verbindung zu, Oberfläche zurück).

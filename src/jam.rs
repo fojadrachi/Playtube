@@ -494,7 +494,7 @@ pub(crate) async fn http_client(server: &str) -> reqwest::Client {
 type Socket = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 /// WebSocket öffnen - bei DNS-Problemen über die per DoH gefundene Adresse.
-async fn connect_ws(url: &str) -> Result<Socket, tokio_tungstenite::tungstenite::Error> {
+pub(crate) async fn connect_ws(url: &str) -> Result<Socket, tokio_tungstenite::tungstenite::Error> {
     if let Some(addr) = dns_override(url).await {
         let stream = tokio::net::TcpStream::connect(addr).await?;
         let (socket, _) = tokio_tungstenite::client_async_tls(url, stream).await?;
