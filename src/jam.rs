@@ -13,7 +13,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 
-pub const DEFAULT_SERVER: &str = "https://jam.fojadrachi.de";
+pub const DEFAULT_SERVER: &str = "https://sync.fojadrachi.de";
 /// Ab dieser Abweichung (Sekunden) wird gespult. Etwas großzügiger als im Browser, weil die
 /// Position über ein Skript im WebView gelesen wird.
 pub const TOLERANCE_S: f64 = 1.0;
@@ -134,7 +134,7 @@ pub fn normalize_code(input: &str) -> Option<String> {
     (code.chars().count() == 6 && code.chars().all(|c| CODE_ALPHABET.contains(c))).then_some(code)
 }
 
-/// Aufrufparameter → Jam-Code: `playtube://jam/ABC234` (URL-Protokoll) oder `--jam ABC234`.
+/// Aufrufparameter → Jam-Code: `playtube://sync/ABC234` (auch alt `playtube://jam/`) oder `--jam ABC234`.
 pub fn code_from_args(args: &[String]) -> Option<String> {
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
@@ -142,8 +142,10 @@ pub fn code_from_args(args: &[String]) -> Option<String> {
             return iter.next().and_then(|c| normalize_code(c));
         }
         let lower = arg.to_ascii_lowercase();
-        if let Some(rest) = lower.strip_prefix("playtube://jam/").or_else(|| lower.strip_prefix("playtube:jam/")) {
-            return normalize_code(rest);
+        for prefix in ["playtube://sync/", "playtube:sync/", "playtube://jam/", "playtube:jam/"] {
+            if let Some(rest) = lower.strip_prefix(prefix) {
+                return normalize_code(rest);
+            }
         }
     }
     None
@@ -700,6 +702,7 @@ mod tests {
     #[test]
     fn reads_deep_links_from_arguments() {
         let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(code_from_args(&args(&["Playtube.exe", "playtube://sync/abc234"])).as_deref(), Some("ABC234"));
         assert_eq!(code_from_args(&args(&["Playtube.exe", "playtube://jam/abc234"])).as_deref(), Some("ABC234"));
         assert_eq!(code_from_args(&args(&["Playtube.exe", "playtube://jam/ABC234/"])).as_deref(), Some("ABC234"));
         assert_eq!(code_from_args(&args(&["Playtube.exe", "--jam", "abc-234"])).as_deref(), Some("ABC234"));

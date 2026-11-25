@@ -1,3 +1,11 @@
+## Playtube 2.18.0
+
+- **Neue Adresse für Sync:** Einladungslinks laufen jetzt über `sync.fojadrachi.de` (passend zum neuen Namen), und
+  Playtube öffnet `playtube://sync/…`-Links. Alte Links auf `jam.fojadrachi.de` bzw. `playtube://jam/…` funktionieren
+  weiter.
+
+Neu in 2.17.0:
+
 ## Playtube 2.17.0
 
 - **„Jam" heißt jetzt „Sync".** Die gemeinsame Hör-Funktion wurde überall in Playtube umbenannt (Tab, Knöpfe,
@@ -176,6 +184,13 @@ Alles Weitere wie in 2.5.2 (Tonausgabe Normal/Discord, Fixes).
 aktualisiert sich auch von selbst (Windows und AppImage).
 
 ---
+
+## Playtube 2.18.0
+
+- **New address for Sync:** invite links now use `sync.fojadrachi.de` (matching the new name), and Playtube opens
+  `playtube://sync/…` links. Old links to `jam.fojadrachi.de` or `playtube://jam/…` keep working.
+
+New in 2.17.0:
 
 ## Playtube 2.17.0
 

@@ -96,7 +96,7 @@ Playtube für Android oder im Browser mit. Gespielt wird im YouTube-Music-Tab, d
 Jam synchron hält (Position, Pause, Titelwechsel). Host bzw. alle mit Steuerrecht steuern auch über
 den Tab selbst, das Tray, das Stream Dock und das Handy. Songs kommen per Link/Video-ID, als Video
 aus dem YouTube-Tab oder – falls am Server freigeschaltet – über die Suche. Einladungslinks
-`playtube://jam/<CODE>` öffnen Playtube direkt (das Setup registriert das Protokoll).
+`playtube://sync/<CODE>` öffnen Playtube direkt (das Setup registriert das Protokoll).
 Ganze **Playlists und Alben** gehen auch: Playlist-Link ins Feld einfügen. In der Playtube-Ansicht
 von YouTube Music erscheint während eines Jams beim Darüberfahren ein **„+ Jam“**-Knopf an jedem
 Song, Album und jeder Playlist (auch eigene, private Playlists) und oben auf der Album-/Playlist-Seite.
@@ -106,7 +106,7 @@ Länge jedes Songs und schaltet auch dann weiter, wenn gerade niemand zuhört.
 Technik: [src/jam.rs](src/jam.rs) (Protokoll, Sync-Logik mit Tests, WebSocket über
 tokio-tungstenite/rustls) und [src/jam_ui.rs](src/jam_ui.rs); der Dienst selbst liegt im eigenen
 Projekt `playtube-jam` (Cloudflare Worker). Server änderbar über `"jam": {"server": "…"}` in der
-`config.json` (Standard `https://jam.fojadrachi.de`).
+`config.json` (Standard `https://sync.fojadrachi.de`).
 
 ## Diagnosedaten
 
@@ -273,7 +273,7 @@ default; only private networks and only after pairing; only a SHA-256 of the tok
 **Jam** tab: enter your name, **Start jam** or enter a code/invite link and **Join**. Invite via
 link (copy) or QR code; friends join with Playtube for PC, Playtube for Android or in the browser.
 Playback happens in the YouTube Music tab, which Playtube keeps in sync with the jam. With control
-rights, the tab itself, the tray, the Stream Dock and the phone control the jam. `playtube://jam/<CODE>`
+rights, the tab itself, the tray, the Stream Dock and the phone control the jam. `playtube://sync/<CODE>`
 links open Playtube directly. Whole **playlists and albums** work too (paste a playlist link). In the
 Playtube view of YouTube Music, a **"+ Jam"** button appears on hover on every song, album and
 playlist (including your own private playlists) and at the top of album/playlist pages while you are
